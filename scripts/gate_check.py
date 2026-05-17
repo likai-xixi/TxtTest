@@ -7,47 +7,11 @@ from pathlib import Path
 
 from _common import ROOT, read_text
 from chapter_evidence import chapter_evidence_failures
+from gate_config import load_gate_configs
 from reader_test import GATE_QUESTIONS
 
 
-GATES = {
-    "A": {
-        "needed": 3,
-        "criteria": "outline/gate_a_3_chapters.md",
-        "reader_synthesis": "reader_tests/gate_a_synthesis.md",
-        "reader_response_dir": "reader_tests/responses/gate_a",
-        "min_reader_responses": 3,
-        "assessment": None,
-        "assessment_sections": [],
-    },
-    "B": {
-        "needed": 10,
-        "criteria": "outline/gate_b_10_chapters.md",
-        "reader_synthesis": "reader_tests/gate_b_synthesis.md",
-        "reader_response_dir": "reader_tests/responses/gate_b",
-        "min_reader_responses": 3,
-        "assessment": None,
-        "assessment_sections": [],
-    },
-    "C": {
-        "needed": 25,
-        "criteria": "ops/gate_rules.yaml",
-        "reader_synthesis": None,
-        "reader_response_dir": None,
-        "min_reader_responses": 0,
-        "assessment": "state/gates/gate_c_assessment.md",
-        "assessment_sections": ["阶段高潮", "不可逆变化", "伏笔负债", "设定膨胀", "卷内结构"],
-    },
-    "E": {
-        "needed": 125,
-        "criteria": "ops/gate_rules.yaml",
-        "reader_synthesis": None,
-        "reader_response_dir": None,
-        "min_reader_responses": 0,
-        "assessment": "state/gates/gate_e_300w_assessment.md",
-        "assessment_sections": ["300 万字模式", "管理成本", "连续性负担", "读者证据", "模型路由", "预算"],
-    },
-}
+GATES = load_gate_configs()
 
 PLACEHOLDERS = (
     "待定",

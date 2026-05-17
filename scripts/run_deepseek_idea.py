@@ -9,6 +9,7 @@ import urllib.error
 import urllib.request
 
 from _common import ROOT, now_iso, write_blocked_by_locks, write_text
+from deepseek_response import DeepSeekResponseError, extract_message_content
 
 
 API_URL = "https://api.deepseek.com/chat/completions"
@@ -114,9 +115,14 @@ def main() -> int:
         print(f"ERROR: DeepSeek request failed: {exc}", file=sys.stderr)
         return 1
 
+    try:
+        content = extract_message_content(response)
+    except DeepSeekResponseError as exc:
+        print(f"ERROR: invalid DeepSeek response: {exc}", file=sys.stderr)
+        return 1
+
     raw_path = ROOT / "external_runs" / "deepseek" / args.idea_id / "idea.raw.json"
     write_text(raw_path, json.dumps(response, ensure_ascii=False, indent=2))
-    content = response["choices"][0]["message"].get("content") or ""
     out = ROOT / "state" / "idea_lab" / args.idea_id / "deepseek_idea.md"
     write_text(
         out,
@@ -127,7 +133,7 @@ def main() -> int:
                 f"generated_at: {now_iso()}",
                 "source: deepseek",
                 "",
-                content.strip(),
+                content,
                 "",
             ]
         ),

@@ -94,6 +94,160 @@ deepseek_action: Ship
 """
 
 
+IDEA_SYNTHESIS_READY = """# Codex Synthesis: {idea}
+
+## Direction A：最强商业钩子
+
+- 一句话卖点：A hook.
+- 主角欲望：A desire.
+- 核心冲突：A conflict.
+- 世界异常：A anomaly.
+- 前三章验证点：A checks.
+- 最大风险：A risk.
+- 适合继续的信号：A continue.
+- 不适合继续的信号：A stop.
+
+## Direction B：最强人物驱动
+
+- 一句话卖点：B hook.
+- 主角欲望：B desire.
+- 核心冲突：B conflict.
+- 世界异常：B anomaly.
+- 前三章验证点：B checks.
+- 最大风险：B risk.
+- 适合继续的信号：B continue.
+- 不适合继续的信号：B stop.
+
+## Direction C：最大差异化/反套路
+
+- 一句话卖点：C hook.
+- 主角欲望：C desire.
+- 核心冲突：C conflict.
+- 世界异常：C anomaly.
+- 前三章验证点：C checks.
+- 最大风险：C risk.
+- 适合继续的信号：C continue.
+- 不适合继续的信号：C stop.
+"""
+
+
+COMPLETE_BRIEF = """# {chapter} Brief
+
+## 本章功能
+
+建立本章案件和主角行动目标。
+
+## 开篇吸引点
+
+用具体异常场面开局。
+
+## 主角目标
+
+主角要在本章完成一次可失败的调查。
+
+## 主要阻力
+
+现场证据被平台和利益方同时遮蔽。
+
+## 主角主动选择
+
+主角选择冒险保留关键异常证据。
+
+## 本章推进
+
+完成阶段性案件推进。
+
+## 信息增量
+
+读者知道异常并非普通故障。
+
+## 章末问题
+
+幕后是谁在制造异常信号？
+
+## 本章使用设定
+
+只使用 context pack 中已经允许的设定。
+
+## 本章可用人物状态
+
+主角保持不信鬼但愿意调查异常。
+
+## 本章可用道具 / 装备
+
+只使用已记录的检测设备。
+
+## 本章可用技能 / 能力
+
+只使用已记录的数据分析能力。
+
+## 能力限制 / 代价
+
+能力不能直接证明鬼存在，且会误判。
+
+## 未解决伏笔
+
+保留旧案信号伏笔。
+
+## 新增设定
+
+无。
+
+## 伏笔：新开 / 推进 / 回收
+
+推进旧案信号。
+
+## 本章禁止新增
+
+禁止新增万能能力。
+
+## 本章禁止解决
+
+禁止解决幕后主谜题。
+
+## 禁止新增 / 禁止解决 / 禁止模仿
+
+禁止换皮参考作品桥段。
+"""
+
+
+def write_ready_idea_lab(repo: Path, idea: str) -> str:
+    lab = f"state/idea_lab/{idea}"
+    write(repo, f"{lab}/original_idea.md", f"# Original Idea: {idea}\n\n赛博民俗悬疑。\n")
+    write(repo, f"{lab}/deepseek_idea.md", f"# DeepSeek Idea Directions: {idea}\n\nDirection A/B/C ready.\n")
+    write(repo, f"{lab}/product_founder_review.md", f"# Product Founder Review: {idea}\n\nA has the clearest hook.\n")
+    write(repo, f"{lab}/technical_lead_review.md", f"# Technical Lead Review: {idea}\n\nKeep rules small for three chapters.\n")
+    write(repo, f"{lab}/qa_release_review.md", f"# QA Release Review: {idea}\n\nGate A needs protagonist agency evidence.\n")
+    write(repo, f"{lab}/codex_synthesis.md", IDEA_SYNTHESIS_READY.format(idea=idea))
+    return lab
+
+
+def run_deepseek_module_with_response(
+    repo: Path,
+    module: str,
+    response_literal: str,
+    *args: str,
+) -> subprocess.CompletedProcess:
+    env = os.environ.copy()
+    env["DEEPSEEK_API_KEY"] = "test-key"
+    code = (
+        "import sys\n"
+        "sys.path.insert(0, 'scripts')\n"
+        f"import {module} as target\n"
+        f"target.call_deepseek = lambda payload, api_key: {response_literal}\n"
+        "raise SystemExit(target.main())\n"
+    )
+    return subprocess.run(
+        [sys.executable, "-c", code, *args],
+        cwd=repo,
+        text=True,
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+        env=env,
+    )
+
+
 def write_auxiliary_reviews(repo: Path, chapter: str, status: str = "CLEAR") -> None:
     for name in ("ai_taste", "web_satisfaction", "retention_risk", "originality"):
         findings = "- Checked."
@@ -181,7 +335,7 @@ def write_human_events(repo: Path, count: int) -> None:
                     "chapter": chapter,
                     "type": "character_decision",
                     "fact": f"fact {number}",
-                    "evidence_quote": f"quote {number}",
+                    "evidence_quote": f"Official chapter {chapter}",
                     "consequence": f"consequence {number}",
                     "verified_by": "human",
                 }
@@ -338,6 +492,28 @@ class WorkflowGuardTests(unittest.TestCase):
             self.assertTrue((repo / "setup_answers.md").exists())
             self.assertIn("next: fill", result.stdout)
 
+    def test_status_prefers_ready_idea_lab_over_questionnaire(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_ready_idea_lab(repo, "idea_status")
+            result = run(repo, "scripts/novel.py", "status")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("idea-select --id idea_status", result.stdout)
+            self.assertNotIn("python scripts/novel.py questionnaire", result.stdout)
+
+    def test_status_without_idea_lab_still_prompts_questionnaire(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            for item in (repo / "state/idea_lab").iterdir():
+                if item.is_dir():
+                    shutil.rmtree(item)
+
+            result = run(repo, "scripts/novel.py", "status")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("python scripts/novel.py questionnaire", result.stdout)
+
     def test_idea_requires_deepseek_key_before_writing_lab(self) -> None:
         with copy_repo() as temp:
             repo = temp
@@ -363,17 +539,7 @@ class WorkflowGuardTests(unittest.TestCase):
         with copy_repo() as temp:
             repo = temp
             idea = "idea_test"
-            lab = f"state/idea_lab/{idea}"
-            write(repo, f"{lab}/original_idea.md", "# Original\n\n赛博民俗悬疑。\n")
-            write(repo, f"{lab}/deepseek_idea.md", "# DeepSeek\n\nDirection A/B/C ready.\n")
-            write(repo, f"{lab}/product_founder_review.md", "# Product\n\nA has the clearest hook.\n")
-            write(repo, f"{lab}/technical_lead_review.md", "# Tech\n\nKeep rules small for three chapters.\n")
-            write(repo, f"{lab}/qa_release_review.md", "# QA\n\nGate A needs protagonist agency evidence.\n")
-            write(
-                repo,
-                f"{lab}/codex_synthesis.md",
-                "# Synthesis\n\n## Direction A\ncommercial hook\n\n## Direction B\ncharacter drive\n\n## Direction C\ndifference\n",
-            )
+            lab = write_ready_idea_lab(repo, idea)
             canon_before = (repo / "bible/canon.md").read_text(encoding="utf-8")
             ledger_before = (repo / "state/event_ledger.jsonl").read_text(encoding="utf-8")
 
@@ -412,6 +578,84 @@ class WorkflowGuardTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("missing idea-lab input", result.stderr)
 
+    def test_idea_select_requires_structured_codex_synthesis(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            idea = "idea_bad_synthesis"
+            lab = write_ready_idea_lab(repo, idea)
+            write(
+                repo,
+                f"{lab}/codex_synthesis.md",
+                f"# Codex Synthesis: {idea}\n\n## Direction A\n\n- 一句话卖点：Only one field.\n",
+            )
+
+            result = run(repo, "scripts/novel.py", "idea-select", "--id", idea, "--choice", "A")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("codex_synthesis.md missing Direction B", result.stderr)
+
+    def test_idea_select_rejects_stale_agent_outputs(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            idea = "idea_stale_agent"
+            lab = write_ready_idea_lab(repo, idea)
+            old_time = 1000
+            new_time = 2000
+            os.utime(repo / f"{lab}/product_founder_review.md", (old_time, old_time))
+            os.utime(repo / f"{lab}/original_idea.md", (new_time, new_time))
+            os.utime(repo / f"{lab}/deepseek_idea.md", (new_time, new_time))
+
+            result = run(repo, "scripts/novel.py", "idea-select", "--id", idea, "--choice", "A")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("older than idea inputs", result.stderr)
+
+    def test_idea_force_cleans_stale_agent_outputs(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            idea = "idea_force"
+            lab = write_ready_idea_lab(repo, idea)
+            write(repo, f"{lab}/selection.json", "{}\n")
+            write(repo, f"{lab}/selection.md", "old selection\n")
+            write(
+                repo,
+                "scripts/run_deepseek_idea.py",
+                """from __future__ import annotations
+import argparse
+from pathlib import Path
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--idea-id", required=True)
+parser.add_argument("--text", required=True)
+parser.add_argument("--model")
+parser.add_argument("--temperature")
+parser.add_argument("--max-tokens")
+args = parser.parse_args()
+root = Path(__file__).resolve().parents[1]
+lab = root / "state" / "idea_lab" / args.idea_id
+lab.mkdir(parents=True, exist_ok=True)
+(lab / "deepseek_idea.md").write_text(f"# DeepSeek Idea Directions: {args.idea_id}\\n\\nnew deepseek\\n", encoding="utf-8")
+print("OK: stub deepseek idea")
+""",
+            )
+            env = os.environ.copy()
+            env["DEEPSEEK_API_KEY"] = "test-key"
+
+            result = run_with_env(
+                repo,
+                ("scripts/novel.py", "idea", "--id", idea, "--text", "新想法", "--force"),
+                env,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertFalse((repo / f"{lab}/product_founder_review.md").exists())
+            self.assertFalse((repo / f"{lab}/technical_lead_review.md").exists())
+            self.assertFalse((repo / f"{lab}/qa_release_review.md").exists())
+            self.assertFalse((repo / f"{lab}/codex_synthesis.md").exists())
+            self.assertFalse((repo / f"{lab}/selection.json").exists())
+            self.assertFalse((repo / f"{lab}/selection.md").exists())
+            self.assertIn("新想法", (repo / f"{lab}/original_idea.md").read_text(encoding="utf-8"))
+
     def test_close_ship_requires_structured_candidate_selection(self) -> None:
         with copy_repo() as temp:
             repo = temp
@@ -440,7 +684,7 @@ class WorkflowGuardTests(unittest.TestCase):
                 "--fact",
                 "fact",
                 "--evidence-quote",
-                "quote",
+                "Official chapter text",
                 "--consequence",
                 "consequence",
             )
@@ -450,6 +694,51 @@ class WorkflowGuardTests(unittest.TestCase):
 
             self.assertNotEqual(close.returncode, 0)
             self.assertIn("missing structured candidate selection", close.stdout)
+
+    def test_close_non_ship_records_decision_without_chapter_evidence(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            close = run(
+                repo,
+                "scripts/novel.py",
+                "close",
+                "v01_c001",
+                "--decision",
+                "Kill chapter",
+                "--notes",
+                "No usable opening.",
+            )
+
+            self.assertEqual(close.returncode, 0, close.stdout + close.stderr)
+            decision = (repo / "reviews/v01_c001/decision.md").read_text(encoding="utf-8")
+            self.assertIn("decision: Kill chapter", decision)
+            self.assertIn("No usable opening.", decision)
+
+    def test_close_rewrite_brief_records_structured_failure_without_chapter_evidence(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            close = run(
+                repo,
+                "scripts/novel.py",
+                "close",
+                "v01_c001",
+                "--decision",
+                "Rewrite brief",
+                "--keep",
+                "core premise",
+                "--change",
+                "opening conflict",
+                "--next-verify",
+                "new first scene",
+                "--setting-boundary",
+                "no new canon",
+                "--failure-condition",
+                "goal remains unclear",
+            )
+
+            self.assertEqual(close.returncode, 0, close.stdout + close.stderr)
+            decision = (repo / "reviews/v01_c001/decision.md").read_text(encoding="utf-8")
+            self.assertIn("decision: Rewrite brief", decision)
 
     def test_stop_lock_blocks_writing_commands(self) -> None:
         with copy_repo() as temp:
@@ -611,6 +900,7 @@ class WorkflowGuardTests(unittest.TestCase):
     def test_append_event_invalid_duplicate_does_not_mutate_ledger(self) -> None:
         with copy_repo() as temp:
             repo = temp
+            write(repo, "chapters/v01/c001.md", "A real quote anchors the event.\n")
             base_args = [
                 "scripts/append_event.py",
                 "--chapter",
@@ -620,7 +910,7 @@ class WorkflowGuardTests(unittest.TestCase):
                 "--fact",
                 "fact",
                 "--evidence-quote",
-                "quote",
+                "real quote anchors",
                 "--consequence",
                 "consequence",
                 "--event-id",
@@ -634,6 +924,55 @@ class WorkflowGuardTests(unittest.TestCase):
             self.assertEqual(first.returncode, 0, first.stderr)
             self.assertNotEqual(second.returncode, 0)
             self.assertEqual(before, after)
+
+    def test_append_event_requires_quote_from_official_chapter(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write(repo, "chapters/v01/c001.md", "The protagonist chooses action on page.\n")
+            before = (repo / "state/event_ledger.jsonl").read_text(encoding="utf-8")
+
+            result = run(
+                repo,
+                "scripts/append_event.py",
+                "--chapter",
+                "v01_c001",
+                "--type",
+                "character_decision",
+                "--fact",
+                "fact",
+                "--evidence-quote",
+                "not in the chapter",
+                "--consequence",
+                "consequence",
+            )
+            after = (repo / "state/event_ledger.jsonl").read_text(encoding="utf-8")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("evidence_quote not found", result.stderr)
+            self.assertEqual(before, after)
+
+    def test_append_event_accepts_quote_from_official_chapter_with_collapsed_whitespace(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write(repo, "chapters/v01/c001.md", "The protagonist chooses\naction on page.\n")
+
+            result = run(
+                repo,
+                "scripts/append_event.py",
+                "--chapter",
+                "v01_c001",
+                "--type",
+                "character_decision",
+                "--fact",
+                "fact",
+                "--evidence-quote",
+                "protagonist chooses action",
+                "--consequence",
+                "consequence",
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("protagonist chooses action", (repo / "state/event_ledger.jsonl").read_text(encoding="utf-8"))
 
     def test_deepseek_review_rejects_review_file_as_input(self) -> None:
         with copy_repo() as temp:
@@ -673,6 +1012,82 @@ class WorkflowGuardTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertTrue((repo / "external_runs/deepseek/v01_c001/review.prompt.md").exists())
             self.assertFalse((repo / "reviews/v01_c001/review_manifest.json").exists())
+
+    def test_deepseek_idea_rejects_malformed_response_without_artifacts(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            result = run_deepseek_module_with_response(
+                repo,
+                "run_deepseek_idea",
+                "{}",
+                "--idea-id",
+                "idea_bad_response",
+                "--text",
+                "idea",
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("invalid DeepSeek response", result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
+            self.assertFalse((repo / "state/idea_lab/idea_bad_response/deepseek_idea.md").exists())
+            self.assertFalse((repo / "external_runs/deepseek/idea_bad_response/idea.raw.json").exists())
+
+    def test_deepseek_generate_rejects_malformed_response_without_artifacts(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write(repo, "state/context_pack/v01_c001.md", "context\n")
+
+            result = run_deepseek_module_with_response(
+                repo,
+                "run_deepseek_generate",
+                "{}",
+                "--chapter",
+                "v01_c001",
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("invalid DeepSeek response", result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
+            self.assertFalse((repo / "drafts/deepseek/v01_c001.md").exists())
+            self.assertFalse((repo / "external_runs/deepseek/v01_c001/generate.raw.json").exists())
+
+    def test_deepseek_review_rejects_malformed_response_without_artifacts(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write(repo, "state/context_pack/v01_c002.md", "context\n")
+            write(repo, "chapters/v01/c002.md", "chapter\n")
+
+            result = run_deepseek_module_with_response(
+                repo,
+                "run_deepseek_review",
+                "{}",
+                "--chapter",
+                "v01_c002",
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("invalid DeepSeek response", result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
+            self.assertFalse((repo / "reviews/v01_c002/deepseek_integrated_review.md").exists())
+            self.assertFalse((repo / "reviews/v01_c002/review_manifest.json").exists())
+            self.assertFalse((repo / "external_runs/deepseek/v01_c002/review.raw.json").exists())
+
+    def test_deepseek_generate_valid_response_writes_candidate_and_raw_json(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write(repo, "state/context_pack/v01_c001.md", "context\n")
+
+            result = run_deepseek_module_with_response(
+                repo,
+                "run_deepseek_generate",
+                "{'choices': [{'message': {'content': 'candidate text'}}]}",
+                "--chapter",
+                "v01_c001",
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual((repo / "drafts/deepseek/v01_c001.md").read_text(encoding="utf-8"), "candidate text\n")
+            self.assertTrue((repo / "external_runs/deepseek/v01_c001/generate.raw.json").exists())
 
     def test_land_rejects_identical_selected_deepseek_candidate(self) -> None:
         with copy_repo() as temp:
@@ -742,6 +1157,56 @@ class WorkflowGuardTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("status: NOT_READY", result.stdout)
             self.assertIn("reader responses below minimum", result.stdout)
+
+    def test_gate_commands_read_same_yaml_config(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write(
+                repo,
+                "ops/gate_rules.yaml",
+                "gate_a_3_chapters:\n"
+                "  gate: A\n"
+                "  criteria: outline/gate_a_3_chapters.md\n"
+                "  decide_only_after_chapters: 3\n"
+                "  reader_synthesis: reader_tests/gate_a_synthesis.md\n"
+                "  reader_response_dir: reader_tests/responses/gate_a\n"
+                "  min_reader_responses: 3\n"
+                "  assessment_sections: []\n"
+                "gate_b_10_chapters:\n"
+                "  gate: B\n"
+                "  criteria: outline/gate_b_10_chapters.md\n"
+                "  decide_only_after_chapters: 10\n"
+                "  reader_synthesis: reader_tests/gate_b_synthesis.md\n"
+                "  reader_response_dir: reader_tests/responses/gate_b\n"
+                "  min_reader_responses: 3\n"
+                "  assessment_sections: []\n"
+                "gate_c_25_chapters:\n"
+                "  gate: C\n"
+                "  criteria: outline/custom_gate_c.md\n"
+                "  decide_only_after_chapters: 1\n"
+                "  required_assessment: state/gates/custom_c.md\n"
+                "  assessment_sections:\n"
+                "    - Custom Section\n"
+                "gate_e_125_chapters:\n"
+                "  gate: E\n"
+                "  criteria: ops/gate_rules.yaml\n"
+                "  decide_only_after_chapters: 125\n"
+                "  required_assessment: state/gates/gate_e_300w_assessment.md\n"
+                "  assessment_sections:\n"
+                "    - 300 万字模式\n",
+            )
+            write(repo, "outline/custom_gate_c.md", "# Custom Gate C\n")
+
+            gate = run(repo, "scripts/novel.py", "gate", "C")
+            gate_check = run(repo, "scripts/novel.py", "gate-check", "C")
+
+            self.assertNotEqual(gate.returncode, 0)
+            self.assertNotEqual(gate_check.returncode, 0)
+            self.assertIn("minimum chapters before decision: 1", gate.stdout)
+            self.assertIn("criteria file: outline/custom_gate_c.md", gate.stdout)
+            self.assertIn("required_chapters: 1", gate_check.stdout)
+            self.assertIn("criteria_file: outline/custom_gate_c.md", gate_check.stdout)
+            self.assertIn("missing gate assessment: state/gates/custom_c.md", gate_check.stdout)
 
     def test_gate_c_requires_and_accepts_structured_assessment(self) -> None:
         with copy_repo() as temp:
@@ -969,6 +1434,7 @@ class WorkflowGuardTests(unittest.TestCase):
     def test_event_id_must_match_chapter(self) -> None:
         with copy_repo() as temp:
             repo = temp
+            write(repo, "chapters/v01/c001.md", "quote\n")
             write(
                 repo,
                 "bad_ledger.jsonl",
@@ -979,6 +1445,21 @@ class WorkflowGuardTests(unittest.TestCase):
 
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("does not match chapter", result.stderr)
+
+    def test_validate_event_ledger_rejects_unanchored_quote(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write(repo, "chapters/v01/c001.md", "Official text with real evidence.\n")
+            write(
+                repo,
+                "bad_ledger.jsonl",
+                '{"event_id":"v01_c001_e001","chapter":"v01_c001","type":"character_decision","fact":"fact","evidence_quote":"missing quote","consequence":"consequence","verified_by":"human"}\n',
+            )
+
+            result = run(repo, "scripts/validate_event_ledger.py", "--path", "bad_ledger.jsonl")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("evidence_quote not found", result.stderr)
 
     def test_context_pack_oversize_fails_without_allow_truncated(self) -> None:
         with copy_repo() as temp:
@@ -1028,6 +1509,162 @@ class WorkflowGuardTests(unittest.TestCase):
             placeholder = run(repo, "scripts/novel.py", "check")
             self.assertNotEqual(placeholder.returncode, 0)
             self.assertIn("placeholder", placeholder.stderr)
+
+    def test_doctor_reports_missing_git_as_error(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            result = run(repo, "scripts/novel.py", "doctor")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("status: ERROR", result.stdout)
+            self.assertIn("not a Git repository", result.stdout)
+
+    def test_next_prompt_prefers_unselected_idea_lab(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_ready_idea_lab(repo, "idea_next")
+            result = run(repo, "scripts/novel.py", "next-prompt")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("总结开书实验", result.stdout)
+            self.assertIn("idea_next", result.stdout)
+
+    def test_next_prompt_routes_to_gate_a_after_three_shipped_chapters(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            for number in range(1, 4):
+                write_complete_chapter_evidence(repo, f"v01_c{number:03d}", number)
+            write_human_events(repo, 3)
+
+            result = run(repo, "scripts/novel.py", "next-prompt")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("进入 Gate A 检查", result.stdout)
+
+    def test_brief_check_requires_anti_drift_sections(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            missing = run(repo, "scripts/novel.py", "brief-check", "v01_c001")
+            self.assertNotEqual(missing.returncode, 0)
+            self.assertIn("status: NOT_READY", missing.stdout)
+
+            write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF.format(chapter="v01_c001"))
+            ready = run(repo, "scripts/novel.py", "brief-check", "v01_c001")
+
+            self.assertEqual(ready.returncode, 0, ready.stdout + ready.stderr)
+            self.assertIn("status: READY", ready.stdout)
+
+    def test_derived_state_and_context_pack_include_objects_and_abilities(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            chapter_text = "主角握住义眼。义眼只能捕捉被数据放大的执念信号。\n"
+            write(repo, "chapters/v01/c001.md", chapter_text)
+            write(
+                repo,
+                "state/event_ledger.jsonl",
+                json.dumps(
+                    {
+                        "event_id": "v01_c001_e001",
+                        "chapter": "v01_c001",
+                        "type": "object_change",
+                        "fact": "义眼成为关键调查装备",
+                        "evidence_quote": "主角握住义眼",
+                        "consequence": "后续必须追踪义眼状态",
+                        "verified_by": "human",
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+                + json.dumps(
+                    {
+                        "event_id": "v01_c001_e002",
+                        "chapter": "v01_c001",
+                        "type": "rule_reveal",
+                        "fact": "义眼只能捕捉被数据放大的执念信号",
+                        "evidence_quote": "义眼只能捕捉被数据放大的执念信号",
+                        "consequence": "限制能力边界",
+                        "verified_by": "human",
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+            )
+            write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF.format(chapter="v01_c001"))
+
+            derived = run(repo, "scripts/build_derived_state.py")
+            self.assertEqual(derived.returncode, 0, derived.stdout + derived.stderr)
+            self.assertIn("义眼成为关键调查装备", (repo / "state/derived/current_objects.yaml").read_text(encoding="utf-8"))
+            self.assertIn("义眼只能捕捉", (repo / "state/derived/current_abilities.yaml").read_text(encoding="utf-8"))
+
+            context = run(repo, "scripts/build_context_pack.py", "--chapter", "v01_c001", "--limit", "10000")
+            self.assertEqual(context.returncode, 0, context.stdout + context.stderr)
+            pack = (repo / "state/context_pack/v01_c001.md").read_text(encoding="utf-8")
+            self.assertIn("道具 / 装备台账", pack)
+            self.assertIn("当前技能 / 规则揭示", pack)
+
+    def test_suggestion_commands_do_not_write_canon_or_ledger(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            chapter = "v01_c001"
+            write(repo, "chapters/v01/c001.md", "主角握住义眼，发现规则只能解释一半线索。\n")
+            ledger_before = (repo / "state/event_ledger.jsonl").read_text(encoding="utf-8")
+            canon_before = (repo / "bible/canon.md").read_text(encoding="utf-8")
+
+            suggest = run(repo, "scripts/novel.py", "event-suggest", chapter)
+            propose = run(repo, "scripts/novel.py", "canon-propose", chapter)
+
+            self.assertEqual(suggest.returncode, 0, suggest.stdout + suggest.stderr)
+            self.assertEqual(propose.returncode, 0, propose.stdout + propose.stderr)
+            self.assertIn("object_change", suggest.stdout)
+            self.assertEqual(ledger_before, (repo / "state/event_ledger.jsonl").read_text(encoding="utf-8"))
+            self.assertEqual(canon_before, (repo / "bible/canon.md").read_text(encoding="utf-8"))
+
+    def test_second_revise_once_is_blocked(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            args = (
+                "scripts/novel.py",
+                "decision",
+                "v01_c001",
+                "--decision",
+                "Revise once",
+                "--keep",
+                "保留主角主动性",
+                "--change",
+                "加强章末钩子",
+                "--next-verify",
+                "复查留存风险",
+                "--setting-boundary",
+                "不新增规则",
+                "--failure-condition",
+                "主角目标仍不清",
+            )
+            first = run(repo, *args)
+            second = run(repo, *args)
+
+            self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+            self.assertNotEqual(second.returncode, 0)
+            self.assertIn("already used Revise once", second.stderr)
+
+    def test_reader_response_template_can_be_recorded_as_incomplete_draft(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            result = run(
+                repo,
+                "scripts/reader_test.py",
+                "add",
+                "--gate",
+                "A",
+                "--reader",
+                "reader_001",
+                "--answers",
+                "templates/reader_response_gate_a.json",
+                "--allow-incomplete",
+                "--allow-unknown",
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertTrue((repo / "reader_tests/responses/gate_a/reader_001.json").exists())
 
 
 if __name__ == "__main__":

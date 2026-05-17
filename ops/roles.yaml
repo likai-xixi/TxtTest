@@ -43,6 +43,8 @@ idea:
     - external_runs/deepseek/*/idea.raw.json
     - outline/premise.md
     - bible/open_questions.md
+    - bible/objects.yaml
+    - bible/abilities.yaml
     - outline/gate_a_3_chapters.md
     - outline/chapter_briefs/v01_c001.md
 
@@ -55,6 +57,8 @@ state:
   allow:
     - state/event_ledger.jsonl
     - state/derived/**
+    - bible/objects.yaml
+    - bible/abilities.yaml
     - state/context_pack/{chapter}.md
     - state/snapshots/{chapter}_*
     - state/gates/**
@@ -66,6 +70,8 @@ chapter:
   allow:
     - outline/chapter_briefs/{chapter}.md
     - chapters/{volume}/{chapter_file}
+    - bible/objects.yaml
+    - bible/abilities.yaml
     - drafts/codex/{chapter}.md
     - drafts/deepseek/{chapter}.md
     - external_runs/deepseek/{chapter}/**
@@ -83,7 +89,10 @@ maintenance:
     - .env.example
     - AGENTS.md
     - README.md
+    - docs/**
     - setup_report.md
+    - bible/objects.yaml
+    - bible/abilities.yaml
     - ops/**
     - references/**
     - scripts/**

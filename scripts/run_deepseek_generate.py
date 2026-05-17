@@ -8,6 +8,7 @@ import urllib.error
 import urllib.request
 
 from _common import ROOT, chapter_parts, read_text, write_blocked_by_locks, write_text
+from deepseek_response import DeepSeekResponseError, extract_message_content
 
 
 API_URL = "https://api.deepseek.com/chat/completions"
@@ -95,10 +96,15 @@ def main() -> int:
         print(f"ERROR: DeepSeek request failed: {exc}", file=sys.stderr)
         return 1
 
+    try:
+        content = extract_message_content(response)
+    except DeepSeekResponseError as exc:
+        print(f"ERROR: invalid DeepSeek response: {exc}", file=sys.stderr)
+        return 1
+
     write_text(run_dir / "generate.raw.json", json.dumps(response, ensure_ascii=False, indent=2))
-    content = response["choices"][0]["message"].get("content") or ""
     out = ROOT / "drafts" / "deepseek" / f"{args.chapter}.md"
-    write_text(out, content.strip() + "\n")
+    write_text(out, content + "\n")
     print(f"OK: wrote {out.relative_to(ROOT)}")
     return 0
 

@@ -27,6 +27,7 @@ DIRS = [
     "schemas",
     "reader_tests",
     "reader_tests/responses",
+    "docs",
     "scripts",
     "templates",
     "exports",
@@ -84,6 +85,10 @@ def main() -> int:
 
     if not (ROOT / ".env.example").exists():
         write_text(ROOT / ".env.example", "DEEPSEEK_API_KEY=\n")
+    if not (ROOT / "bible" / "objects.yaml").exists():
+        write_text(ROOT / "bible" / "objects.yaml", "objects: []\n")
+    if not (ROOT / "bible" / "abilities.yaml").exists():
+        write_text(ROOT / "bible" / "abilities.yaml", "abilities: []\n")
     locks = ROOT / "state" / "stops" / "project_locks.json"
     if not locks.exists():
         write_text(locks, '{\n  "locks": []\n}\n')

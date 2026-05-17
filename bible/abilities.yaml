@@ -1,0 +1,15 @@
+abilities: []
+
+# Template:
+# - id: ability_id
+#   name: 待定
+#   owner: protagonist
+#   first_revealed: null
+#   can_do:
+#     - 待定
+#   cannot_do:
+#     - 待定
+#   cost:
+#     - 待定
+#   current_limits:
+#     - 待定

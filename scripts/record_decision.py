@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from _common import ROOT, chapter_parts, now_iso, write_blocked_by_locks, write_json, write_text
+from _common import ROOT, chapter_parts, now_iso, read_json, write_blocked_by_locks, write_json, write_text
 
 
 ALLOWED = ["Ship", "Revise once", "Rewrite brief", "Kill chapter", "Pause project"]
@@ -26,6 +26,13 @@ def main() -> int:
         return 1
 
     chapter_parts(args.chapter)
+    existing = read_json(ROOT / "reviews" / args.chapter / "decision.json", {})
+    if args.decision == "Revise once" and existing.get("decision") == "Revise once":
+        print(
+            "ERROR: this chapter already used Revise once; choose Rewrite brief or record an explicit human decision.",
+            file=sys.stderr,
+        )
+        return 1
     if args.decision in STRUCTURED_REQUIRED:
         required = {
             "--keep": args.keep,

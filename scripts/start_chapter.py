@@ -65,6 +65,10 @@ def main() -> int:
         for error in errors:
             print(f"ERROR: {error}", file=sys.stderr)
         return 1
+    if not args.allow_placeholders:
+        code = run(["scripts/brief_check.py", "--chapter", args.chapter])
+        if code != 0:
+            return code
 
     for step in [
         ["scripts/build_derived_state.py"],

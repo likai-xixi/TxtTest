@@ -1,5 +1,11 @@
 gate_a_3_chapters:
+  gate: A
   decide_only_after_chapters: 3
+  criteria: outline/gate_a_3_chapters.md
+  reader_synthesis: reader_tests/gate_a_synthesis.md
+  reader_response_dir: reader_tests/responses/gate_a
+  min_reader_responses: 3
+  assessment_sections: []
   questions:
     - 是否愿意写第 4 章
     - 流程是否让写作更轻
@@ -11,7 +17,13 @@ gate_a_3_chapters:
     - Codex / DeepSeek 哪个更适合主写
 
 gate_b_10_chapters:
+  gate: B
   decide_only_after_chapters: 10
+  criteria: outline/gate_b_10_chapters.md
+  reader_synthesis: reader_tests/gate_b_synthesis.md
+  reader_response_dir: reader_tests/responses/gate_b
+  min_reader_responses: 3
+  assessment_sections: []
   questions:
     - 主角欲望稳定性
     - 主要阻力稳定性
@@ -20,8 +32,19 @@ gate_b_10_chapters:
     - 每 3 章爽点 / 留存复盘
 
 gate_c_25_chapters:
+  gate: C
   decide_only_after_chapters: 25
+  criteria: ops/gate_rules.yaml
+  reader_synthesis:
+  reader_response_dir:
+  min_reader_responses: 0
   required_assessment: state/gates/gate_c_assessment.md
+  assessment_sections:
+    - 阶段高潮
+    - 不可逆变化
+    - 伏笔负债
+    - 设定膨胀
+    - 卷内结构
   questions:
     - 阶段高潮
     - 不可逆变化
@@ -30,8 +53,20 @@ gate_c_25_chapters:
     - 卷内结构
 
 gate_e_125_chapters:
+  gate: E
   decide_only_after_chapters: 125
+  criteria: ops/gate_rules.yaml
+  reader_synthesis:
+  reader_response_dir:
+  min_reader_responses: 0
   required_assessment: state/gates/gate_e_300w_assessment.md
+  assessment_sections:
+    - 300 万字模式
+    - 管理成本
+    - 连续性负担
+    - 读者证据
+    - 模型路由
+    - 预算
   questions:
     - 是否进入 300 万字模式
     - 管理成本

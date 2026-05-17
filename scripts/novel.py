@@ -11,18 +11,24 @@ from pathlib import Path
 
 from _common import ROOT, chapter_parts, now_iso, read_text, unresolved_locks, write_text
 from diff_scope_check import ROLE_PATTERNS, changed_files
+from gate_config import load_gate_configs
 from validate_event_ledger import ALLOWED_TYPES
 
 
 DECISIONS = ["Ship", "Revise once", "Rewrite brief", "Kill chapter", "Pause project"]
-GATES = {
-    "A": ("outline/gate_a_3_chapters.md", 3),
-    "B": ("outline/gate_b_10_chapters.md", 10),
-    "C": ("ops/gate_rules.yaml", 25),
-    "E": ("ops/gate_rules.yaml", 125),
-}
+GATES = load_gate_configs()
 PLACEHOLDER_MARKERS = ("待定", "待填", "待评", "待生成", "待人类裁决", "TODO")
 IDEA_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
+IDEA_FORCE_CLEANUP_FILES = (
+    "deepseek_idea.md",
+    "product_founder_review.md",
+    "technical_lead_review.md",
+    "qa_release_review.md",
+    "codex_synthesis.md",
+    "agent_tasks.md",
+    "selection.json",
+    "selection.md",
+)
 
 
 def run_script(script: str, *args: str, check: bool = True) -> int:
@@ -99,6 +105,13 @@ def validate_idea_id(value: str) -> str:
 
 def default_idea_id() -> str:
     return "idea_" + now_iso().replace("-", "").replace(":", "").replace("+00:00", "Z")
+
+
+def cleanup_forced_idea_lab(lab: Path) -> None:
+    for name in IDEA_FORCE_CLEANUP_FILES:
+        path = lab / name
+        if path.exists():
+            path.unlink()
 
 
 def seed_text(path: Path) -> str:
@@ -277,6 +290,8 @@ def command_idea(args: argparse.Namespace) -> int:
     if lab.exists() and not args.force:
         print(f"ERROR: idea lab already exists: {lab.relative_to(ROOT)}. Use --force to overwrite metadata.", file=sys.stderr)
         return 1
+    if lab.exists() and args.force:
+        cleanup_forced_idea_lab(lab)
     write_text(lab / "original_idea.md", f"# Original Idea: {idea_id}\n\n{idea_text}\n")
     write_text(
         lab / "idea.json",
@@ -501,22 +516,23 @@ def command_close(args: argparse.Namespace) -> int:
     ensure_no_open_locks()
     chapter_parts(args.chapter)
     run_script("validate_event_ledger.py")
-    run_script("validate_chapter.py", "--chapter", args.chapter)
-    run_script("continuity_check.py", "--chapter", args.chapter)
-    run_script("stop_check.py", "--chapter", args.chapter)
-    if args.decision == "Ship" and not chapter_has_events(args.chapter):
-        print(
-            "ERROR: Ship requires at least one human-verified event for this chapter. "
-            "Run `python scripts/novel.py event ...`.",
-            file=sys.stderr,
-        )
-        return 1
     if args.decision == "Ship":
+        run_script("validate_chapter.py", "--chapter", args.chapter)
+        run_script("continuity_check.py", "--chapter", args.chapter)
+        run_script("stop_check.py", "--chapter", args.chapter)
+        if not chapter_has_events(args.chapter):
+            print(
+                "ERROR: Ship requires at least one human-verified event for this chapter. "
+                "Run `python scripts/novel.py event ...`.",
+                file=sys.stderr,
+            )
+            return 1
         run_script("chapter_evidence.py", "--chapter", args.chapter)
 
     command_decision(args)
     run_script("build_derived_state.py")
-    run_script("diff_scope_check.py", "--role", "chapter", "--chapter", args.chapter)
+    if args.decision == "Ship":
+        run_script("diff_scope_check.py", "--role", "chapter", "--chapter", args.chapter)
     if args.commit_message:
         return command_commit(
             argparse.Namespace(message=args.commit_message, all=True, role="chapter", chapter=args.chapter)
@@ -533,12 +549,14 @@ def command_derive(_args: argparse.Namespace) -> int:
 
 def command_gate(args: argparse.Namespace) -> int:
     gate = args.gate.upper()
-    path_text, needed = GATES[gate]
+    config = GATES[gate]
+    path_text = config["criteria"]
+    needed = config["needed"]
     path = ROOT / path_text
     print(f"# Gate {gate}")
     print()
     print(f"minimum chapters before decision: {needed}")
-    print(f"criteria file: {path.relative_to(ROOT)}")
+    print(f"criteria file: {path.relative_to(ROOT).as_posix()}")
     print()
     print(read_text(path).strip())
     print()
@@ -616,6 +634,33 @@ def command_compare(args: argparse.Namespace) -> int:
 def command_diff_scope(args: argparse.Namespace) -> int:
     run_script("diff_scope_check.py", "--role", args.role, "--chapter", args.chapter)
     return 0
+
+
+def command_doctor(_args: argparse.Namespace) -> int:
+    return run_script("project_doctor.py", check=False)
+
+
+def command_next_prompt(args: argparse.Namespace) -> int:
+    script_args: list[str] = []
+    if args.chapter:
+        script_args.extend(["--chapter", args.chapter])
+    return run_script("next_prompt.py", *script_args, check=False)
+
+
+def command_brief_check(args: argparse.Namespace) -> int:
+    return run_script("brief_check.py", "--chapter", args.chapter, check=False)
+
+
+def command_event_suggest(args: argparse.Namespace) -> int:
+    return run_script("event_suggest.py", args.chapter, check=False)
+
+
+def command_canon_propose(args: argparse.Namespace) -> int:
+    return run_script("canon_propose.py", args.chapter, check=False)
+
+
+def command_health_report(args: argparse.Namespace) -> int:
+    return run_script("health_report.py", "--to", args.to, check=False)
 
 
 def command_self_test(_args: argparse.Namespace) -> int:
@@ -993,6 +1038,29 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--role", required=True, choices=sorted(ROLE_PATTERNS))
     p.add_argument("--chapter", required=True)
     p.set_defaults(func=command_diff_scope)
+
+    p = sub.add_parser("doctor", help="Check whether the project environment is ready to run the workflow.")
+    p.set_defaults(func=command_doctor)
+
+    p = sub.add_parser("next-prompt", help="Print the next recommended Codex app prompt.")
+    p.add_argument("--chapter", default=None)
+    p.set_defaults(func=command_next_prompt)
+
+    p = sub.add_parser("brief-check", help="Check a chapter brief for anti-drift requirements.")
+    p.add_argument("chapter")
+    p.set_defaults(func=command_brief_check)
+
+    p = sub.add_parser("event-suggest", help="Suggest event ledger entries without writing them.")
+    p.add_argument("chapter")
+    p.set_defaults(func=command_event_suggest)
+
+    p = sub.add_parser("canon-propose", help="Propose canon entries without writing canon.")
+    p.add_argument("chapter")
+    p.set_defaults(func=command_canon_propose)
+
+    p = sub.add_parser("health-report", help="Print a long-form health report without mutating state.")
+    p.add_argument("--to", required=True)
+    p.set_defaults(func=command_health_report)
 
     p = sub.add_parser("stop-record", help="Record an unresolved stop-rule lock.")
     p.add_argument("--chapter", default="")

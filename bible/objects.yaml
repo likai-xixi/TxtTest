@@ -1,0 +1,13 @@
+objects: []
+
+# Template:
+# - id: object_id
+#   name: 待定
+#   type: equipment
+#   owner: protagonist
+#   first_seen: null
+#   current_state: 待定
+#   limits:
+#     - 待定
+#   forbidden_upgrades:
+#     - 禁止临时变成万能道具。

@@ -19,6 +19,7 @@ REVIEW_TEMPLATES = [
     "web_satisfaction.md",
     "retention_risk.md",
     "originality.md",
+    "similarity_risk.md",
 ]
 
 

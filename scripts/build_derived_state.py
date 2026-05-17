@@ -73,6 +73,36 @@ def build_open_threads(events: list[dict]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def build_event_state(events: list[dict], event_type: str, root_key: str) -> str:
+    items = [event for event in events if event["type"] == event_type]
+    lines = [f"{root_key}:"]
+    if not items:
+        lines.append("  []")
+        return "\n".join(lines) + "\n"
+    for event in items:
+        lines.extend(
+            [
+                f"  - id: {yaml_quote(event['event_id'])}",
+                f"    latest_chapter: {yaml_quote(event['chapter'])}",
+                f"    fact: {yaml_quote(event['fact'])}",
+                f"    evidence_quote: {yaml_quote(event['evidence_quote'])}",
+                f"    consequence: {yaml_quote(event['consequence'])}",
+            ]
+        )
+    return "\n".join(lines) + "\n"
+
+
+def build_rule_reveals(events: list[dict]) -> str:
+    lines = ["# Rule Reveals", ""]
+    matched = [event for event in events if event["type"] == "rule_reveal"]
+    if not matched:
+        lines.append("暂无。")
+        return "\n".join(lines) + "\n"
+    for event in matched[-20:]:
+        lines.append(f"- {event['event_id']} ({event['chapter']}): {event['fact']}")
+    return "\n".join(lines) + "\n"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Build derived state from event ledger.")
     parser.add_argument("--ledger", default=str(LEDGER))
@@ -117,6 +147,9 @@ def main() -> int:
     write_text(ROOT / "state" / "derived" / "current_state.yaml", "\n".join(current_state) + "\n")
     write_text(ROOT / "state" / "derived" / "open_threads.yaml", build_open_threads(events))
     write_text(ROOT / "state" / "derived" / "latest_events.md", "\n".join(latest_events) + "\n")
+    write_text(ROOT / "state" / "derived" / "current_objects.yaml", build_event_state(events, "object_change", "objects"))
+    write_text(ROOT / "state" / "derived" / "current_abilities.yaml", build_event_state(events, "rule_reveal", "abilities"))
+    write_text(ROOT / "state" / "derived" / "rule_reveals.md", build_rule_reveals(events))
     print("OK: built state/derived")
     return 0
 

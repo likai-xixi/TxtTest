@@ -27,6 +27,8 @@ REQUIRED_PATHS = [
     "bible/relationships.yaml",
     "bible/factions.yaml",
     "bible/locations.yaml",
+    "bible/objects.yaml",
+    "bible/abilities.yaml",
     "bible/timeline.yaml",
     "bible/glossary.yaml",
     "bible/open_questions.md",
@@ -58,12 +60,16 @@ REQUIRED_PATHS = [
     "templates/web_satisfaction.md",
     "templates/retention_risk.md",
     "templates/originality.md",
+    "templates/similarity_risk.md",
+    "templates/reader_response_gate_a.json",
+    "templates/reader_response_gate_b.json",
     "templates/model_disagreement.md",
     "templates/continuity.md",
     "templates/gate_c_assessment.md",
     "templates/gate_e_300w_assessment.md",
     "state/stops/project_locks.json",
     "state/idea_lab",
+    "docs/editor_commands.md",
     "scripts/template_init.py",
     "scripts/apply_questionnaire.py",
     "scripts/run_deepseek_idea.py",
@@ -87,6 +93,12 @@ REQUIRED_PATHS = [
     "scripts/reader_test.py",
     "scripts/stop_check.py",
     "scripts/project_lock.py",
+    "scripts/project_doctor.py",
+    "scripts/next_prompt.py",
+    "scripts/brief_check.py",
+    "scripts/event_suggest.py",
+    "scripts/canon_propose.py",
+    "scripts/health_report.py",
     "scripts/review_manifest.py",
     "scripts/self_test.py",
     "tests/test_workflow_guards.py",
@@ -153,6 +165,21 @@ def check_roles_yaml() -> list[str]:
     return errors
 
 
+def check_yaml_root(path_text: str, expected_key: str) -> list[str]:
+    path = ROOT / path_text
+    if yaml is None:
+        return [f"{path_text}: PyYAML is required to validate YAML"]
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return [f"{path_text}: invalid YAML: {exc}"]
+    if not isinstance(data, dict):
+        return [f"{path_text}: top-level value must be a mapping"]
+    if expected_key not in data or not isinstance(data[expected_key], list):
+        return [f"{path_text}: must define `{expected_key}: []` or a list"]
+    return []
+
+
 def main() -> int:
     errors: list[str] = []
     for item in REQUIRED_PATHS:
@@ -162,6 +189,8 @@ def main() -> int:
     errors.extend(check_scripts())
     errors.extend(check_source_log())
     errors.extend(check_roles_yaml())
+    errors.extend(check_yaml_root("bible/objects.yaml", "objects"))
+    errors.extend(check_yaml_root("bible/abilities.yaml", "abilities"))
     errors.extend(f"event ledger: {error}" for error in validate_ledger(ROOT / "state" / "event_ledger.jsonl"))
 
     if errors:

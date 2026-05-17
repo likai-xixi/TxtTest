@@ -20,6 +20,22 @@ REQUIRED_INPUTS = [
     "codex_synthesis.md",
 ]
 PLACEHOLDER_MARKERS = ("待定", "待填", "待评", "待生成", "TODO", "{idea_id}")
+AGENT_OUTPUTS = [
+    "product_founder_review.md",
+    "technical_lead_review.md",
+    "qa_release_review.md",
+    "codex_synthesis.md",
+]
+REQUIRED_DIRECTION_FIELDS = [
+    "一句话卖点",
+    "主角欲望",
+    "核心冲突",
+    "世界异常",
+    "前三章验证点",
+    "最大风险",
+    "适合继续的信号",
+    "不适合继续的信号",
+]
 
 
 def validate_idea_id(value: str) -> str:
@@ -30,6 +46,58 @@ def validate_idea_id(value: str) -> str:
 
 def has_placeholder(text: str) -> bool:
     return any(marker in text for marker in PLACEHOLDER_MARKERS)
+
+
+def first_heading(text: str) -> str:
+    for line in text.splitlines():
+        if line.startswith("# "):
+            return line
+    return ""
+
+
+def direction_sections(text: str) -> dict[str, str]:
+    matches = list(re.finditer(r"^##\s*Direction\s+([ABC])\b.*$", text, flags=re.M))
+    sections: dict[str, str] = {}
+    for index, match in enumerate(matches):
+        start = match.end()
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        sections[match.group(1)] = text[start:end]
+    return sections
+
+
+def validate_codex_synthesis(text: str) -> list[str]:
+    errors: list[str] = []
+    sections = direction_sections(text)
+    for direction in ("A", "B", "C"):
+        section = sections.get(direction)
+        if section is None:
+            errors.append(f"codex_synthesis.md missing Direction {direction}")
+            continue
+        for field in REQUIRED_DIRECTION_FIELDS:
+            if field not in section:
+                errors.append(f"codex_synthesis.md Direction {direction} missing field {field}")
+    return errors
+
+
+def validate_output_freshness(lab: Path) -> list[str]:
+    input_mtime = max((lab / "original_idea.md").stat().st_mtime, (lab / "deepseek_idea.md").stat().st_mtime)
+    errors: list[str] = []
+    for name in AGENT_OUTPUTS:
+        path = lab / name
+        if path.stat().st_mtime + 0.001 < input_mtime:
+            errors.append(f"idea-lab input {path.relative_to(ROOT)} is older than idea inputs")
+    return errors
+
+
+def validate_ready_contents(idea_id: str, lab: Path, contents: dict[str, str]) -> list[str]:
+    errors: list[str] = []
+    for name in AGENT_OUTPUTS:
+        heading = first_heading(contents[name])
+        if idea_id not in heading:
+            errors.append(f"idea-lab input {lab.joinpath(name).relative_to(ROOT)} heading must include {idea_id}")
+    errors.extend(validate_codex_synthesis(contents["codex_synthesis.md"]))
+    errors.extend(validate_output_freshness(lab))
+    return errors
 
 
 def require_ready_lab(idea_id: str) -> tuple[Path, dict[str, str]]:
@@ -47,6 +115,9 @@ def require_ready_lab(idea_id: str) -> tuple[Path, dict[str, str]]:
         if name != "original_idea.md" and has_placeholder(text):
             raise ValueError(f"idea-lab input still has placeholders: {path.relative_to(ROOT)}")
         contents[name] = text
+    errors = validate_ready_contents(idea_id, lab, contents)
+    if errors:
+        raise ValueError("; ".join(errors))
     return lab, contents
 
 
@@ -212,11 +283,39 @@ selected_direction: {args.choice}
 
 待定。
 
+## 本章可用人物状态
+
+待定。
+
+## 本章可用道具 / 装备
+
+待定。
+
+## 本章可用技能 / 能力
+
+待定。
+
+## 能力限制 / 代价
+
+待定。
+
+## 未解决伏笔
+
+待定。
+
 ## 新增设定
 
 待定：新增设定必须先停留在 open_questions，不能直接进 canon。
 
 ## 伏笔：新开 / 推进 / 回收
+
+待定。
+
+## 本章禁止新增
+
+待定。
+
+## 本章禁止解决
 
 待定。
 
