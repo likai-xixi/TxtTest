@@ -1,0 +1,10 @@
+{
+  "event_id": "v01_c001_e001",
+  "chapter": "v01_c001",
+  "type": "character_decision",
+  "fact": "主角决定隐瞒光痕",
+  "evidence_quote": "他把手缩进袖中",
+  "consequence": "形成信息差",
+  "verified_by": "human"
+}
+

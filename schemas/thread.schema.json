@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Thread",
+  "type": "object",
+  "required": [
+    "id",
+    "status",
+    "importance",
+    "opened_chapter",
+    "latest_chapter",
+    "description"
+  ],
+  "properties": {
+    "id": { "type": "string" },
+    "status": {
+      "type": "string",
+      "enum": ["open", "active", "paid_off", "abandoned", "corrected"]
+    },
+    "importance": {
+      "type": "string",
+      "enum": ["low", "medium", "high"]
+    },
+    "opened_chapter": { "type": "string" },
+    "latest_chapter": { "type": "string" },
+    "description": { "type": "string" },
+    "evidence_quote": { "type": "string" }
+  }
+}
+

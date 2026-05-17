@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Character",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "role",
+    "external_goal",
+    "inner_need",
+    "fear",
+    "misbelief",
+    "secret",
+    "current_state",
+    "forbidden_changes"
+  ],
+  "properties": {
+    "id": { "type": "string" },
+    "name": { "type": "string" },
+    "role": { "type": "string" },
+    "external_goal": { "type": "string" },
+    "inner_need": { "type": "string" },
+    "fear": { "type": "string" },
+    "misbelief": { "type": "string" },
+    "secret": { "type": "string" },
+    "current_state": { "type": "string" },
+    "forbidden_changes": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}
+

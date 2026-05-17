@@ -1,0 +1,40 @@
+brief:
+  allow:
+    - outline/chapter_briefs/{chapter}.md
+
+draft:
+  allow:
+    - chapters/{volume}/{chapter_file}.md
+
+candidate:
+  allow:
+    - drafts/codex/{chapter}.md
+    - drafts/deepseek/{chapter}.md
+    - external_runs/deepseek/{chapter}/**
+
+review:
+  allow:
+    - reviews/{chapter}/codex_integrated_review.md
+    - reviews/{chapter}/deepseek_integrated_review.md
+
+continuity:
+  allow:
+    - reviews/{chapter}/continuity.md
+
+decision:
+  allow:
+    - reviews/{chapter}/model_disagreement.md
+    - reviews/{chapter}/decision.md
+
+revision:
+  allow:
+    - chapters/{volume}/{chapter_file}.md
+    - reviews/{chapter}/revision.md
+
+state:
+  allow:
+    - state/event_ledger.jsonl
+    - state/derived/**
+    - state/context_pack/**
+    - state/snapshots/**
+

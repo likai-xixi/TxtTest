@@ -1,0 +1,17 @@
+pilot:
+  chapters: 3
+  context_pack_limit_chars: 3000
+  chapter_brief_chars:
+    min: 300
+    max: 800
+  revisions_per_chapter: 1
+  deepseek:
+    generation_model: deepseek-v4-pro
+    review_model: deepseek-v4-pro
+
+after_10_chapters:
+  context_pack_limit_chars: 5000
+
+after_50_chapters:
+  context_pack_limit_chars: 8000
+

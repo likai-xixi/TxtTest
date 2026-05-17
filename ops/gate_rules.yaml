@@ -1,0 +1,34 @@
+gate_a_3_chapters:
+  decide_only_after_chapters: 3
+  questions:
+    - 是否愿意写第 4 章
+    - 流程是否让写作更轻
+    - 主角目标是否成立
+    - 核心卖点是否一句话说清
+    - 3 章里至少 2 章让人想看下一章
+    - 世界观是否展示压力而不是百科
+    - 是否出现设定膨胀或漂移
+    - Codex / DeepSeek 哪个更适合主写
+
+gate_b_10_chapters:
+  decide_only_after_chapters: 10
+  questions:
+    - 主角欲望稳定性
+    - 主要阻力稳定性
+    - 管理成本
+    - 连续问题
+    - 每 3 章爽点 / 留存复盘
+
+gate_c_25_chapters:
+  decide_only_after_chapters: 25
+  questions:
+    - 阶段高潮
+    - 不可逆变化
+    - 伏笔负债
+    - 设定膨胀
+    - 卷内结构
+
+gate_e_125_chapters:
+  decide_only_after_chapters: 125
+  question: 是否进入 300 万字模式
+

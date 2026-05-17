@@ -1,0 +1,23 @@
+models:
+  codex:
+    role: orchestrator
+    can_modify_files: true
+
+  deepseek_generate:
+    provider: deepseek
+    model: deepseek-v4-pro
+    mode: candidate_generation
+    can_modify_files: false
+    output_dir: drafts/deepseek/{chapter}/
+
+  deepseek_review:
+    provider: deepseek
+    model: deepseek-v4-pro
+    mode: independent_review
+    can_modify_files: false
+    output_dir: reviews/{chapter}/
+
+environment:
+  required:
+    - DEEPSEEK_API_KEY
+

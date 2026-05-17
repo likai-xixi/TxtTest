@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EventLedgerEntry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_id",
+    "chapter",
+    "type",
+    "fact",
+    "evidence_quote",
+    "consequence",
+    "verified_by"
+  ],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "pattern": "^v\\d{2}_c\\d{3}_e\\d{3}$"
+    },
+    "chapter": {
+      "type": "string",
+      "pattern": "^v\\d{2}_c\\d{3}$"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "character_decision",
+        "character_state_change",
+        "relationship_change",
+        "world_fact",
+        "rule_reveal",
+        "thread_opened",
+        "thread_advanced",
+        "thread_paid_off",
+        "location_change",
+        "object_change",
+        "correction"
+      ]
+    },
+    "fact": {
+      "type": "string",
+      "minLength": 1
+    },
+    "evidence_quote": {
+      "type": "string",
+      "minLength": 1
+    },
+    "consequence": {
+      "type": "string",
+      "minLength": 1
+    },
+    "verified_by": {
+      "type": "string",
+      "const": "human"
+    }
+  }
+}
+

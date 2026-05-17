@@ -1,0 +1,28 @@
+stop_or_rebuild_if:
+  context_pack_conflict:
+    action: pause_and_resolve_continuity_issue
+
+  canon_violation:
+    action: stop_until_human_decision
+
+  p1_continuity_issue:
+    action: human_choose_fix_current_chapter_or_correction_event
+
+  deepseek_and_codex_both_reject:
+    action: rewrite_brief_or_kill_chapter
+
+  model_reviews_disagree_on_core_issue:
+    action: human_decision_required
+
+  same_problem_survives_after_one_revision:
+    action: stop_polishing_and_rewrite_brief
+
+  protagonist_goal_unclear_for_3_consecutive_chapters:
+    action: pause_and_rebuild_protagonist_goal
+
+  high_importance_thread_no_progress_25_chapters:
+    action: force_payoff_or_abandon_with_human_confirmation
+
+  canon_change_required_every_5_chapters:
+    action: freeze_drafting_and_stabilize_canon
+

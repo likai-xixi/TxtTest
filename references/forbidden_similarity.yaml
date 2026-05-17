@@ -1,0 +1,9 @@
+forbidden_similarity:
+  - source_text_imitation
+  - reskinned_plot_beats
+  - copied_relationships
+  - copied_setting_terms
+  - copied_sentence_patterns
+  - copied_dialogue_rhythm
+  - signature_expressions
+
