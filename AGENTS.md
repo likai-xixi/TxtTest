@@ -15,27 +15,33 @@
 复制本仓库到新目录后，先运行：
 
 ```bash
-python scripts/template_init.py --project-name "你的小说名"
-python scripts/check_template.py
-python scripts/project_status.py
+python scripts/novel.py init --name "你的小说名"
+python scripts/novel.py check
+python scripts/novel.py status
 ```
 
 然后复制 `templates/questionnaire_answers.md` 为 `setup_answers.md`，填写启动问卷并运行：
 
 ```bash
-python scripts/apply_questionnaire.py --answers setup_answers.md
+python scripts/novel.py apply-questionnaire --answers setup_answers.md
 ```
 
 第一章 brief 填完后运行：
 
 ```bash
-python scripts/start_chapter.py --chapter v01_c001 --deepseek-dry-run
+python scripts/novel.py start v01_c001 --deepseek-dry-run
 ```
 
 如果要创建后续章节：
 
 ```bash
-python scripts/new_chapter.py --chapter v01_c002
+python scripts/novel.py new-chapter v01_c002
+```
+
+完整简化流程可随时查看：
+
+```bash
+python scripts/novel.py flow
 ```
 
 ## 资产优先级
@@ -90,6 +96,7 @@ canon
 
 ## 关键脚本
 
+- `scripts/novel.py`：模板的统一入口，覆盖开书、问卷、章节、候选、审查、裁决、事件、Gate、备份、导出、提交。
 - `scripts/template_init.py`：复制后初始化模板目录和空账本。
 - `scripts/apply_questionnaire.py`：把启动问卷写入 premise 与 open questions。
 - `scripts/new_chapter.py`：创建章节 brief 与 review 工作区。

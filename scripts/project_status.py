@@ -35,14 +35,13 @@ def main() -> int:
     print()
     print("## Next likely action")
     if has_placeholders("outline/premise.md"):
-        print("Fill templates/questionnaire_answers.md, then run scripts/apply_questionnaire.py.")
+        print("Run `python scripts/novel.py questionnaire`, fill setup_answers.md, then run `python scripts/novel.py apply-questionnaire`.")
     elif has_placeholders("outline/chapter_briefs/v01_c001.md"):
-        print("Fill outline/chapter_briefs/v01_c001.md, then run scripts/start_chapter.py --chapter v01_c001.")
+        print("Fill outline/chapter_briefs/v01_c001.md, then run `python scripts/novel.py start v01_c001`.")
     else:
-        print("Run scripts/start_chapter.py --chapter v01_c001.")
+        print("Run `python scripts/novel.py start v01_c001`.")
     return 0
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

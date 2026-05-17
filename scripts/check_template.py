@@ -48,6 +48,7 @@ REQUIRED_PATHS = [
     "scripts/template_init.py",
     "scripts/apply_questionnaire.py",
     "scripts/new_chapter.py",
+    "scripts/novel.py",
     "scripts/start_chapter.py",
     "scripts/append_event.py",
     "scripts/record_decision.py",

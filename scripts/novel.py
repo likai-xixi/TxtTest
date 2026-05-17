@@ -1,0 +1,440 @@
+from __future__ import annotations
+
+import argparse
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+from _common import ROOT, chapter_parts, read_text, write_text
+from validate_event_ledger import ALLOWED_TYPES
+
+
+DECISIONS = ["Ship", "Revise once", "Rewrite brief", "Kill chapter", "Pause project"]
+GATES = {
+    "A": ("outline/gate_a_3_chapters.md", 3),
+    "B": ("outline/gate_b_10_chapters.md", 10),
+    "C": ("ops/gate_rules.yaml", 25),
+    "E": ("ops/gate_rules.yaml", 125),
+}
+
+
+def run_script(script: str, *args: str, check: bool = True) -> int:
+    command = [sys.executable, str(ROOT / "scripts" / script), *args]
+    result = subprocess.run(command, cwd=ROOT)
+    if check and result.returncode != 0:
+        raise SystemExit(result.returncode)
+    return result.returncode
+
+
+def run_git(*args: str, check: bool = True) -> subprocess.CompletedProcess:
+    result = subprocess.run(["git", *args], cwd=ROOT, text=True, capture_output=True)
+    if check and result.returncode != 0:
+        if result.stdout:
+            print(result.stdout)
+        if result.stderr:
+            print(result.stderr, file=sys.stderr)
+        raise SystemExit(result.returncode)
+    return result
+
+
+def git_config_get(key: str) -> str:
+    result = run_git("config", "--get", key, check=False)
+    return result.stdout.strip() if result.returncode == 0 else ""
+
+
+def ensure_git_identity() -> None:
+    changed: list[str] = []
+    if not git_config_get("user.name"):
+        run_git("config", "user.name", "Codex")
+        changed.append("user.name=Codex")
+    if not git_config_get("user.email"):
+        run_git("config", "user.email", "codex@local")
+        changed.append("user.email=codex@local")
+    if changed:
+        print(f"info: set local Git identity ({', '.join(changed)})")
+
+
+def copy_questionnaire(output: Path, force: bool) -> None:
+    source = ROOT / "templates" / "questionnaire_answers.md"
+    if output.exists() and not force:
+        raise SystemExit(f"ERROR: {output.relative_to(ROOT)} already exists. Use --force to overwrite.")
+    write_text(output, read_text(source))
+    print(f"OK: wrote {output.relative_to(ROOT)}")
+
+
+def chapter_has_events(chapter: str) -> bool:
+    ledger = ROOT / "state" / "event_ledger.jsonl"
+    if not ledger.exists():
+        return False
+    for line in ledger.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if entry.get("chapter") == chapter:
+            return True
+    return False
+
+
+def command_init(args: argparse.Namespace) -> int:
+    script_args = ["--project-name", args.name]
+    if args.init_git:
+        script_args.append("--init-git")
+    if args.clean_generated:
+        script_args.append("--clean-generated")
+    run_script("template_init.py", *script_args)
+    run_script("check_template.py")
+    return 0
+
+
+def command_questionnaire(args: argparse.Namespace) -> int:
+    output = Path(args.output)
+    if not output.is_absolute():
+        output = ROOT / output
+    copy_questionnaire(output, args.force)
+    print("next: fill the answers, then run `python scripts/novel.py apply-questionnaire`")
+    return 0
+
+
+def command_apply_questionnaire(args: argparse.Namespace) -> int:
+    script_args = ["--answers", args.answers]
+    if args.allow_placeholders:
+        script_args.append("--allow-placeholders")
+    run_script("apply_questionnaire.py", *script_args)
+    print("next: ask Codex to generate minimal worldview, protagonist card, and volume mini-outline for human confirmation")
+    return 0
+
+
+def command_new_chapter(args: argparse.Namespace) -> int:
+    script_args = ["--chapter", args.chapter]
+    if args.force:
+        script_args.append("--force")
+    run_script("new_chapter.py", *script_args)
+    print(f"next: fill outline/chapter_briefs/{args.chapter}.md")
+    return 0
+
+
+def command_start(args: argparse.Namespace) -> int:
+    script_args = ["--chapter", args.chapter]
+    if args.allow_placeholders:
+        script_args.append("--allow-placeholders")
+    if args.deepseek_dry_run:
+        script_args.append("--deepseek-dry-run")
+    run_script("start_chapter.py", *script_args)
+    if args.deepseek:
+        run_script("run_deepseek_generate.py", "--chapter", args.chapter)
+    print(f"ready: state/context_pack/{args.chapter}.md")
+    return 0
+
+
+def command_deepseek_generate(args: argparse.Namespace) -> int:
+    script_args = ["--chapter", args.chapter]
+    if args.model:
+        script_args.extend(["--model", args.model])
+    if args.dry_run:
+        script_args.append("--dry-run")
+    run_script("run_deepseek_generate.py", *script_args)
+    return 0
+
+
+def command_review(args: argparse.Namespace) -> int:
+    if args.deepseek or args.deepseek_dry_run:
+        script_args = ["--chapter", args.chapter]
+        if args.input:
+            script_args.extend(["--input", args.input])
+        if args.deepseek_dry_run:
+            script_args.append("--dry-run")
+        run_script("run_deepseek_review.py", *script_args)
+
+    if not args.skip_chapter_validate:
+        run_script("validate_chapter.py", "--chapter", args.chapter)
+    run_script("continuity_check.py", "--chapter", args.chapter)
+
+    compare_args = ["--chapter", args.chapter]
+    if args.allow_missing_reviews:
+        compare_args.append("--allow-missing")
+    run_script("compare_model_reviews.py", *compare_args)
+    print(f"next: human decision in reviews/{args.chapter}/decision.md")
+    return 0
+
+
+def command_decision(args: argparse.Namespace) -> int:
+    script_args = ["--chapter", args.chapter, "--decision", args.decision]
+    if args.notes:
+        script_args.extend(["--notes", args.notes])
+    run_script("record_decision.py", *script_args)
+    return 0
+
+
+def command_event(args: argparse.Namespace) -> int:
+    script_args = [
+        "--chapter",
+        args.chapter,
+        "--type",
+        args.type,
+        "--fact",
+        args.fact,
+        "--evidence-quote",
+        args.evidence_quote,
+        "--consequence",
+        args.consequence,
+    ]
+    if args.event_id:
+        script_args.extend(["--event-id", args.event_id])
+    run_script("append_event.py", *script_args)
+    if args.rebuild:
+        run_script("build_derived_state.py")
+    return 0
+
+
+def command_close(args: argparse.Namespace) -> int:
+    chapter_parts(args.chapter)
+    if args.decision == "Ship" and not args.allow_no_events and not chapter_has_events(args.chapter):
+        print(
+            "ERROR: Ship requires at least one human-verified event for this chapter. "
+            "Run `python scripts/novel.py event ...` or pass --allow-no-events.",
+            file=sys.stderr,
+        )
+        return 1
+
+    command_decision(args)
+    run_script("validate_event_ledger.py")
+    run_script("build_derived_state.py")
+    if args.commit_message:
+        return command_commit(argparse.Namespace(message=args.commit_message, all=True))
+    return 0
+
+
+def command_derive(_args: argparse.Namespace) -> int:
+    run_script("validate_event_ledger.py")
+    run_script("build_derived_state.py")
+    return 0
+
+
+def command_gate(args: argparse.Namespace) -> int:
+    gate = args.gate.upper()
+    path_text, needed = GATES[gate]
+    path = ROOT / path_text
+    print(f"# Gate {gate}")
+    print()
+    print(f"minimum chapters before decision: {needed}")
+    print(f"criteria file: {path.relative_to(ROOT)}")
+    print()
+    print(read_text(path).strip())
+    print()
+    print("Human must decide. This command does not pass a gate automatically.")
+    return 0
+
+
+def command_backup(args: argparse.Namespace) -> int:
+    run_script("build_backup.py", "--label", args.label)
+    return 0
+
+
+def command_export(args: argparse.Namespace) -> int:
+    run_script("export_clean.py", "--volume", args.volume)
+    return 0
+
+
+def command_commit(args: argparse.Namespace) -> int:
+    if args.all:
+        run_git("add", "--", ".")
+    status = run_git("status", "--short", check=False).stdout.strip()
+    if not status:
+        print("OK: nothing to commit")
+        return 0
+    ensure_git_identity()
+    result = run_git("commit", "-m", args.message, check=False)
+    if result.returncode != 0:
+        if result.stdout:
+            print(result.stdout)
+        if result.stderr:
+            print(result.stderr, file=sys.stderr)
+        return result.returncode
+    print(result.stdout.strip())
+    return 0
+
+
+def command_status(_args: argparse.Namespace) -> int:
+    run_script("project_status.py")
+    return 0
+
+
+def command_check(_args: argparse.Namespace) -> int:
+    run_script("check_template.py")
+    return 0
+
+
+def command_flow(_args: argparse.Namespace) -> int:
+    print(
+        """# Simplified Full Flow
+
+1. Open a copied template in Codex app.
+   python scripts/novel.py init --name "Book Name"
+
+2. Prepare and apply questionnaire.
+   python scripts/novel.py questionnaire
+   python scripts/novel.py apply-questionnaire --answers setup_answers.md
+
+3. Ask Codex to draft setup assets for human confirmation.
+   Minimal worldview, protagonist card, relationships seed, volume mini-outline.
+   Do not write canon until human confirms facts.
+
+4. Start a chapter.
+   python scripts/novel.py new-chapter v01_c001
+   Fill the brief.
+   python scripts/novel.py start v01_c001 --deepseek-dry-run
+
+5. Generate candidates.
+   Codex candidate: Codex writes drafts/codex/v01_c001.md from context pack.
+   DeepSeek candidate: python scripts/novel.py deepseek-generate v01_c001
+   Human chooses Codex, DeepSeek, or mixed direction.
+
+6. Land official chapter.
+   Codex writes chapters/v01/c001.md.
+   Do not copy DeepSeek directly into chapters.
+
+7. Review.
+   Codex writes reviews/v01_c001/codex_integrated_review.md without reading DeepSeek review.
+   python scripts/novel.py review v01_c001 --deepseek
+
+8. Human decision.
+   python scripts/novel.py decision v01_c001 --decision "Revise once"
+   or
+   python scripts/novel.py decision v01_c001 --decision "Ship"
+
+9. Record human-verified facts.
+   python scripts/novel.py event v01_c001 --type character_decision --fact "..." --evidence-quote "..." --consequence "..."
+
+10. Close chapter.
+    python scripts/novel.py close v01_c001 --decision "Ship" --commit-message "complete v01 c001"
+
+11. Gates.
+    After 3 chapters: python scripts/novel.py gate A
+    Human decides whether to continue to 10-chapter validation.
+
+12. Maintenance.
+    python scripts/novel.py backup --label before_gate_a
+    python scripts/novel.py export --volume v01
+    python scripts/novel.py status
+"""
+    )
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="One-command hub for the novel workflow template.")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    p = sub.add_parser("init", help="Initialize a copied template for a new novel.")
+    p.add_argument("--name", required=True)
+    p.add_argument("--init-git", action="store_true")
+    generated = p.add_mutually_exclusive_group()
+    generated.add_argument("--clean-generated", dest="clean_generated", action="store_true", default=True)
+    generated.add_argument("--keep-generated", dest="clean_generated", action="store_false")
+    p.set_defaults(func=command_init)
+
+    p = sub.add_parser("questionnaire", help="Create setup_answers.md from the questionnaire template.")
+    p.add_argument("--output", default="setup_answers.md")
+    p.add_argument("--force", action="store_true")
+    p.set_defaults(func=command_questionnaire)
+
+    p = sub.add_parser("apply-questionnaire", help="Apply startup questionnaire answers.")
+    p.add_argument("--answers", default="setup_answers.md")
+    p.add_argument("--allow-placeholders", action="store_true")
+    p.set_defaults(func=command_apply_questionnaire)
+
+    p = sub.add_parser("new-chapter", help="Create chapter brief and review workspace.")
+    p.add_argument("chapter")
+    p.add_argument("--force", action="store_true")
+    p.set_defaults(func=command_new_chapter)
+
+    p = sub.add_parser("start", help="Build derived state and context pack for a chapter.")
+    p.add_argument("chapter")
+    p.add_argument("--allow-placeholders", action="store_true")
+    p.add_argument("--deepseek", action="store_true", help="Call DeepSeek generation after context pack is built.")
+    p.add_argument("--deepseek-dry-run", action="store_true", help="Write DeepSeek prompt without calling API.")
+    p.set_defaults(func=command_start)
+
+    p = sub.add_parser("deepseek-generate", help="Generate a DeepSeek candidate draft.")
+    p.add_argument("chapter")
+    p.add_argument("--model", default="deepseek-v4-pro")
+    p.add_argument("--dry-run", action="store_true")
+    p.set_defaults(func=command_deepseek_generate)
+
+    p = sub.add_parser("review", help="Run chapter validation, continuity, review comparison, and optional DeepSeek review.")
+    p.add_argument("chapter")
+    p.add_argument("--deepseek", action="store_true")
+    p.add_argument("--deepseek-dry-run", action="store_true")
+    p.add_argument("--input", default=None)
+    p.add_argument("--skip-chapter-validate", action="store_true")
+    p.add_argument("--allow-missing-reviews", action="store_true")
+    p.set_defaults(func=command_review)
+
+    p = sub.add_parser("decision", help="Record a human chapter decision.")
+    p.add_argument("chapter")
+    p.add_argument("--decision", required=True, choices=DECISIONS)
+    p.add_argument("--notes", default="")
+    p.set_defaults(func=command_decision)
+
+    p = sub.add_parser("event", help="Append one human-verified event ledger entry.")
+    p.add_argument("chapter")
+    p.add_argument("--type", required=True, choices=sorted(ALLOWED_TYPES))
+    p.add_argument("--fact", required=True)
+    p.add_argument("--evidence-quote", required=True)
+    p.add_argument("--consequence", required=True)
+    p.add_argument("--event-id", default=None)
+    p.add_argument("--no-rebuild", dest="rebuild", action="store_false")
+    p.set_defaults(func=command_event, rebuild=True)
+
+    p = sub.add_parser("close", help="Record decision, validate ledger, rebuild derived state, and optionally commit.")
+    p.add_argument("chapter")
+    p.add_argument("--decision", required=True, choices=DECISIONS)
+    p.add_argument("--notes", default="")
+    p.add_argument("--allow-no-events", action="store_true")
+    p.add_argument("--commit-message", default=None)
+    p.set_defaults(func=command_close)
+
+    p = sub.add_parser("derive", help="Validate ledger and rebuild derived state.")
+    p.set_defaults(func=command_derive)
+
+    p = sub.add_parser("gate", help="Show gate criteria. Never auto-passes a gate.")
+    p.add_argument("gate", choices=sorted(GATES))
+    p.set_defaults(func=command_gate)
+
+    p = sub.add_parser("backup", help="Create a backup zip without secrets/raw API JSON.")
+    p.add_argument("--label", default="manual")
+    p.set_defaults(func=command_backup)
+
+    p = sub.add_parser("export", help="Export clean chapter text.")
+    p.add_argument("--volume", default="v01")
+    p.set_defaults(func=command_export)
+
+    p = sub.add_parser("commit", help="Commit current changes.")
+    p.add_argument("--message", required=True)
+    p.add_argument("--all", action="store_true", help="Stage all files before committing.")
+    p.set_defaults(func=command_commit)
+
+    p = sub.add_parser("status", help="Show project status and next likely action.")
+    p.set_defaults(func=command_status)
+
+    p = sub.add_parser("check", help="Run template integrity check.")
+    p.set_defaults(func=command_check)
+
+    p = sub.add_parser("flow", help="Print the complete simplified lifecycle.")
+    p.set_defaults(func=command_flow)
+
+    return parser
+
+
+def main() -> int:
+    parser = build_parser()
+    args = parser.parse_args()
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

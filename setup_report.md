@@ -5,9 +5,9 @@
 复制到新目录后可运行：
 
 ```bash
-python scripts/template_init.py --project-name "你的小说名"
-python scripts/check_template.py
-python scripts/project_status.py
+python scripts/novel.py init --name "你的小说名"
+python scripts/novel.py check
+python scripts/novel.py status
 ```
 
 ## 你需要回答的启动问卷
@@ -15,7 +15,7 @@ python scripts/project_status.py
 请复制 `templates/questionnaire_answers.md` 为 `setup_answers.md` 后填写，再运行：
 
 ```bash
-python scripts/apply_questionnaire.py --answers setup_answers.md
+python scripts/novel.py apply-questionnaire --answers setup_answers.md
 ```
 
 答案会先进入 `outline/premise.md` 与 `bible/open_questions.md`，不会直接进入 `bible/canon.md`。
@@ -45,5 +45,5 @@ python scripts/apply_questionnaire.py --answers setup_answers.md
 先回答启动问卷。Codex 将据此生成最小世界观、主角卡、第一卷 mini-outline，并等待你确认。确认后再填写 `outline/chapter_briefs/v01_c001.md` 并运行：
 
 ```bash
-python scripts/start_chapter.py --chapter v01_c001 --deepseek-dry-run
+python scripts/novel.py start v01_c001 --deepseek-dry-run
 ```
