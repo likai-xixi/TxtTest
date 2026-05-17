@@ -1,28 +1,36 @@
 stop_or_rebuild_if:
   context_pack_conflict:
+    enforcement: manual_editorial
     action: pause_and_resolve_continuity_issue
 
   canon_violation:
+    enforcement: continuity_check_machine_subset
     action: stop_until_human_decision
 
   p1_continuity_issue:
+    enforcement: stop_check_machine
     action: human_choose_fix_current_chapter_or_correction_event
 
   deepseek_and_codex_both_reject:
+    enforcement: stop_check_machine
     action: rewrite_brief_or_kill_chapter
 
   model_reviews_disagree_on_core_issue:
+    enforcement: compare_model_reviews_then_stop_check_machine
     action: human_decision_required
 
   same_problem_survives_after_one_revision:
+    enforcement: manual_editorial
     action: stop_polishing_and_rewrite_brief
 
   protagonist_goal_unclear_for_3_consecutive_chapters:
+    enforcement: manual_editorial
     action: pause_and_rebuild_protagonist_goal
 
   high_importance_thread_no_progress_25_chapters:
+    enforcement: derived_state_plus_manual_editorial
     action: force_payoff_or_abandon_with_human_confirmation
 
   canon_change_required_every_5_chapters:
+    enforcement: manual_editorial
     action: freeze_drafting_and_stabilize_canon
-

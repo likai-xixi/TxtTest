@@ -4,10 +4,11 @@ import argparse
 import sys
 from pathlib import Path
 
-from _common import ROOT, chapter_parts, read_text, write_text
+from _common import ROOT, chapter_number, chapter_parts, gate_decision, read_text, unresolved_locks, write_text
 
 
 REVIEW_TEMPLATES = [
+    "candidate_selection.md",
     "codex_integrated_review.md",
     "deepseek_integrated_review.md",
     "continuity.md",
@@ -41,6 +42,21 @@ def main() -> int:
     parser.add_argument("--chapter", required=True, help="Chapter id like v01_c002.")
     parser.add_argument("--force", action="store_true", help="Overwrite existing scaffold files.")
     args = parser.parse_args()
+
+    locks = unresolved_locks()
+    if locks:
+        print("ERROR: unresolved stop locks block new chapters:", file=sys.stderr)
+        for lock in locks:
+            print(f"  - {lock.get('id')}: {lock.get('reason')}", file=sys.stderr)
+        return 1
+
+    number = chapter_number(args.chapter)
+    if number >= 4 and gate_decision("a") != "continue":
+        print("ERROR: Gate A must be recorded as continue before creating chapter 4+.", file=sys.stderr)
+        return 1
+    if number >= 11 and gate_decision("b") != "continue":
+        print("ERROR: Gate B must be recorded as continue before creating chapter 11+.", file=sys.stderr)
+        return 1
 
     volume, _chapter_file = chapter_parts(args.chapter)
     created: list[str] = []
@@ -77,4 +93,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

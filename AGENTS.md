@@ -12,6 +12,8 @@
 
 ## 模板仓库使用方式
 
+正式流程的写入口以 `scripts/novel.py` 为准。底层脚本保留给统一入口、测试和排查调用；不得绕过 `novel.py` 直接落候选选择、裁决、Gate、事件或提交。
+
 复制本仓库到新目录后，先运行：
 
 ```bash
@@ -63,7 +65,7 @@ canon
 2. build_context_pack
 3. Codex / DeepSeek 生成候选稿
 4. 人类选定候选方向
-5. Codex 落正式 draft 到 chapters/
+5. Codex 落正式 draft 到 chapters/，并记录 chapter_landing provenance
 6. Codex 独立审查
 7. DeepSeek 独立审查
 8. continuity_check
@@ -77,6 +79,9 @@ canon
 ```
 
 人类判定只选：`Ship`、`Revise once`、`Rewrite brief`、`Kill chapter`、`Pause project`。
+
+候选方向必须通过 `python scripts/novel.py select-candidate {chapter} --choice ...` 留痕。没有候选选择记录，不允许 Ship close。
+Ship close 还必须通过 `chapter_evidence.py`：结构化候选选择、官方正文落章 provenance、Codex/DeepSeek 审查、review manifest、model_disagreement 和无 P0/P1 continuity 必须齐全。
 
 ## DeepSeek 边界
 
@@ -103,5 +108,12 @@ canon
 - `scripts/start_chapter.py`：校验 brief、生成 derived state、构建 context pack。
 - `scripts/append_event.py`：追加人类确认事件到账本。
 - `scripts/record_decision.py`：记录章节人类裁决。
+- `scripts/record_candidate_selection.py`：记录人类选定候选方向。
+- `scripts/record_chapter_landing.py`：记录正式正文落章 provenance，证明 Codex 依据 context pack、brief 和候选选择整合，不直接复制 DeepSeek。
+- `scripts/chapter_evidence.py`：检查单章 Ship 前证据。
+- `scripts/review_manifest.py`：记录 Codex / DeepSeek 审查输入哈希，审计防污染。
+- `scripts/gate_check.py` / `scripts/record_gate_decision.py`：检查 Gate 证据并记录人类 Gate 裁决。
+- `scripts/project_lock.py` / `scripts/stop_check.py`：管理 stop rules 锁和机器可判定停止条件。
+- `scripts/self_test.py`：运行本地回归测试。
 - `scripts/check_template.py`：检查模板完整性。
 - `scripts/project_status.py`：输出下一步建议。

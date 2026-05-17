@@ -24,6 +24,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Build the single allowed context pack for a chapter.")
     parser.add_argument("--chapter", required=True, help="Chapter id like v01_c001.")
     parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument("--allow-truncated", action="store_true")
     args = parser.parse_args()
 
     chapter = args.chapter
@@ -64,6 +65,12 @@ def main() -> int:
     if len(text) > limit:
         snapshot = ROOT / "state" / "snapshots" / f"{chapter}_oversize_context.md"
         write_text(snapshot, text)
+        if not args.allow_truncated:
+            print(
+                f"ERROR: context pack exceeds {limit} chars; full candidate saved to {snapshot.relative_to(ROOT)}. "
+                "Tighten source files or rerun with --allow-truncated for diagnostics."
+            )
+            return 1
         text = (
             "\n".join(parts[:10]).strip()
             + f"\n\n## Snapshot\n\nContext exceeded {limit} chars. Full candidate pack saved to `{snapshot.relative_to(ROOT)}`. Tighten source files before drafting.\n"
@@ -79,4 +86,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

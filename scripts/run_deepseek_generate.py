@@ -7,7 +7,7 @@ import sys
 import urllib.error
 import urllib.request
 
-from _common import ROOT, read_text, write_text
+from _common import ROOT, chapter_parts, read_text, write_blocked_by_locks, write_text
 
 
 API_URL = "https://api.deepseek.com/chat/completions"
@@ -36,6 +36,15 @@ def main() -> int:
     parser.add_argument("--max-tokens", type=int, default=6000)
     parser.add_argument("--dry-run", action="store_true", help="Write the prompt only; do not call the API.")
     args = parser.parse_args()
+
+    if write_blocked_by_locks("DeepSeek candidate generation"):
+        return 1
+
+    try:
+        chapter_parts(args.chapter)
+    except ValueError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
 
     context_path = ROOT / "state" / "context_pack" / f"{args.chapter}.md"
     if not context_path.exists():
@@ -95,4 +104,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

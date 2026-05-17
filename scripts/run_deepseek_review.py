@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -8,7 +9,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from _common import ROOT, chapter_parts, read_text, write_text
+from _common import ROOT, chapter_parts, read_text, write_blocked_by_locks, write_text
 
 
 API_URL = "https://api.deepseek.com/chat/completions"
@@ -34,6 +35,55 @@ def default_chapter_path(chapter: str) -> Path:
     return ROOT / "chapters" / volume / chapter_file
 
 
+def allowed_review_inputs(chapter: str) -> set[Path]:
+    volume, chapter_file = chapter_parts(chapter)
+    return {
+        (ROOT / "chapters" / volume / chapter_file).absolute(),
+        (ROOT / "drafts" / "codex" / f"{chapter}.md").absolute(),
+        (ROOT / "drafts" / "deepseek" / f"{chapter}.md").absolute(),
+    }
+
+
+def validate_input_path(path: Path, chapter: str) -> Path:
+    absolute = path.absolute()
+    if absolute not in allowed_review_inputs(chapter):
+        allowed = "\n".join(f"  - {item.relative_to(ROOT)}" for item in sorted(allowed_review_inputs(chapter)))
+        raise ValueError(
+            "DeepSeek review input must be the official chapter or a candidate draft for this chapter.\n"
+            f"Allowed inputs:\n{allowed}"
+        )
+    if absolute.is_symlink():
+        raise ValueError(f"DeepSeek review input must not be a symlink: {absolute.relative_to(ROOT)}")
+    resolved = absolute.resolve()
+    if ROOT.resolve() not in resolved.parents and resolved != ROOT.resolve():
+        raise ValueError(f"DeepSeek review input escapes the project root: {absolute.relative_to(ROOT)}")
+    return absolute
+
+
+def write_manifest(chapter: str, chapter_path: Path) -> None:
+    context_path = ROOT / "state" / "context_pack" / f"{chapter}.md"
+    manifest_path = ROOT / "reviews" / chapter / "review_manifest.json"
+    current = {}
+    if manifest_path.exists():
+        current = json.loads(manifest_path.read_text(encoding="utf-8"))
+    inputs = []
+    for path in (context_path.resolve(), chapter_path.resolve()):
+        inputs.append(
+            {
+                "path": path.relative_to(ROOT).as_posix(),
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            }
+        )
+    current["deepseek"] = {
+        "recorded_at": __import__("datetime").datetime.now(
+            __import__("datetime").timezone.utc
+        ).replace(microsecond=0).isoformat(),
+        "inputs": inputs,
+        "forbidden_inputs": ["reviews/{chapter}/codex_integrated_review.md"],
+    }
+    write_text(manifest_path, json.dumps(current, ensure_ascii=False, indent=2) + "\n")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Ask DeepSeek for an independent chapter review.")
     parser.add_argument("--chapter", required=True)
@@ -43,10 +93,24 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true", help="Write the prompt only; do not call the API.")
     args = parser.parse_args()
 
+    if write_blocked_by_locks("DeepSeek review"):
+        return 1
+
+    try:
+        chapter_parts(args.chapter)
+    except ValueError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+
     context_path = ROOT / "state" / "context_pack" / f"{args.chapter}.md"
     chapter_path = Path(args.input) if args.input else default_chapter_path(args.chapter)
     if not chapter_path.is_absolute():
         chapter_path = ROOT / chapter_path
+    try:
+        chapter_path = validate_input_path(chapter_path, args.chapter)
+    except ValueError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
 
     if not context_path.exists():
         print(f"ERROR: missing context pack: {context_path.relative_to(ROOT)}", file=sys.stderr)
@@ -116,6 +180,7 @@ def main() -> int:
         print(f"ERROR: DeepSeek request failed: {exc}", file=sys.stderr)
         return 1
 
+    write_manifest(args.chapter, chapter_path)
     write_text(run_dir / "review.raw.json", json.dumps(response, ensure_ascii=False, indent=2))
     content = response["choices"][0]["message"].get("content") or ""
     out = ROOT / "reviews" / args.chapter / "deepseek_integrated_review.md"
@@ -126,4 +191,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

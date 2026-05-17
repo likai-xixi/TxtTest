@@ -71,6 +71,8 @@ def validate(path: Path) -> list[str]:
         chapter = entry.get("chapter", "")
         if not CHAPTER_RE.match(str(chapter)):
             errors.append(f"line {line_no}: invalid chapter {chapter!r}")
+        elif EVENT_RE.match(str(event_id)) and not str(event_id).startswith(f"{chapter}_e"):
+            errors.append(f"line {line_no}: event_id {event_id!r} does not match chapter {chapter!r}")
 
         event_type = entry.get("type")
         if event_type not in ALLOWED_TYPES:
@@ -105,4 +107,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

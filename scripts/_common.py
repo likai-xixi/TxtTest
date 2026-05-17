@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import re
+import json
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -58,3 +60,34 @@ def chapter_number(chapter: str) -> int:
         raise ValueError(f"Invalid chapter id: {chapter}")
     return int(match.group("chapter"))
 
+
+def read_json(path: Path, default):
+    if not path.exists():
+        return default
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def write_json(path: Path, data) -> None:
+    write_text(path, json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+
+
+def unresolved_locks() -> list[dict]:
+    path = ROOT / "state" / "stops" / "project_locks.json"
+    data = read_json(path, {"locks": []})
+    return [item for item in data.get("locks", []) if item.get("status") == "open"]
+
+
+def write_blocked_by_locks(action: str) -> bool:
+    locks = unresolved_locks()
+    if not locks:
+        return False
+    print(f"ERROR: unresolved stop locks block {action}:", file=sys.stderr)
+    for lock in locks:
+        print(f"  - {lock.get('id')}: {lock.get('reason')}", file=sys.stderr)
+    return True
+
+
+def gate_decision(gate: str) -> str | None:
+    path = ROOT / "state" / "gates" / f"gate_{gate.lower()}.json"
+    data = read_json(path, {})
+    return data.get("decision")

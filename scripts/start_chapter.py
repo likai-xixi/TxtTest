@@ -4,7 +4,7 @@ import argparse
 import subprocess
 import sys
 
-from _common import ROOT, chapter_parts, non_ws_count, read_text
+from _common import ROOT, chapter_number, chapter_parts, gate_decision, non_ws_count, read_text, unresolved_locks
 
 
 PLACEHOLDERS = ("待定", "待填", "TODO")
@@ -38,6 +38,27 @@ def main() -> int:
     parser.add_argument("--allow-placeholders", action="store_true", help="Allow placeholder brief text; useful for template smoke tests.")
     parser.add_argument("--deepseek-dry-run", action="store_true", help="Build DeepSeek prompt without calling API.")
     args = parser.parse_args()
+
+    locks = unresolved_locks()
+    if locks:
+        print("ERROR: unresolved stop locks block chapter start:", file=sys.stderr)
+        for lock in locks:
+            print(f"  - {lock.get('id')}: {lock.get('reason')}", file=sys.stderr)
+        return 1
+
+    number = chapter_number(args.chapter)
+    if number >= 4 and gate_decision("a") != "continue":
+        print("ERROR: Gate A must be recorded as continue before starting chapter 4+.", file=sys.stderr)
+        return 1
+    if number >= 11 and gate_decision("b") != "continue":
+        print("ERROR: Gate B must be recorded as continue before starting chapter 11+.", file=sys.stderr)
+        return 1
+    if number >= 26 and gate_decision("c") != "continue":
+        print("ERROR: Gate C must be recorded as continue before starting chapter 26+.", file=sys.stderr)
+        return 1
+    if number >= 126 and gate_decision("e") != "continue":
+        print("ERROR: Gate E must be recorded as continue before starting chapter 126+.", file=sys.stderr)
+        return 1
 
     errors = validate_brief(args.chapter, args.allow_placeholders)
     if errors:

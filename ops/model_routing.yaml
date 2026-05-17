@@ -7,17 +7,23 @@ models:
     provider: deepseek
     model: deepseek-v4-pro
     mode: candidate_generation
-    can_modify_files: false
-    output_dir: drafts/deepseek/{chapter}/
+    api_model_can_modify_files: false
+    local_wrapper_writes:
+      - drafts/deepseek/{chapter}.md
+      - external_runs/deepseek/{chapter}/generate.prompt.md
+      - external_runs/deepseek/{chapter}/generate.raw.json
 
   deepseek_review:
     provider: deepseek
     model: deepseek-v4-pro
     mode: independent_review
-    can_modify_files: false
-    output_dir: reviews/{chapter}/
+    api_model_can_modify_files: false
+    local_wrapper_writes:
+      - reviews/{chapter}/deepseek_integrated_review.md
+      - reviews/{chapter}/review_manifest.json
+      - external_runs/deepseek/{chapter}/review.prompt.md
+      - external_runs/deepseek/{chapter}/review.raw.json
 
 environment:
   required:
     - DEEPSEEK_API_KEY
-

@@ -11,7 +11,11 @@ from _common import ROOT, chapter_parts, posix
 
 ROLE_PATTERNS = {
     "brief": ["outline/chapter_briefs/{chapter}.md"],
-    "draft": ["chapters/{volume}/{chapter_file}.md"],
+    "draft": [
+        "chapters/{volume}/{chapter_file}",
+        "reviews/{chapter}/chapter_landing.md",
+        "reviews/{chapter}/chapter_landing.json",
+    ],
     "candidate": [
         "drafts/codex/{chapter}.md",
         "drafts/deepseek/{chapter}.md",
@@ -20,21 +24,59 @@ ROLE_PATTERNS = {
     "review": [
         "reviews/{chapter}/codex_integrated_review.md",
         "reviews/{chapter}/deepseek_integrated_review.md",
+        "reviews/{chapter}/review_manifest.json",
     ],
     "continuity": ["reviews/{chapter}/continuity.md"],
     "decision": [
         "reviews/{chapter}/model_disagreement.md",
         "reviews/{chapter}/decision.md",
     ],
+    "gate": [
+        "state/gates/**",
+        "reader_tests/**",
+    ],
     "revision": [
-        "chapters/{volume}/{chapter_file}.md",
+        "chapters/{volume}/{chapter_file}",
         "reviews/{chapter}/revision.md",
     ],
     "state": [
         "state/event_ledger.jsonl",
         "state/derived/**",
-        "state/context_pack/**",
-        "state/snapshots/**",
+        "state/context_pack/{chapter}.md",
+        "state/snapshots/{chapter}_*",
+        "state/gates/**",
+        "state/selections/**",
+        "state/stops/**",
+    ],
+    "chapter": [
+        "outline/chapter_briefs/{chapter}.md",
+        "chapters/{volume}/{chapter_file}",
+        "drafts/codex/{chapter}.md",
+        "drafts/deepseek/{chapter}.md",
+        "external_runs/deepseek/{chapter}/**",
+        "reviews/{chapter}/**",
+        "state/selections/{chapter}.json",
+        "state/event_ledger.jsonl",
+        "state/derived/**",
+        "state/context_pack/{chapter}.md",
+        "state/snapshots/{chapter}_*",
+        "state/stops/**",
+    ],
+    "maintenance": [
+        ".gitignore",
+        ".env.example",
+        "AGENTS.md",
+        "README.md",
+        "ops/**",
+        "scripts/**",
+        "templates/**",
+        "tests/**",
+        "schemas/**",
+        "reader_tests/**",
+        "reviews/**",
+        "state/gates/**",
+        "state/selections/**",
+        "state/stops/**",
     ],
 }
 
@@ -51,6 +93,16 @@ def changed_files() -> list[str]:
             result = run_git(args)
             if result.returncode == 0:
                 files.update(line.strip() for line in result.stdout.splitlines() if line.strip())
+        status = run_git(["status", "--porcelain"])
+        if status.returncode == 0:
+            for line in status.stdout.splitlines():
+                if not line.strip():
+                    continue
+                path = line[3:].strip()
+                if " -> " in path:
+                    path = path.split(" -> ", 1)[1]
+                if path:
+                    files.add(path)
     else:
         result = run_git(["status", "--short"])
         for line in result.stdout.splitlines():
@@ -95,4 +147,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

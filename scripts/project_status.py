@@ -3,10 +3,10 @@ from __future__ import annotations
 import os
 import subprocess
 
-from _common import ROOT, read_text
+from _common import ROOT, gate_decision, read_text, unresolved_locks
 
 
-PLACEHOLDERS = ("待定", "待填")
+PLACEHOLDERS = ("待定", "待填", "待评", "待生成", "待人类裁决", "TODO")
 
 
 def git_status() -> str:
@@ -32,6 +32,11 @@ def main() -> int:
     print(f"- premise placeholders: {'yes' if has_placeholders('outline/premise.md') else 'no'}")
     print(f"- c001 brief placeholders: {'yes' if has_placeholders('outline/chapter_briefs/v01_c001.md') else 'no'}")
     print(f"- event ledger exists: {'yes' if (ROOT / 'state/event_ledger.jsonl').exists() else 'no'}")
+    print()
+    print("## Workflow Gates")
+    print(f"- open stop locks: {len(unresolved_locks())}")
+    print(f"- Gate A decision: {gate_decision('a') or 'not recorded'}")
+    print(f"- Gate B decision: {gate_decision('b') or 'not recorded'}")
     print()
     print("## Next likely action")
     if has_placeholders("outline/premise.md"):

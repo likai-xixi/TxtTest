@@ -7,6 +7,9 @@ from _common import ROOT, chapter_parts, now_iso, read_text, write_text
 from validate_event_ledger import validate as validate_ledger
 
 
+PLACEHOLDERS = ("待定", "待填", "TODO")
+
+
 def add_issue(issues: list[tuple[str, str]], level: str, text: str) -> None:
     issues.append((level, text))
 
@@ -32,7 +35,7 @@ def main() -> int:
         chapter_text = read_text(chapter_path)
         if not chapter_text.strip():
             add_issue(issues, "P2", "Chapter file is empty.")
-        if "待定" in chapter_text or "TODO" in chapter_text:
+        if any(marker in chapter_text for marker in PLACEHOLDERS):
             add_issue(issues, "P3", "Chapter contains placeholder text.")
 
     ledger_errors = validate_ledger(ledger_path)
@@ -45,10 +48,19 @@ def main() -> int:
         # become stricter after the first human-confirmed facts exist.
         pass
 
+    p0_count = sum(1 for level, _text in issues if level == "P0")
+    p1_count = sum(1 for level, _text in issues if level == "P1")
+    status = "BLOCKED" if p0_count or p1_count else "CLEAR"
+
     lines = [
         f"# Continuity: {args.chapter}",
         "",
         f"generated_at: {now_iso()}",
+        f"status: {status}",
+        f"p0_count: {p0_count}",
+        f"p1_count: {p1_count}",
+        f"p2_count: {sum(1 for level, _text in issues if level == 'P2')}",
+        f"p3_count: {sum(1 for level, _text in issues if level == 'P3')}",
         "",
         "## Summary",
         "",
@@ -90,4 +102,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

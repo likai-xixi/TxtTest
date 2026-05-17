@@ -5,7 +5,7 @@ import json
 from collections import Counter
 from pathlib import Path
 
-from _common import ROOT, now_iso, write_text
+from _common import ROOT, now_iso, write_blocked_by_locks, write_text
 from validate_event_ledger import validate
 
 
@@ -78,6 +78,9 @@ def main() -> int:
     parser.add_argument("--ledger", default=str(LEDGER))
     args = parser.parse_args()
 
+    if write_blocked_by_locks("derived state rebuild"):
+        return 1
+
     ledger = Path(args.ledger)
     if not ledger.is_absolute():
         ledger = ROOT / ledger
@@ -120,4 +123,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

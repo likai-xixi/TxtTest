@@ -4,3 +4,4 @@ __pycache__/
 exports/
 backups/
 external_runs/**/*.raw.json
+external_runs/**/*.prompt.md

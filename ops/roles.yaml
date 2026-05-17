@@ -4,18 +4,23 @@ brief:
 
 draft:
   allow:
-    - chapters/{volume}/{chapter_file}.md
+    - chapters/{volume}/{chapter_file}
+    - reviews/{chapter}/chapter_landing.md
+    - reviews/{chapter}/chapter_landing.json
 
 candidate:
   allow:
     - drafts/codex/{chapter}.md
     - drafts/deepseek/{chapter}.md
     - external_runs/deepseek/{chapter}/**
+    - reviews/{chapter}/candidate_selection.md
+    - state/selections/{chapter}.json
 
 review:
   allow:
     - reviews/{chapter}/codex_integrated_review.md
     - reviews/{chapter}/deepseek_integrated_review.md
+    - reviews/{chapter}/review_manifest.json
 
 continuity:
   allow:
@@ -26,15 +31,39 @@ decision:
     - reviews/{chapter}/model_disagreement.md
     - reviews/{chapter}/decision.md
 
+gate:
+  allow:
+    - state/gates/**
+    - reader_tests/**
+
 revision:
   allow:
-    - chapters/{volume}/{chapter_file}.md
+    - chapters/{volume}/{chapter_file}
     - reviews/{chapter}/revision.md
 
 state:
   allow:
     - state/event_ledger.jsonl
     - state/derived/**
-    - state/context_pack/**
-    - state/snapshots/**
+    - state/context_pack/{chapter}.md
+    - state/snapshots/{chapter}_*
+    - state/gates/**
+    - state/selections/**
+    - state/stops/**
 
+maintenance:
+  allow:
+    - .gitignore
+    - .env.example
+    - AGENTS.md
+    - README.md
+    - ops/**
+    - scripts/**
+    - templates/**
+    - tests/**
+    - schemas/**
+    - reader_tests/**
+    - reviews/**
+    - state/gates/**
+    - state/selections/**
+    - state/stops/**

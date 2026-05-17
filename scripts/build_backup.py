@@ -14,7 +14,7 @@ def should_include(path: Path) -> bool:
     rel = path.relative_to(ROOT)
     if any(part in EXCLUDE_PARTS for part in rel.parts):
         return False
-    if path.name.endswith(".raw.json"):
+    if path.name.endswith(".raw.json") or path.name.endswith(".prompt.md"):
         return False
     if path.name == ".env":
         return False
@@ -39,4 +39,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

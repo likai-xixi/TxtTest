@@ -18,10 +18,14 @@ DIRS = [
     "state/derived",
     "state/context_pack",
     "state/snapshots",
+    "state/gates",
+    "state/selections",
+    "state/stops",
     "references",
     "ops",
     "schemas",
     "reader_tests",
+    "reader_tests/responses",
     "scripts",
     "templates",
     "exports",
@@ -76,6 +80,9 @@ def main() -> int:
 
     if not (ROOT / ".env.example").exists():
         write_text(ROOT / ".env.example", "DEEPSEEK_API_KEY=\n")
+    locks = ROOT / "state" / "stops" / "project_locks.json"
+    if not locks.exists():
+        write_text(locks, '{\n  "locks": []\n}\n')
 
     removed = clean_generated() if args.clean_generated else 0
     git_created = maybe_init_git() if args.init_git else False
@@ -100,4 +107,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

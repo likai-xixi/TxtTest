@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import subprocess
 import sys
 from pathlib import Path
 
-from _common import ROOT, chapter_parts, read_text, write_text
+from _common import ROOT, chapter_parts, read_text, unresolved_locks, write_text
+from diff_scope_check import ROLE_PATTERNS, changed_files
 from validate_event_ledger import ALLOWED_TYPES
 
 
@@ -55,6 +57,16 @@ def ensure_git_identity() -> None:
         print(f"info: set local Git identity ({', '.join(changed)})")
 
 
+def ensure_no_open_locks() -> None:
+    locks = unresolved_locks()
+    if not locks:
+        return
+    print("ERROR: unresolved stop locks block this action:", file=sys.stderr)
+    for lock in locks:
+        print(f"  - {lock.get('id')}: {lock.get('reason')}", file=sys.stderr)
+    raise SystemExit(1)
+
+
 def copy_questionnaire(output: Path, force: bool) -> None:
     source = ROOT / "templates" / "questionnaire_answers.md"
     if output.exists() and not force:
@@ -74,7 +86,7 @@ def chapter_has_events(chapter: str) -> bool:
             entry = json.loads(line)
         except json.JSONDecodeError:
             continue
-        if entry.get("chapter") == chapter:
+        if entry.get("chapter") == chapter and entry.get("verified_by") == "human":
             return True
     return False
 
@@ -118,6 +130,7 @@ def command_new_chapter(args: argparse.Namespace) -> int:
 
 
 def command_start(args: argparse.Namespace) -> int:
+    ensure_no_open_locks()
     script_args = ["--chapter", args.chapter]
     if args.allow_placeholders:
         script_args.append("--allow-placeholders")
@@ -131,6 +144,7 @@ def command_start(args: argparse.Namespace) -> int:
 
 
 def command_deepseek_generate(args: argparse.Namespace) -> int:
+    ensure_no_open_locks()
     script_args = ["--chapter", args.chapter]
     if args.model:
         script_args.extend(["--model", args.model])
@@ -141,6 +155,7 @@ def command_deepseek_generate(args: argparse.Namespace) -> int:
 
 
 def command_review(args: argparse.Namespace) -> int:
+    ensure_no_open_locks()
     if args.deepseek or args.deepseek_dry_run:
         script_args = ["--chapter", args.chapter]
         if args.input:
@@ -157,19 +172,82 @@ def command_review(args: argparse.Namespace) -> int:
     if args.allow_missing_reviews:
         compare_args.append("--allow-missing")
     run_script("compare_model_reviews.py", *compare_args)
+    run_script("stop_check.py", "--chapter", args.chapter)
     print(f"next: human decision in reviews/{args.chapter}/decision.md")
     return 0
 
 
-def command_decision(args: argparse.Namespace) -> int:
-    script_args = ["--chapter", args.chapter, "--decision", args.decision]
+def command_codex_review_start(args: argparse.Namespace) -> int:
+    ensure_no_open_locks()
+    volume, chapter_file = chapter_parts(args.chapter)
+    context = f"state/context_pack/{args.chapter}.md"
+    review_input = args.input or f"chapters/{volume}/{chapter_file}"
+    run_script(
+        "review_manifest.py",
+        "--chapter",
+        args.chapter,
+        "--reviewer",
+        "codex",
+        "--input",
+        context,
+        "--input",
+        review_input,
+    )
+    print(f"next: write reviews/{args.chapter}/codex_integrated_review.md without reading DeepSeek review")
+    return 0
+
+
+def command_select_candidate(args: argparse.Namespace) -> int:
+    ensure_no_open_locks()
+    script_args = ["--chapter", args.chapter, "--choice", args.choice, "--reason", args.reason]
+    if args.adopt:
+        script_args.extend(["--adopt", args.adopt])
+    if args.reject:
+        script_args.extend(["--reject", args.reject])
+    if args.mixed_strategy:
+        script_args.extend(["--mixed-strategy", args.mixed_strategy])
     if args.notes:
         script_args.extend(["--notes", args.notes])
+    run_script("record_candidate_selection.py", *script_args)
+    return 0
+
+
+def command_land(args: argparse.Namespace) -> int:
+    ensure_no_open_locks()
+    script_args = [
+        "--chapter",
+        args.chapter,
+        "--source",
+        args.source,
+        "--attestation",
+        args.attestation,
+    ]
+    if args.notes:
+        script_args.extend(["--notes", args.notes])
+    run_script("record_chapter_landing.py", *script_args)
+    return 0
+
+
+def command_decision(args: argparse.Namespace) -> int:
+    ensure_no_open_locks()
+    script_args = ["--chapter", args.chapter, "--decision", args.decision]
+    for attr, option in [
+        ("keep", "--keep"),
+        ("change", "--change"),
+        ("next_verify", "--next-verify"),
+        ("setting_boundary", "--setting-boundary"),
+        ("failure_condition", "--failure-condition"),
+        ("notes", "--notes"),
+    ]:
+        value = getattr(args, attr, "")
+        if value:
+            script_args.extend([option, value])
     run_script("record_decision.py", *script_args)
     return 0
 
 
 def command_event(args: argparse.Namespace) -> int:
+    ensure_no_open_locks()
     script_args = [
         "--chapter",
         args.chapter,
@@ -191,24 +269,34 @@ def command_event(args: argparse.Namespace) -> int:
 
 
 def command_close(args: argparse.Namespace) -> int:
+    ensure_no_open_locks()
     chapter_parts(args.chapter)
-    if args.decision == "Ship" and not args.allow_no_events and not chapter_has_events(args.chapter):
+    run_script("validate_event_ledger.py")
+    run_script("validate_chapter.py", "--chapter", args.chapter)
+    run_script("continuity_check.py", "--chapter", args.chapter)
+    run_script("stop_check.py", "--chapter", args.chapter)
+    if args.decision == "Ship" and not chapter_has_events(args.chapter):
         print(
             "ERROR: Ship requires at least one human-verified event for this chapter. "
-            "Run `python scripts/novel.py event ...` or pass --allow-no-events.",
+            "Run `python scripts/novel.py event ...`.",
             file=sys.stderr,
         )
         return 1
+    if args.decision == "Ship":
+        run_script("chapter_evidence.py", "--chapter", args.chapter)
 
     command_decision(args)
-    run_script("validate_event_ledger.py")
     run_script("build_derived_state.py")
+    run_script("diff_scope_check.py", "--role", "chapter", "--chapter", args.chapter)
     if args.commit_message:
-        return command_commit(argparse.Namespace(message=args.commit_message, all=True))
+        return command_commit(
+            argparse.Namespace(message=args.commit_message, all=True, role="chapter", chapter=args.chapter)
+        )
     return 0
 
 
 def command_derive(_args: argparse.Namespace) -> int:
+    ensure_no_open_locks()
     run_script("validate_event_ledger.py")
     run_script("build_derived_state.py")
     return 0
@@ -226,6 +314,80 @@ def command_gate(args: argparse.Namespace) -> int:
     print(read_text(path).strip())
     print()
     print("Human must decide. This command does not pass a gate automatically.")
+    print()
+    sys.stdout.flush()
+    return run_script("gate_check.py", "--gate", gate, check=False)
+
+
+def command_gate_check(args: argparse.Namespace) -> int:
+    run_script("gate_check.py", "--gate", args.gate)
+    return 0
+
+
+def command_gate_close(args: argparse.Namespace) -> int:
+    ensure_no_open_locks()
+    script_args = ["--gate", args.gate, "--decision", args.decision, "--reason", args.reason]
+    if args.next_limits:
+        script_args.extend(["--next-limits", args.next_limits])
+    if args.continue_to:
+        script_args.extend(["--continue-to", args.continue_to])
+    if args.budget:
+        script_args.extend(["--budget", args.budget])
+    if args.primary_model:
+        script_args.extend(["--primary-model", args.primary_model])
+    if args.must_fix:
+        script_args.extend(["--must-fix", args.must_fix])
+    if args.stop_trigger:
+        script_args.extend(["--stop-trigger", args.stop_trigger])
+    run_script("record_gate_decision.py", *script_args)
+    return 0
+
+
+def command_reader_test(args: argparse.Namespace) -> int:
+    ensure_no_open_locks()
+    script_args = [args.reader_command, "--gate", args.gate]
+    if args.reader_command == "add":
+        script_args.extend(["--reader", args.reader])
+        if args.answers:
+            script_args.extend(["--answers", args.answers])
+        if args.target_reader:
+            script_args.extend(["--target-reader", args.target_reader])
+    else:
+        if args.risk:
+            script_args.extend(["--risk", args.risk])
+        if args.recommendation:
+            script_args.extend(["--recommendation", args.recommendation])
+    run_script("reader_test.py", *script_args)
+    return 0
+
+
+def command_stop_check(args: argparse.Namespace) -> int:
+    run_script("stop_check.py", "--chapter", args.chapter)
+    return 0
+
+
+def command_chapter_evidence(args: argparse.Namespace) -> int:
+    run_script("chapter_evidence.py", "--chapter", args.chapter)
+    return 0
+
+
+def command_stop_record(args: argparse.Namespace) -> int:
+    script_args = ["record", "--reason", args.reason]
+    if args.chapter:
+        script_args.extend(["--chapter", args.chapter])
+    if args.lock_id:
+        script_args.extend(["--lock-id", args.lock_id])
+    run_script("project_lock.py", *script_args)
+    return 0
+
+
+def command_stop_resolve(args: argparse.Namespace) -> int:
+    run_script("project_lock.py", "resolve", "--lock-id", args.lock_id, "--resolution", args.resolution)
+    return 0
+
+
+def command_stop_list(_args: argparse.Namespace) -> int:
+    run_script("project_lock.py", "list", check=False)
     return 0
 
 
@@ -239,9 +401,43 @@ def command_export(args: argparse.Namespace) -> int:
     return 0
 
 
+def allowed_patterns_for(role: str, chapter: str) -> list[str]:
+    volume, chapter_file = chapter_parts(chapter)
+    return [
+        pattern.format(chapter=chapter, volume=volume, chapter_file=chapter_file)
+        for pattern in ROLE_PATTERNS[role]
+    ]
+
+
+def file_allowed(path: str, patterns: list[str]) -> bool:
+    return any(fnmatch.fnmatch(str(path).replace("\\", "/"), pattern) for pattern in patterns)
+
+
+def stage_role_files(role: str, chapter: str) -> int:
+    patterns = allowed_patterns_for(role, chapter)
+    files = changed_files()
+    allowed = [path for path in files if file_allowed(path, patterns)]
+    if not allowed:
+        return 0
+    run_git("add", "--", *allowed)
+    return len(allowed)
+
+
 def command_commit(args: argparse.Namespace) -> int:
+    ensure_no_open_locks()
+    if args.all and not args.role:
+        print("ERROR: commit --all requires --role and --chapter so diff_scope_check can run.", file=sys.stderr)
+        return 1
+    if args.role:
+        if not args.chapter:
+            print("ERROR: --chapter is required when --role is used.", file=sys.stderr)
+            return 1
+        run_script("diff_scope_check.py", "--role", args.role, "--chapter", args.chapter)
     if args.all:
-        run_git("add", "--", ".")
+        if args.role:
+            stage_role_files(args.role, args.chapter)
+        else:
+            run_git("add", "--", ".")
     status = run_git("status", "--short", check=False).stdout.strip()
     if not status:
         print("OK: nothing to commit")
@@ -292,12 +488,15 @@ def command_flow(_args: argparse.Namespace) -> int:
    Codex candidate: Codex writes drafts/codex/v01_c001.md from context pack.
    DeepSeek candidate: python scripts/novel.py deepseek-generate v01_c001
    Human chooses Codex, DeepSeek, or mixed direction.
+   python scripts/novel.py select-candidate v01_c001 --choice "Mixed" --reason "..." --mixed-strategy "..." --notes "..."
 
 6. Land official chapter.
    Codex writes chapters/v01/c001.md.
    Do not copy DeepSeek directly into chapters.
+   python scripts/novel.py land v01_c001 --source "Codex" --attestation "Codex integrated from context pack, brief, and selected direction; no direct DeepSeek copy."
 
 7. Review.
+   python scripts/novel.py codex-review-start v01_c001
    Codex writes reviews/v01_c001/codex_integrated_review.md without reading DeepSeek review.
    python scripts/novel.py review v01_c001 --deepseek
 
@@ -313,7 +512,10 @@ def command_flow(_args: argparse.Namespace) -> int:
     python scripts/novel.py close v01_c001 --decision "Ship" --commit-message "complete v01 c001"
 
 11. Gates.
+    python scripts/novel.py reader-test summarize --gate A --risk "..." --recommendation "..."
+    python scripts/novel.py gate-check A
     After 3 chapters: python scripts/novel.py gate A
+    python scripts/novel.py gate-close A --decision continue --reason "..." --next-limits "..." --continue-to v01_c010 --budget "10章小连载验证" --primary-model Codex --must-fix "..." --stop-trigger "..."
     Human decides whether to continue to 10-chapter validation.
 
 12. Maintenance.
@@ -365,6 +567,23 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--dry-run", action="store_true")
     p.set_defaults(func=command_deepseek_generate)
 
+    p = sub.add_parser("select-candidate", help="Record the human-selected candidate direction.")
+    p.add_argument("chapter")
+    p.add_argument("--choice", required=True, choices=["Codex", "DeepSeek", "Mixed", "Rewrite brief", "No usable candidate"])
+    p.add_argument("--reason", required=True)
+    p.add_argument("--adopt", default="")
+    p.add_argument("--reject", default="")
+    p.add_argument("--mixed-strategy", default="")
+    p.add_argument("--notes", default="")
+    p.set_defaults(func=command_select_candidate)
+
+    p = sub.add_parser("land", help="Record provenance for the official chapter landing.")
+    p.add_argument("chapter")
+    p.add_argument("--source", required=True, choices=["Codex", "DeepSeek", "Mixed"])
+    p.add_argument("--attestation", required=True)
+    p.add_argument("--notes", default="")
+    p.set_defaults(func=command_land)
+
     p = sub.add_parser("review", help="Run chapter validation, continuity, review comparison, and optional DeepSeek review.")
     p.add_argument("chapter")
     p.add_argument("--deepseek", action="store_true")
@@ -374,9 +593,19 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--allow-missing-reviews", action="store_true")
     p.set_defaults(func=command_review)
 
+    p = sub.add_parser("codex-review-start", help="Record Codex review input manifest before manual Codex review.")
+    p.add_argument("chapter")
+    p.add_argument("--input", default=None)
+    p.set_defaults(func=command_codex_review_start)
+
     p = sub.add_parser("decision", help="Record a human chapter decision.")
     p.add_argument("chapter")
     p.add_argument("--decision", required=True, choices=DECISIONS)
+    p.add_argument("--keep", default="")
+    p.add_argument("--change", default="")
+    p.add_argument("--next-verify", default="")
+    p.add_argument("--setting-boundary", default="")
+    p.add_argument("--failure-condition", default="")
     p.add_argument("--notes", default="")
     p.set_defaults(func=command_decision)
 
@@ -393,8 +622,12 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("close", help="Record decision, validate ledger, rebuild derived state, and optionally commit.")
     p.add_argument("chapter")
     p.add_argument("--decision", required=True, choices=DECISIONS)
+    p.add_argument("--keep", default="")
+    p.add_argument("--change", default="")
+    p.add_argument("--next-verify", default="")
+    p.add_argument("--setting-boundary", default="")
+    p.add_argument("--failure-condition", default="")
     p.add_argument("--notes", default="")
-    p.add_argument("--allow-no-events", action="store_true")
     p.add_argument("--commit-message", default=None)
     p.set_defaults(func=command_close)
 
@@ -404,6 +637,58 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("gate", help="Show gate criteria. Never auto-passes a gate.")
     p.add_argument("gate", choices=sorted(GATES))
     p.set_defaults(func=command_gate)
+
+    p = sub.add_parser("gate-check", help="Check machine-verifiable evidence before a human gate decision.")
+    p.add_argument("gate", choices=sorted(GATES))
+    p.set_defaults(func=command_gate_check)
+
+    p = sub.add_parser("gate-close", help="Record a human gate decision.")
+    p.add_argument("gate", choices=sorted(GATES))
+    p.add_argument("--decision", required=True, choices=["continue", "pause", "kill", "rework"])
+    p.add_argument("--reason", required=True)
+    p.add_argument("--next-limits", default="")
+    p.add_argument("--continue-to", default="")
+    p.add_argument("--budget", default="")
+    p.add_argument("--primary-model", default="")
+    p.add_argument("--must-fix", default="")
+    p.add_argument("--stop-trigger", default="")
+    p.set_defaults(func=command_gate_close)
+
+    p = sub.add_parser("reader-test", help="Record or summarize reader-test evidence.")
+    reader_sub = p.add_subparsers(dest="reader_command", required=True)
+    rp = reader_sub.add_parser("add")
+    rp.add_argument("--gate", required=True, choices=["A", "B"])
+    rp.add_argument("--reader", required=True)
+    rp.add_argument("--answers", default=None)
+    rp.add_argument("--target-reader", default="unknown")
+    rp.set_defaults(func=command_reader_test)
+    rp = reader_sub.add_parser("summarize")
+    rp.add_argument("--gate", required=True, choices=["A", "B"])
+    rp.add_argument("--risk", default="")
+    rp.add_argument("--recommendation", default="")
+    rp.set_defaults(func=command_reader_test)
+
+    p = sub.add_parser("stop-check", help="Evaluate machine-checkable stop rules.")
+    p.add_argument("chapter")
+    p.set_defaults(func=command_stop_check)
+
+    p = sub.add_parser("chapter-evidence", help="Check per-chapter evidence before Ship close.")
+    p.add_argument("chapter")
+    p.set_defaults(func=command_chapter_evidence)
+
+    p = sub.add_parser("stop-record", help="Record an unresolved stop-rule lock.")
+    p.add_argument("--chapter", default="")
+    p.add_argument("--reason", required=True)
+    p.add_argument("--lock-id", default=None)
+    p.set_defaults(func=command_stop_record)
+
+    p = sub.add_parser("stop-resolve", help="Resolve a stop-rule lock.")
+    p.add_argument("--lock-id", required=True)
+    p.add_argument("--resolution", required=True)
+    p.set_defaults(func=command_stop_resolve)
+
+    p = sub.add_parser("stop-list", help="List unresolved stop-rule locks.")
+    p.set_defaults(func=command_stop_list)
 
     p = sub.add_parser("backup", help="Create a backup zip without secrets/raw API JSON.")
     p.add_argument("--label", default="manual")
@@ -416,6 +701,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("commit", help="Commit current changes.")
     p.add_argument("--message", required=True)
     p.add_argument("--all", action="store_true", help="Stage all files before committing.")
+    p.add_argument("--role", choices=sorted(ROLE_PATTERNS), default=None)
+    p.add_argument("--chapter", default=None)
     p.set_defaults(func=command_commit)
 
     p = sub.add_parser("status", help="Show project status and next likely action.")
