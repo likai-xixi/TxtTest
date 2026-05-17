@@ -8,6 +8,7 @@ import unittest
 import zipfile
 import hashlib
 import json
+import os
 from contextlib import contextmanager
 from collections.abc import Iterator
 from pathlib import Path
@@ -36,6 +37,18 @@ def run(repo: Path, *args: str) -> subprocess.CompletedProcess:
         capture_output=True,
         encoding="utf-8",
         errors="replace",
+    )
+
+
+def run_with_env(repo: Path, args: tuple[str, ...], env: dict[str, str]) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        [sys.executable, *args],
+        cwd=repo,
+        text=True,
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+        env=env,
     )
 
 
@@ -295,7 +308,7 @@ class WorkflowGuardTests(unittest.TestCase):
             repo = temp
             help_result = run(repo, "scripts/novel.py", "--help")
             self.assertEqual(help_result.returncode, 0)
-            for command in ("go", "draft", "self-test", "diff-scope", "continuity", "compare", "evidence"):
+            for command in ("go", "draft", "idea", "idea-form", "idea-select", "self-test", "diff-scope", "continuity", "compare", "evidence"):
                 self.assertIn(command, help_result.stdout)
 
             diff_scope = run(repo, "scripts/novel.py", "diff-scope", "--role", "chapter", "--chapter", "v01_c001")
@@ -324,6 +337,80 @@ class WorkflowGuardTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertTrue((repo / "setup_answers.md").exists())
             self.assertIn("next: fill", result.stdout)
+
+    def test_idea_requires_deepseek_key_before_writing_lab(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            env = os.environ.copy()
+            env.pop("DEEPSEEK_API_KEY", None)
+
+            result = run_with_env(repo, ("scripts/novel.py", "idea", "--id", "idea_test", "--text", "赛博民俗悬疑"), env)
+
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("DEEPSEEK_API_KEY", result.stderr)
+            self.assertFalse((repo / "state/idea_lab/idea_test").exists())
+
+    def test_idea_form_creates_short_seed(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            result = run(repo, "scripts/novel.py", "idea-form")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertTrue((repo / "idea_seed.md").exists())
+            self.assertIn("核心想法", (repo / "idea_seed.md").read_text(encoding="utf-8"))
+
+    def test_idea_select_writes_only_pilot_assets(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            idea = "idea_test"
+            lab = f"state/idea_lab/{idea}"
+            write(repo, f"{lab}/original_idea.md", "# Original\n\n赛博民俗悬疑。\n")
+            write(repo, f"{lab}/deepseek_idea.md", "# DeepSeek\n\nDirection A/B/C ready.\n")
+            write(repo, f"{lab}/product_founder_review.md", "# Product\n\nA has the clearest hook.\n")
+            write(repo, f"{lab}/technical_lead_review.md", "# Tech\n\nKeep rules small for three chapters.\n")
+            write(repo, f"{lab}/qa_release_review.md", "# QA\n\nGate A needs protagonist agency evidence.\n")
+            write(
+                repo,
+                f"{lab}/codex_synthesis.md",
+                "# Synthesis\n\n## Direction A\ncommercial hook\n\n## Direction B\ncharacter drive\n\n## Direction C\ndifference\n",
+            )
+            canon_before = (repo / "bible/canon.md").read_text(encoding="utf-8")
+            ledger_before = (repo / "state/event_ledger.jsonl").read_text(encoding="utf-8")
+
+            result = run(
+                repo,
+                "scripts/novel.py",
+                "idea-select",
+                "--id",
+                idea,
+                "--choice",
+                "A",
+                "--reason",
+                "商业钩子最强",
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertTrue((repo / f"{lab}/selection.json").exists())
+            self.assertIn("idea_lab_id: idea_test", (repo / "outline/premise.md").read_text(encoding="utf-8"))
+            self.assertIn("不得直接视为 canon", (repo / "bible/open_questions.md").read_text(encoding="utf-8"))
+            self.assertIn("Gate A", (repo / "outline/gate_a_3_chapters.md").read_text(encoding="utf-8"))
+            self.assertIn("待定", (repo / "outline/chapter_briefs/v01_c001.md").read_text(encoding="utf-8"))
+            self.assertEqual(canon_before, (repo / "bible/canon.md").read_text(encoding="utf-8"))
+            self.assertEqual(ledger_before, (repo / "state/event_ledger.jsonl").read_text(encoding="utf-8"))
+            self.assertFalse((repo / "chapters/v01/c001.md").exists())
+
+    def test_idea_select_requires_multi_agent_outputs(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            idea = "idea_missing_agent"
+            lab = f"state/idea_lab/{idea}"
+            write(repo, f"{lab}/original_idea.md", "# Original\n\n想法。\n")
+            write(repo, f"{lab}/deepseek_idea.md", "# DeepSeek\n\nDirections.\n")
+
+            result = run(repo, "scripts/novel.py", "idea-select", "--id", idea, "--choice", "A")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("missing idea-lab input", result.stderr)
 
     def test_close_ship_requires_structured_candidate_selection(self) -> None:
         with copy_repo() as temp:

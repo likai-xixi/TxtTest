@@ -51,6 +51,7 @@ REQUIRED_PATHS = [
     "schemas/character.schema.json",
     "schemas/thread.schema.json",
     "templates/questionnaire_answers.md",
+    "templates/idea_seed.md",
     "templates/chapter_brief.md",
     "templates/candidate_selection.md",
     "templates/ai_taste.md",
@@ -62,8 +63,11 @@ REQUIRED_PATHS = [
     "templates/gate_c_assessment.md",
     "templates/gate_e_300w_assessment.md",
     "state/stops/project_locks.json",
+    "state/idea_lab",
     "scripts/template_init.py",
     "scripts/apply_questionnaire.py",
+    "scripts/run_deepseek_idea.py",
+    "scripts/record_idea_selection.py",
     "scripts/new_chapter.py",
     "scripts/novel.py",
     "scripts/start_chapter.py",
@@ -140,7 +144,7 @@ def check_roles_yaml() -> list[str]:
         return [f"roles: invalid YAML: {exc}"]
     if not isinstance(data, dict):
         return ["roles: top-level value must be a mapping"]
-    required = {"brief", "draft", "candidate", "review", "continuity", "decision", "gate", "revision", "state", "chapter", "maintenance"}
+    required = {"brief", "draft", "candidate", "review", "continuity", "decision", "gate", "revision", "state", "chapter", "idea", "maintenance"}
     missing = sorted(required - set(data))
     errors = [f"roles: missing role {role}" for role in missing]
     for role, config in data.items():

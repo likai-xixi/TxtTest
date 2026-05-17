@@ -36,6 +36,16 @@ gate:
     - state/gates/**
     - reader_tests/**
 
+idea:
+  allow:
+    - idea_seed.md
+    - state/idea_lab/**
+    - external_runs/deepseek/*/idea.raw.json
+    - outline/premise.md
+    - bible/open_questions.md
+    - outline/gate_a_3_chapters.md
+    - outline/chapter_briefs/v01_c001.md
+
 revision:
   allow:
     - chapters/{volume}/{chapter_file}
@@ -48,6 +58,7 @@ state:
     - state/context_pack/{chapter}.md
     - state/snapshots/{chapter}_*
     - state/gates/**
+    - state/idea_lab/**
     - state/selections/**
     - state/stops/**
 
@@ -82,5 +93,6 @@ maintenance:
     - reader_tests/**
     - reviews/**
     - state/gates/**
+    - state/idea_lab/**
     - state/selections/**
     - state/stops/**

@@ -19,6 +19,7 @@ DIRS = [
     "state/context_pack",
     "state/snapshots",
     "state/gates",
+    "state/idea_lab",
     "state/selections",
     "state/stops",
     "references",
@@ -37,7 +38,10 @@ GENERATED_PATTERNS = [
     "state/snapshots/*.md",
     "state/derived/*.md",
     "state/derived/*.yaml",
+    "state/idea_lab/*/*.md",
+    "state/idea_lab/*/*.json",
     "external_runs/deepseek/*/*.prompt.md",
+    "external_runs/deepseek/*/*.raw.json",
 ]
 
 

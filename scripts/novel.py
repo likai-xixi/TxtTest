@@ -4,11 +4,12 @@ import argparse
 import fnmatch
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
 
-from _common import ROOT, chapter_parts, read_text, unresolved_locks, write_text
+from _common import ROOT, chapter_parts, now_iso, read_text, unresolved_locks, write_text
 from diff_scope_check import ROLE_PATTERNS, changed_files
 from validate_event_ledger import ALLOWED_TYPES
 
@@ -21,6 +22,7 @@ GATES = {
     "E": ("ops/gate_rules.yaml", 125),
 }
 PLACEHOLDER_MARKERS = ("待定", "待填", "待评", "待生成", "待人类裁决", "TODO")
+IDEA_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
 
 
 def run_script(script: str, *args: str, check: bool = True) -> int:
@@ -87,6 +89,23 @@ def display_path(path: Path) -> str:
         return str(path.relative_to(ROOT))
     except ValueError:
         return str(path)
+
+
+def validate_idea_id(value: str) -> str:
+    if not IDEA_ID_RE.match(value):
+        raise argparse.ArgumentTypeError("idea id must use only letters, numbers, dash, and underscore")
+    return value
+
+
+def default_idea_id() -> str:
+    return "idea_" + now_iso().replace("-", "").replace(":", "").replace("+00:00", "Z")
+
+
+def seed_text(path: Path) -> str:
+    text = read_text(path)
+    if not text.strip():
+        return ""
+    return text
 
 
 def chapter_has_events(chapter: str) -> bool:
@@ -214,6 +233,116 @@ def command_draft(args: argparse.Namespace) -> int:
             deepseek_dry_run=args.deepseek_dry_run,
         )
     )
+
+
+def command_idea_form(args: argparse.Namespace) -> int:
+    output = Path(args.output)
+    if not output.is_absolute():
+        output = ROOT / output
+    if output.exists() and not args.force:
+        print(f"ERROR: {display_path(output)} already exists. Use --force to overwrite.", file=sys.stderr)
+        return 1
+    write_text(output, read_text(ROOT / "templates" / "idea_seed.md"))
+    print(f"OK: wrote {display_path(output)}")
+    print("next: fill it, then run `python scripts/novel.py idea --seed idea_seed.md`.")
+    return 0
+
+
+def command_idea(args: argparse.Namespace) -> int:
+    ensure_no_open_locks()
+    if not os.environ.get("DEEPSEEK_API_KEY"):
+        print("ERROR: DEEPSEEK_API_KEY is required for idea lab; dry-run is not allowed.", file=sys.stderr)
+        return 2
+
+    if args.text:
+        idea_text = args.text.strip()
+    else:
+        seed = Path(args.seed)
+        if not seed.is_absolute():
+            seed = ROOT / seed
+        if not seed.exists():
+            print(f"ERROR: missing idea seed: {display_path(seed)}", file=sys.stderr)
+            return 1
+        idea_text = seed_text(seed).strip()
+    if not idea_text:
+        print("ERROR: idea text must not be empty.", file=sys.stderr)
+        return 1
+    if args.seed and has_placeholders(seed):
+        print("ERROR: idea seed still has placeholders.", file=sys.stderr)
+        return 1
+
+    idea_id = args.id or default_idea_id()
+    validate_idea_id(idea_id)
+    lab = ROOT / "state" / "idea_lab" / idea_id
+    if lab.exists() and not args.force:
+        print(f"ERROR: idea lab already exists: {lab.relative_to(ROOT)}. Use --force to overwrite metadata.", file=sys.stderr)
+        return 1
+    write_text(lab / "original_idea.md", f"# Original Idea: {idea_id}\n\n{idea_text}\n")
+    write_text(
+        lab / "idea.json",
+        json.dumps(
+            {
+                "idea_id": idea_id,
+                "created_at": now_iso(),
+                "requires_deepseek": True,
+                "requires_multi_agent": True,
+                "writes_canon": False,
+                "writes_chapters": False,
+                "writes_event_ledger": False,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+    )
+
+    script_args = ["--idea-id", idea_id, "--text", idea_text, "--model", args.model]
+    script_args.extend(["--temperature", str(args.temperature), "--max-tokens", str(args.max_tokens)])
+    run_script("run_deepseek_idea.py", *script_args)
+    write_text(
+        lab / "agent_tasks.md",
+        f"""# Multi-Agent Tasks: {idea_id}
+
+开书实验要求 Codex app 同时启用：
+
+- product_founder：读者钩子、类型承诺、前三章验证价值。
+- technical_lead：长篇可控性、设定膨胀风险、状态/伏笔管理。
+- qa_release：Gate A 成功标准、失败信号、首三章证据要求。
+
+每个 agent 必须只读取：
+
+- `state/idea_lab/{idea_id}/original_idea.md`
+- `state/idea_lab/{idea_id}/deepseek_idea.md`
+
+输出必须分别写入：
+
+- `state/idea_lab/{idea_id}/product_founder_review.md`
+- `state/idea_lab/{idea_id}/technical_lead_review.md`
+- `state/idea_lab/{idea_id}/qa_release_review.md`
+
+Codex 汇总必须写入：
+
+- `state/idea_lab/{idea_id}/codex_synthesis.md`
+
+汇总固定包含 A/B/C 三个方向：商业钩子、人物驱动、差异化/反套路。
+""",
+    )
+    print(f"OK: idea lab created at state/idea_lab/{idea_id}")
+    print("next: enable product_founder, technical_lead, and qa_release agents, then write codex_synthesis.md.")
+    return 0
+
+
+def command_idea_select(args: argparse.Namespace) -> int:
+    ensure_no_open_locks()
+    script_args = ["--id", args.id, "--choice", args.choice]
+    if args.reason:
+        script_args.extend(["--reason", args.reason])
+    if args.mixed_strategy:
+        script_args.extend(["--mixed-strategy", args.mixed_strategy])
+    if args.notes:
+        script_args.extend(["--notes", args.notes])
+    run_script("record_idea_selection.py", *script_args)
+    return 0
 
 
 def command_new_chapter(args: argparse.Namespace) -> int:
@@ -600,50 +729,55 @@ def command_flow(_args: argparse.Namespace) -> int:
    Fill setup_answers.md, then run:
    python scripts/novel.py go
 
-3. Ask Codex to draft setup assets for human confirmation.
+3. Or start from idea lab.
+   python scripts/novel.py idea --text "A cyber-folk suspense story about someone who refuses to believe in ghosts."
+   Enable product_founder, technical_lead, and qa_release agents.
+   python scripts/novel.py idea-select --id idea_... --choice A --reason "..."
+
+4. Ask Codex to draft setup assets for human confirmation.
    Minimal worldview, protagonist card, relationships seed, volume mini-outline.
    Do not write canon until human confirms facts.
 
-4. Start a chapter.
+5. Start a chapter.
    Easiest path:
    python scripts/novel.py draft v01_c001
    Fill the brief if requested, then run the same command again.
 
-5. Generate candidates.
+6. Generate candidates.
    Codex candidate: Codex writes drafts/codex/v01_c001.md from context pack.
    DeepSeek candidate: python scripts/novel.py deepseek-generate v01_c001
    Human chooses Codex, DeepSeek, or mixed direction.
    python scripts/novel.py select-candidate v01_c001 --choice "Mixed" --reason "..." --mixed-strategy "..." --notes "..."
 
-6. Land official chapter.
+7. Land official chapter.
    Codex writes chapters/v01/c001.md.
    Do not copy DeepSeek directly into chapters.
    python scripts/novel.py land v01_c001 --selected-direction "Codex" --attestation "Codex integrated from context pack, brief, and selected direction; no direct DeepSeek copy."
 
-7. Review.
+8. Review.
    python scripts/novel.py codex-review-start v01_c001
    Codex writes reviews/v01_c001/codex_integrated_review.md without reading DeepSeek review.
    python scripts/novel.py review v01_c001 --deepseek
 
-8. Human decision.
+9. Human decision.
    python scripts/novel.py decision v01_c001 --decision "Revise once"
    or
    python scripts/novel.py decision v01_c001 --decision "Ship"
 
-9. Record human-verified facts.
+10. Record human-verified facts.
    python scripts/novel.py event v01_c001 --type character_decision --fact "..." --evidence-quote "..." --consequence "..."
 
-10. Close chapter.
+11. Close chapter.
     python scripts/novel.py close v01_c001 --decision "Ship" --commit-message "complete v01 c001"
 
-11. Gates.
+12. Gates.
     python scripts/novel.py reader-test summarize --gate A --risk "..." --recommendation "..."
     python scripts/novel.py gate-check A
     After 3 chapters: python scripts/novel.py gate A
     python scripts/novel.py gate-close A --decision continue --reason "..." --next-limits "..." --continue-to v01_c010 --budget "10章小连载验证" --primary-model Codex --must-fix "..." --stop-trigger "..."
     Human decides whether to continue to 10-chapter validation.
 
-12. Maintenance.
+13. Maintenance.
     python scripts/novel.py backup --label before_gate_a
     python scripts/novel.py export --volume v01
     python scripts/novel.py status
@@ -688,6 +822,30 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--answers", default="setup_answers.md")
     p.add_argument("--deepseek-dry-run", action="store_true", help="When the brief is ready, also write the DeepSeek prompt without calling the API.")
     p.set_defaults(func=command_draft)
+
+    p = sub.add_parser("idea-form", help="Create a short idea seed form.")
+    p.add_argument("--output", default="idea_seed.md")
+    p.add_argument("--force", action="store_true")
+    p.set_defaults(func=command_idea_form)
+
+    p = sub.add_parser("idea", help="Create an idea lab from one idea and call DeepSeek.")
+    source = p.add_mutually_exclusive_group(required=True)
+    source.add_argument("--text", default="")
+    source.add_argument("--seed", default="")
+    p.add_argument("--id", type=validate_idea_id, default=None)
+    p.add_argument("--force", action="store_true")
+    p.add_argument("--model", default="deepseek-v4-pro")
+    p.add_argument("--temperature", type=float, default=0.8)
+    p.add_argument("--max-tokens", type=int, default=5000)
+    p.set_defaults(func=command_idea)
+
+    p = sub.add_parser("idea-select", help="Record the selected idea direction and create pilot assets.")
+    p.add_argument("--id", required=True, type=validate_idea_id)
+    p.add_argument("--choice", required=True, choices=["A", "B", "C", "Mixed"])
+    p.add_argument("--reason", default="")
+    p.add_argument("--mixed-strategy", default="")
+    p.add_argument("--notes", default="")
+    p.set_defaults(func=command_idea_select)
 
     p = sub.add_parser("new-chapter", help="Create chapter brief and review workspace.")
     p.add_argument("chapter")

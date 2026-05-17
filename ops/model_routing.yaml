@@ -13,6 +13,15 @@ models:
       - external_runs/deepseek/{chapter}/generate.prompt.md
       - external_runs/deepseek/{chapter}/generate.raw.json
 
+  deepseek_idea:
+    provider: deepseek
+    model: deepseek-v4-pro
+    mode: idea_lab_direction_generation
+    api_model_can_modify_files: false
+    local_wrapper_writes:
+      - state/idea_lab/{idea_id}/deepseek_idea.md
+      - external_runs/deepseek/{idea_id}/idea.raw.json
+
   deepseek_review:
     provider: deepseek
     model: deepseek-v4-pro

@@ -36,6 +36,8 @@ python scripts/novel.py go
 在 Codex app 里不用记后面的脚本链条，直接说：
 
 ```text
+想法：……
+开书实验
 开书
 开章 v01_c001
 收章 v01_c001
@@ -44,6 +46,28 @@ python scripts/novel.py go
 ```
 
 Codex 会按 `AGENTS.md` 自己运行检查、生成 context pack、调用 DeepSeek、记录 provenance、跑审查和 evidence。只有需要你给 brief、选择方向、裁决章节或确认正文事实时才停下来问你。
+
+## 开书实验室
+
+如果只有一个模糊念头，先走开书实验：
+
+```bash
+python scripts/novel.py idea --text "赛博民俗悬疑，主角是不信鬼的人"
+```
+
+这个命令必须真实调用 DeepSeek；没有 `DEEPSEEK_API_KEY` 会直接停止。DeepSeek 完成后，Codex app 必须启用 `product_founder`、`technical_lead`、`qa_release` 三类 agent，并把审查写入 `state/idea_lab/{idea_id}/`。Codex 汇总后，你只需要选择：
+
+```bash
+python scripts/novel.py idea-select --id idea_xxx --choice A --reason "商业钩子最强"
+```
+
+选择后只会生成试点资产：`outline/premise.md`、`bible/open_questions.md`、`outline/gate_a_3_chapters.md`、`outline/chapter_briefs/v01_c001.md`。不会写 canon、正文或 event ledger。
+
+如果不想一句话输入，可先生成短表单：
+
+```bash
+python scripts/novel.py idea-form
+```
 
 如果你想用命令行开章：
 

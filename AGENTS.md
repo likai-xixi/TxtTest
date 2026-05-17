@@ -19,6 +19,7 @@
 人类总编不需要记脚本细节。若用户使用下列口令，Codex app 必须自动翻译为流程动作：
 
 - `开书`：运行 `python scripts/novel.py go`，如缺启动问卷就生成并请用户填写。
+- `想法：...` / `开书实验`：必须进入 idea-lab。先运行 `python scripts/novel.py idea --text "..."` 或 `idea-form`；必须真实调用 DeepSeek，不能 dry-run；必须同时启用 `product_founder`、`technical_lead`、`qa_release` 三类 agent。
 - `继续`：运行 `python scripts/novel.py go` 和 `status`，判断下一步；只在需要人类回答、确认或裁决时停下。
 - `开章 v01_c001` / `写下一章`：运行 `python scripts/novel.py draft {chapter}`。若 brief 缺失或仍有占位，先请用户给本章功能、开篇吸引点、主角目标、阻力、主动选择、章末问题；不要直接写正文。
 - `收章 v01_c001`：Codex 自行执行候选选择记录、正式落章 provenance、Codex review manifest、DeepSeek review、continuity、model_disagreement、evidence 检查；缺人类裁决或 event ledger 事实时再问用户。
@@ -26,10 +27,20 @@
 
 回复用户时优先使用这些口令，不要把完整脚本链条甩给用户。
 
+### 开书实验室硬规则
+
+- 如果当前 Codex 环境不能启用 `product_founder`、`technical_lead`、`qa_release`，必须停止并说明“开书实验要求多 agent，当前环境不满足”，不能降级成单模型。
+- 如果 `DEEPSEEK_API_KEY` 不可用，必须停止；开书实验不能用 dry-run 替代。
+- idea-lab 只能写 `state/idea_lab/`、`external_runs/deepseek/` 和被人类选择后的试点资产；不得写 `bible/canon.md`、`chapters/`、`state/event_ledger.jsonl`。
+- Codex 汇总必须固定给三种方向：A 最强商业钩子、B 最强人物驱动、C 最大差异化/反套路。
+- 每个方向必须包含：一句话卖点、主角欲望、核心冲突、世界异常、前三章验证点、最大风险、适合继续/不适合继续的信号。
+
 常用入口：
 
 ```bash
 python scripts/novel.py go
+python scripts/novel.py idea --text "..."
+python scripts/novel.py idea-select --id idea_xxx --choice A
 python scripts/novel.py draft v01_c001
 python scripts/novel.py flow
 python scripts/novel.py check
