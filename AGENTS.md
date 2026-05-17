@@ -17,6 +17,7 @@
 常用入口：
 
 ```bash
+python scripts/novel.py go
 python scripts/novel.py flow
 python scripts/novel.py check
 python scripts/novel.py status

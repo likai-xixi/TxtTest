@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import fnmatch
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -19,6 +20,7 @@ GATES = {
     "C": ("ops/gate_rules.yaml", 25),
     "E": ("ops/gate_rules.yaml", 125),
 }
+PLACEHOLDER_MARKERS = ("待定", "待填", "待评", "待生成", "待人类裁决", "TODO")
 
 
 def run_script(script: str, *args: str, check: bool = True) -> int:
@@ -75,6 +77,18 @@ def copy_questionnaire(output: Path, force: bool) -> None:
     print(f"OK: wrote {output.relative_to(ROOT)}")
 
 
+def has_placeholders(path: Path) -> bool:
+    text = read_text(path)
+    return any(marker in text for marker in PLACEHOLDER_MARKERS)
+
+
+def display_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
 def chapter_has_events(chapter: str) -> bool:
     ledger = ROOT / "state" / "event_ledger.jsonl"
     if not ledger.exists():
@@ -117,6 +131,76 @@ def command_apply_questionnaire(args: argparse.Namespace) -> int:
         script_args.append("--allow-placeholders")
     run_script("apply_questionnaire.py", *script_args)
     print("next: ask Codex to generate minimal worldview, protagonist card, and volume mini-outline for human confirmation")
+    return 0
+
+
+def command_go(args: argparse.Namespace) -> int:
+    script_args = ["--project-name", args.name, "--init-git"]
+    if args.clean_generated:
+        script_args.append("--clean-generated")
+    run_script("template_init.py", *script_args)
+    run_script("check_template.py")
+
+    print("# Go")
+    print()
+    print(f"DEEPSEEK_API_KEY: {'set' if os.environ.get('DEEPSEEK_API_KEY') else 'missing'}")
+    print()
+
+    answers = Path(args.answers)
+    if not answers.is_absolute():
+        answers = ROOT / answers
+
+    if not answers.exists():
+        copy_questionnaire(answers, force=False)
+        print()
+        print(f"next: fill `{display_path(answers)}`, then run `python scripts/novel.py go` again.")
+        return 0
+
+    if has_placeholders(answers):
+        print(f"next: finish `{display_path(answers)}`, then run `python scripts/novel.py go` again.")
+        return 0
+
+    premise = ROOT / "outline" / "premise.md"
+    if has_placeholders(premise):
+        run_script("apply_questionnaire.py", "--answers", str(answers))
+        print("OK: applied startup questionnaire.")
+        print()
+
+    setup_assets = [
+        ROOT / "bible" / "worldview.md",
+        ROOT / "bible" / "rules.md",
+        ROOT / "bible" / "characters.yaml",
+        ROOT / "bible" / "relationships.yaml",
+        ROOT / "outline" / "volume_01.md",
+    ]
+    if any(has_placeholders(path) for path in setup_assets):
+        print("next: ask Codex to draft the minimal worldview, protagonist card, relationships seed, and volume mini-outline.")
+        print("guardrail: keep canon empty until the human editor confirms hard facts.")
+        return 0
+
+    brief = ROOT / "outline" / "chapter_briefs" / f"{args.chapter}.md"
+    if not brief.exists():
+        run_script("new_chapter.py", "--chapter", args.chapter)
+        print()
+    if has_placeholders(brief):
+        print(f"next: fill `{display_path(brief)}`, then run `python scripts/novel.py go --chapter {args.chapter}` again.")
+        return 0
+
+    context = ROOT / "state" / "context_pack" / f"{args.chapter}.md"
+    if not context.exists():
+        start_args = ["--chapter", args.chapter]
+        if args.deepseek_dry_run:
+            start_args.append("--deepseek-dry-run")
+        run_script("start_chapter.py", *start_args)
+        print(f"ready: `{display_path(context)}`")
+        return 0
+
+    print(f"ready: `{display_path(context)}`")
+    print(f"next: ask Codex to write `drafts/codex/{args.chapter}.md` from the context pack.")
+    if os.environ.get("DEEPSEEK_API_KEY"):
+        print(f"optional: run `python scripts/novel.py deepseek-generate {args.chapter}` for a DeepSeek candidate.")
+    else:
+        print("optional: DeepSeek key is missing in this process; use dry-run or restart Codex after setting the system env var.")
     return 0
 
 
@@ -499,8 +583,10 @@ def command_flow(_args: argparse.Namespace) -> int:
    python scripts/novel.py init --name "Book Name"
 
 2. Prepare and apply questionnaire.
-   python scripts/novel.py questionnaire
-   python scripts/novel.py apply-questionnaire --answers setup_answers.md
+   Easiest path:
+   python scripts/novel.py go --name "Book Name"
+   Fill setup_answers.md, then run:
+   python scripts/novel.py go
 
 3. Ask Codex to draft setup assets for human confirmation.
    Minimal worldview, protagonist card, relationships seed, volume mini-outline.
@@ -575,6 +661,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--answers", default="setup_answers.md")
     p.add_argument("--allow-placeholders", action="store_true")
     p.set_defaults(func=command_apply_questionnaire)
+
+    p = sub.add_parser("go", help="One-step helper that initializes and tells you the next action.")
+    p.add_argument("--name", default="Untitled Novel")
+    p.add_argument("--answers", default="setup_answers.md")
+    p.add_argument("--chapter", default="v01_c001")
+    p.add_argument("--clean-generated", action="store_true", help="Remove generated context/snapshot/prompt files before guiding.")
+    p.add_argument("--deepseek-dry-run", action="store_true", help="When the brief is ready, also write the DeepSeek prompt without calling the API.")
+    p.set_defaults(func=command_go)
 
     p = sub.add_parser("new-chapter", help="Create chapter brief and review workspace.")
     p.add_argument("chapter")

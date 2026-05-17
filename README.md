@@ -17,6 +17,22 @@ python scripts/novel.py self-test
 
 ## 复制后开工
 
+最省事的方式是反复跑一个命令：
+
+```bash
+python scripts/novel.py go --name "你的小说名"
+```
+
+第一次会初始化目录、检测模板、生成 `setup_answers.md`。你填完问卷后再跑：
+
+```bash
+python scripts/novel.py go
+```
+
+它会自动应用问卷，并提示下一步该让 Codex 生成哪些最小资产。后续不知道该干什么时，也先跑 `go`。
+
+如果你想手动走细分命令：
+
 ```bash
 python scripts/novel.py init --name "你的小说名"
 python scripts/novel.py questionnaire
