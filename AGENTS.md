@@ -14,10 +14,23 @@
 
 正式流程以 `scripts/novel.py` 为准。底层脚本保留给统一入口、测试和排查调用；不得绕过 `novel.py` 直接落候选选择、裁决、Gate、事件或提交。
 
+## 总编口令
+
+人类总编不需要记脚本细节。若用户使用下列口令，Codex app 必须自动翻译为流程动作：
+
+- `开书`：运行 `python scripts/novel.py go`，如缺启动问卷就生成并请用户填写。
+- `继续`：运行 `python scripts/novel.py go` 和 `status`，判断下一步；只在需要人类回答、确认或裁决时停下。
+- `开章 v01_c001` / `写下一章`：运行 `python scripts/novel.py draft {chapter}`。若 brief 缺失或仍有占位，先请用户给本章功能、开篇吸引点、主角目标、阻力、主动选择、章末问题；不要直接写正文。
+- `收章 v01_c001`：Codex 自行执行候选选择记录、正式落章 provenance、Codex review manifest、DeepSeek review、continuity、model_disagreement、evidence 检查；缺人类裁决或 event ledger 事实时再问用户。
+- `查状态`：运行 `python scripts/novel.py status`，用一句话告诉用户现在卡在哪里。
+
+回复用户时优先使用这些口令，不要把完整脚本链条甩给用户。
+
 常用入口：
 
 ```bash
 python scripts/novel.py go
+python scripts/novel.py draft v01_c001
 python scripts/novel.py flow
 python scripts/novel.py check
 python scripts/novel.py status

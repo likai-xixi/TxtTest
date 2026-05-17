@@ -204,6 +204,18 @@ def command_go(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_draft(args: argparse.Namespace) -> int:
+    return command_go(
+        argparse.Namespace(
+            name=args.name,
+            answers=args.answers,
+            chapter=args.chapter,
+            clean_generated=False,
+            deepseek_dry_run=args.deepseek_dry_run,
+        )
+    )
+
+
 def command_new_chapter(args: argparse.Namespace) -> int:
     script_args = ["--chapter", args.chapter]
     if args.force:
@@ -593,9 +605,9 @@ def command_flow(_args: argparse.Namespace) -> int:
    Do not write canon until human confirms facts.
 
 4. Start a chapter.
-   python scripts/novel.py new-chapter v01_c001
-   Fill the brief.
-   python scripts/novel.py start v01_c001 --deepseek-dry-run
+   Easiest path:
+   python scripts/novel.py draft v01_c001
+   Fill the brief if requested, then run the same command again.
 
 5. Generate candidates.
    Codex candidate: Codex writes drafts/codex/v01_c001.md from context pack.
@@ -669,6 +681,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--clean-generated", action="store_true", help="Remove generated context/snapshot/prompt files before guiding.")
     p.add_argument("--deepseek-dry-run", action="store_true", help="When the brief is ready, also write the DeepSeek prompt without calling the API.")
     p.set_defaults(func=command_go)
+
+    p = sub.add_parser("draft", help="Open or continue a chapter until its context pack is ready.")
+    p.add_argument("chapter")
+    p.add_argument("--name", default="Untitled Novel")
+    p.add_argument("--answers", default="setup_answers.md")
+    p.add_argument("--deepseek-dry-run", action="store_true", help="When the brief is ready, also write the DeepSeek prompt without calling the API.")
+    p.set_defaults(func=command_draft)
 
     p = sub.add_parser("new-chapter", help="Create chapter brief and review workspace.")
     p.add_argument("chapter")

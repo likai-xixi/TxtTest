@@ -31,6 +31,26 @@ python scripts/novel.py go
 
 它会自动应用问卷，并提示下一步该让 Codex 生成哪些最小资产。后续不知道该干什么时，也先跑 `go`。
 
+## 日常口令
+
+在 Codex app 里不用记后面的脚本链条，直接说：
+
+```text
+开书
+开章 v01_c001
+收章 v01_c001
+继续
+查状态
+```
+
+Codex 会按 `AGENTS.md` 自己运行检查、生成 context pack、调用 DeepSeek、记录 provenance、跑审查和 evidence。只有需要你给 brief、选择方向、裁决章节或确认正文事实时才停下来问你。
+
+如果你想用命令行开章：
+
+```bash
+python scripts/novel.py draft v01_c001
+```
+
 如果你想手动走细分命令：
 
 ```bash

@@ -295,7 +295,7 @@ class WorkflowGuardTests(unittest.TestCase):
             repo = temp
             help_result = run(repo, "scripts/novel.py", "--help")
             self.assertEqual(help_result.returncode, 0)
-            for command in ("go", "self-test", "diff-scope", "continuity", "compare", "evidence"):
+            for command in ("go", "draft", "self-test", "diff-scope", "continuity", "compare", "evidence"):
                 self.assertIn(command, help_result.stdout)
 
             diff_scope = run(repo, "scripts/novel.py", "diff-scope", "--role", "chapter", "--chapter", "v01_c001")
@@ -314,6 +314,15 @@ class WorkflowGuardTests(unittest.TestCase):
             self.assertTrue((repo / ".git").exists())
             self.assertTrue((repo / "setup_answers.md").exists())
             self.assertIn("DEEPSEEK_API_KEY:", result.stdout)
+            self.assertIn("next: fill", result.stdout)
+
+    def test_draft_is_chapter_friendly_go_alias(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            result = run(repo, "scripts/novel.py", "draft", "v01_c001")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertTrue((repo / "setup_answers.md").exists())
             self.assertIn("next: fill", result.stdout)
 
     def test_close_ship_requires_structured_candidate_selection(self) -> None:
