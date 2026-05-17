@@ -57,6 +57,12 @@ def main() -> int:
     if number >= 11 and gate_decision("b") != "continue":
         print("ERROR: Gate B must be recorded as continue before creating chapter 11+.", file=sys.stderr)
         return 1
+    if number >= 26 and gate_decision("c") != "continue":
+        print("ERROR: Gate C must be recorded as continue before creating chapter 26+.", file=sys.stderr)
+        return 1
+    if number >= 126 and gate_decision("e") != "continue":
+        print("ERROR: Gate E must be recorded as continue before creating chapter 126+.", file=sys.stderr)
+        return 1
 
     volume, _chapter_file = chapter_parts(args.chapter)
     created: list[str] = []

@@ -12,7 +12,13 @@ python scripts/novel.py status
 
 ## 你需要回答的启动问卷
 
-请复制 `templates/questionnaire_answers.md` 为 `setup_answers.md` 后填写，再运行：
+请运行：
+
+```bash
+python scripts/novel.py questionnaire
+```
+
+填写 `setup_answers.md` 后运行：
 
 ```bash
 python scripts/novel.py apply-questionnaire --answers setup_answers.md
@@ -35,14 +41,14 @@ python scripts/novel.py apply-questionnaire --answers setup_answers.md
 
 ## 当前缺口
 
-- 未配置 `DEEPSEEK_API_KEY`。
-- 未填写启动问卷。
-- 未有人类确认的 canon 事实。
+- 启动问卷尚未填写。
+- 没有人类确认的 canon 事实。
 - `event_ledger.jsonl` 尚无正文事实事件。
+- 第一章 brief 仍需人类确认后才能 start。
 
 ## 推荐下一步
 
-先回答启动问卷。Codex 将据此生成最小世界观、主角卡、第一卷 mini-outline，并等待你确认。确认后再填写 `outline/chapter_briefs/v01_c001.md` 并运行：
+先回答启动问卷。Codex 可据此生成最小世界观、主角卡和第一卷 mini-outline，等待人类确认；确认后再填写 `outline/chapter_briefs/v01_c001.md` 并运行：
 
 ```bash
 python scripts/novel.py start v01_c001 --deepseek-dry-run

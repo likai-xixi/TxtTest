@@ -1,6 +1,10 @@
 # Codex Integrated Review: v01_c001
 
-待初稿完成后由 Codex 独立填写。填写本报告前不得读取 DeepSeek review。
+填写本报告前不得读取 DeepSeek review。先运行：
+
+```bash
+python scripts/novel.py codex-review-start v01_c001
+```
 
 ## 是否读得下去
 
@@ -25,4 +29,3 @@
 ## 建议动作
 
 待评。
-

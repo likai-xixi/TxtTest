@@ -1,6 +1,13 @@
 # Retention Risk: {chapter}
 
+status: 待评
+
 3 章前不做真实读者测试；这里只记录可能导致读者停止阅读的风险。
 
-当前状态：待评。
+## Findings
 
+- 待评。
+
+## Required Outcome
+
+将 `status` 改为 `CLEAR`、`ACCEPTED_BY_HUMAN` 或 `BLOCKED`。Ship 前只允许 `CLEAR` 或 `ACCEPTED_BY_HUMAN`。

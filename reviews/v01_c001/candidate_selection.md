@@ -11,4 +11,3 @@
 - Mixed
 - Rewrite brief
 - No usable candidate
-

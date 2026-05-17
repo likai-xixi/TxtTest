@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import sys
 from pathlib import Path
 
 from _common import ROOT, read_text
@@ -18,6 +17,8 @@ GATES = {
         "reader_synthesis": "reader_tests/gate_a_synthesis.md",
         "reader_response_dir": "reader_tests/responses/gate_a",
         "min_reader_responses": 3,
+        "assessment": None,
+        "assessment_sections": [],
     },
     "B": {
         "needed": 10,
@@ -25,6 +26,8 @@ GATES = {
         "reader_synthesis": "reader_tests/gate_b_synthesis.md",
         "reader_response_dir": "reader_tests/responses/gate_b",
         "min_reader_responses": 3,
+        "assessment": None,
+        "assessment_sections": [],
     },
     "C": {
         "needed": 25,
@@ -32,6 +35,8 @@ GATES = {
         "reader_synthesis": None,
         "reader_response_dir": None,
         "min_reader_responses": 0,
+        "assessment": "state/gates/gate_c_assessment.md",
+        "assessment_sections": ["阶段高潮", "不可逆变化", "伏笔负债", "设定膨胀", "卷内结构"],
     },
     "E": {
         "needed": 125,
@@ -39,10 +44,24 @@ GATES = {
         "reader_synthesis": None,
         "reader_response_dir": None,
         "min_reader_responses": 0,
+        "assessment": "state/gates/gate_e_300w_assessment.md",
+        "assessment_sections": ["300 万字模式", "管理成本", "连续性负担", "读者证据", "模型路由", "预算"],
     },
 }
 
-PLACEHOLDERS = ("待定", "待评", "待生成", "待人类裁决", "TODO", "待填")
+PLACEHOLDERS = (
+    "待定",
+    "待评",
+    "待生成",
+    "待人类裁决",
+    "待填",
+    "TODO",
+    "寰呭畾",
+    "寰呰瘎",
+    "寰呯敓",
+    "寰呬汉",
+    "寰呭～",
+)
 
 
 def chapter_id(number: int) -> str:
@@ -91,6 +110,13 @@ def has_placeholder(path: Path) -> bool:
     return any(marker in text for marker in PLACEHOLDERS)
 
 
+def status_value(text: str) -> str | None:
+    for line in text.splitlines():
+        if line.lower().startswith("status:"):
+            return line.split(":", 1)[1].strip()
+    return None
+
+
 def continuity_has_blocker(chapter: str) -> bool:
     path = ROOT / "reviews" / chapter / "continuity.md"
     text = read_text(path)
@@ -103,7 +129,7 @@ def continuity_has_blocker(chapter: str) -> bool:
             continue
         body = match.group("body")
         issue_lines = [line for line in body.splitlines() if line.strip().startswith("-")]
-        if any("无" not in line for line in issue_lines):
+        if any("无" not in line and "none" not in line.lower() for line in issue_lines):
             return True
     return False
 
@@ -146,6 +172,25 @@ def check_reader_responses(config: dict, failures: list[str]) -> None:
                     failures.append(f"reader response {path.relative_to(ROOT)} missing answer: {question}")
 
 
+def check_assessment(config: dict, failures: list[str]) -> None:
+    path_text = config.get("assessment")
+    if not path_text:
+        return
+    path = ROOT / str(path_text)
+    text = read_text(path)
+    if not text.strip():
+        failures.append(f"missing gate assessment: {path_text}")
+        return
+    if has_placeholder(path):
+        failures.append(f"gate assessment still has placeholders: {path_text}")
+    status = status_value(text)
+    if status not in {"CLEAR", "ACCEPTED_BY_HUMAN"}:
+        failures.append(f"gate assessment {path_text} status is {status or 'MISSING'}")
+    for section in config.get("assessment_sections", []):
+        if section not in text:
+            failures.append(f"gate assessment {path_text} missing section {section}")
+
+
 def check_chapter(chapter: str, chapters_with_events: set[str], failures: list[str]) -> None:
     cpath = chapter_path(chapter)
     if not cpath.exists() or not read_text(cpath).strip():
@@ -175,6 +220,7 @@ def main() -> int:
     failures: list[str] = []
     chapters_with_events = event_chapters()
 
+    check_assessment(config, failures)
     for number in range(1, config["needed"] + 1):
         check_chapter(chapter_id(number), chapters_with_events, failures)
     check_reader_synthesis(config["reader_synthesis"], failures)

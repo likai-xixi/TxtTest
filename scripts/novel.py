@@ -214,11 +214,15 @@ def command_select_candidate(args: argparse.Namespace) -> int:
 
 def command_land(args: argparse.Namespace) -> int:
     ensure_no_open_locks()
+    selected_direction = args.selected_direction or args.source
+    if not selected_direction:
+        print("ERROR: land requires --selected-direction (or legacy --source).", file=sys.stderr)
+        return 1
     script_args = [
         "--chapter",
         args.chapter,
-        "--source",
-        args.source,
+        "--selected-direction",
+        selected_direction,
         "--attestation",
         args.attestation,
     ]
@@ -371,6 +375,29 @@ def command_chapter_evidence(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_continuity(args: argparse.Namespace) -> int:
+    run_script("continuity_check.py", "--chapter", args.chapter)
+    return 0
+
+
+def command_compare(args: argparse.Namespace) -> int:
+    script_args = ["--chapter", args.chapter]
+    if args.allow_missing:
+        script_args.append("--allow-missing")
+    run_script("compare_model_reviews.py", *script_args)
+    return 0
+
+
+def command_diff_scope(args: argparse.Namespace) -> int:
+    run_script("diff_scope_check.py", "--role", args.role, "--chapter", args.chapter)
+    return 0
+
+
+def command_self_test(_args: argparse.Namespace) -> int:
+    run_script("self_test.py")
+    return 0
+
+
 def command_stop_record(args: argparse.Namespace) -> int:
     script_args = ["record", "--reason", args.reason]
     if args.chapter:
@@ -493,7 +520,7 @@ def command_flow(_args: argparse.Namespace) -> int:
 6. Land official chapter.
    Codex writes chapters/v01/c001.md.
    Do not copy DeepSeek directly into chapters.
-   python scripts/novel.py land v01_c001 --source "Codex" --attestation "Codex integrated from context pack, brief, and selected direction; no direct DeepSeek copy."
+   python scripts/novel.py land v01_c001 --selected-direction "Codex" --attestation "Codex integrated from context pack, brief, and selected direction; no direct DeepSeek copy."
 
 7. Review.
    python scripts/novel.py codex-review-start v01_c001
@@ -579,7 +606,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("land", help="Record provenance for the official chapter landing.")
     p.add_argument("chapter")
-    p.add_argument("--source", required=True, choices=["Codex", "DeepSeek", "Mixed"])
+    direction_group = p.add_mutually_exclusive_group(required=True)
+    direction_group.add_argument("--selected-direction", choices=["Codex", "DeepSeek", "Mixed"])
+    direction_group.add_argument("--source", choices=["Codex", "DeepSeek", "Mixed"], help="Legacy alias for --selected-direction.")
     p.add_argument("--attestation", required=True)
     p.add_argument("--notes", default="")
     p.set_defaults(func=command_land)
@@ -676,6 +705,24 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("chapter")
     p.set_defaults(func=command_chapter_evidence)
 
+    p = sub.add_parser("evidence", help="Alias for chapter-evidence.")
+    p.add_argument("chapter")
+    p.set_defaults(func=command_chapter_evidence)
+
+    p = sub.add_parser("continuity", help="Run continuity check for one chapter.")
+    p.add_argument("chapter")
+    p.set_defaults(func=command_continuity)
+
+    p = sub.add_parser("compare", help="Compare Codex and DeepSeek reviews for one chapter.")
+    p.add_argument("chapter")
+    p.add_argument("--allow-missing", action="store_true")
+    p.set_defaults(func=command_compare)
+
+    p = sub.add_parser("diff-scope", help="Check changed files against a workflow role.")
+    p.add_argument("--role", required=True, choices=sorted(ROLE_PATTERNS))
+    p.add_argument("--chapter", required=True)
+    p.set_defaults(func=command_diff_scope)
+
     p = sub.add_parser("stop-record", help="Record an unresolved stop-rule lock.")
     p.add_argument("--chapter", default="")
     p.add_argument("--reason", required=True)
@@ -710,6 +757,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("check", help="Run template integrity check.")
     p.set_defaults(func=command_check)
+
+    p = sub.add_parser("self-test", help="Run local workflow regression tests.")
+    p.set_defaults(func=command_self_test)
 
     p = sub.add_parser("flow", help="Print the complete simplified lifecycle.")
     p.set_defaults(func=command_flow)

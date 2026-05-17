@@ -9,7 +9,10 @@ from _common import ROOT, now_iso, read_text, write_text
 
 ACTIONS = ["Ship", "Revise once", "Rewrite brief", "Kill chapter", "Pause project"]
 ACTION_RE = re.compile(r"(Ship|Revise once|Rewrite brief|Kill chapter|Pause project)", re.IGNORECASE)
-ISSUE_RE = re.compile(r"(P[0-3]|问题|风险|建议|AI 味|撞梗|换皮|主角|推进|读得下去|Rewrite|Revise|Ship|Kill|Pause)", re.IGNORECASE)
+ISSUE_RE = re.compile(
+    r"(P[0-3]|问题|风险|建议|AI 味|撞梗|换皮|主角|推进|读得下去|Rewrite|Revise|Ship|Kill|Pause)",
+    re.IGNORECASE,
+)
 BLOCKING_ACTIONS = {"Rewrite brief", "Kill chapter", "Pause project"}
 
 
@@ -46,7 +49,7 @@ def extract_signals(text: str) -> list[str]:
 
 def signal_key(value: str) -> str:
     normalized = re.sub(r"\s+", "", value.lower())
-    normalized = re.sub(r"[，。；：:,.!！?？`#*_~>\-]", "", normalized)
+    normalized = re.sub(r"[，。；：,!.?#*_~>\-]", "", normalized)
     return normalized[:80]
 
 

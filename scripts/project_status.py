@@ -6,7 +6,7 @@ import subprocess
 from _common import ROOT, gate_decision, read_text, unresolved_locks
 
 
-PLACEHOLDERS = ("待定", "待填", "待评", "待生成", "待人类裁决", "TODO")
+PLACEHOLDERS = ("待定", "待填", "待评", "待生成", "待人类裁决", "寰呭畾", "寰呭～", "寰呰瘎", "TODO")
 
 
 def git_status() -> str:

@@ -53,11 +53,12 @@ def main() -> int:
 
     context = read_text(context_path)
     system = (
-        "你是外部候选生成模型。只输出候选正文，不声明 canon，不改状态，"
-        "不追加 event ledger，不自称最终稿。若 context_pack 信息不足，列出缺口并停止。"
+        "你是外部候选生成模型。只输出候选正文，不声称它是 canon，"
+        "不修改状态，不追加 event ledger，不自称最终稿。"
+        "如果 context_pack 信息不足，列出缺口并停止。"
     )
     user = (
-        f"请依据以下 context_pack 为 {args.chapter} 生成候选稿。"
+        f"请只依据下面的 context_pack 为 {args.chapter} 生成候选稿。"
         "不要读取或引用任何未给出的仓库信息。\n\n"
         f"{context}"
     )

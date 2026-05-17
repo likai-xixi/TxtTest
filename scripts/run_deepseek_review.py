@@ -9,7 +9,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from _common import ROOT, chapter_parts, read_text, write_blocked_by_locks, write_text
+from _common import ROOT, chapter_parts, now_iso, read_text, write_blocked_by_locks, write_text
 
 
 API_URL = "https://api.deepseek.com/chat/completions"
@@ -75,9 +75,7 @@ def write_manifest(chapter: str, chapter_path: Path) -> None:
             }
         )
     current["deepseek"] = {
-        "recorded_at": __import__("datetime").datetime.now(
-            __import__("datetime").timezone.utc
-        ).replace(microsecond=0).isoformat(),
+        "recorded_at": now_iso(),
         "inputs": inputs,
         "forbidden_inputs": ["reviews/{chapter}/codex_integrated_review.md"],
     }
@@ -122,11 +120,10 @@ def main() -> int:
     context = read_text(context_path)
     chapter_text = read_text(chapter_path)
     system = (
-        "你是独立审查模型。你不能读取 Codex review，也不能改仓库文件。"
-        "只审查给定 context_pack 与正文，输出结构化审查意见。"
+        "你是独立审查模型。你不能读取 Codex review，也不能修改仓库文件。"
+        "只审查给定的 context_pack 与正文，输出结构化审查意见。"
     )
-    user = f"""请审查 {args.chapter}，只看以下材料。
-
+    user = f"""请审查 {args.chapter}，只看下面材料。
 必须覆盖：
 1. 是否读得下去
 2. 主角是否主动

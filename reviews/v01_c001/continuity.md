@@ -3,6 +3,5 @@
 待运行：
 
 ```bash
-python scripts/continuity_check.py --chapter v01_c001
+python scripts/novel.py continuity v01_c001
 ```
-

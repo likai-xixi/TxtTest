@@ -1,6 +1,10 @@
 # Codex Integrated Review: {chapter}
 
-填写本报告前不得读取 DeepSeek review。
+填写本报告前不得读取 DeepSeek review。先运行：
+
+```bash
+python scripts/novel.py codex-review-start {chapter}
+```
 
 ## 是否读得下去
 
@@ -25,4 +29,3 @@
 ## 建议动作
 
 待评。
-

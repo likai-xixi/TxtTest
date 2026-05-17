@@ -4,81 +4,37 @@ import argparse
 import fnmatch
 import subprocess
 import sys
-from pathlib import Path
 
 from _common import ROOT, chapter_parts, posix
 
 
-ROLE_PATTERNS = {
-    "brief": ["outline/chapter_briefs/{chapter}.md"],
-    "draft": [
-        "chapters/{volume}/{chapter_file}",
-        "reviews/{chapter}/chapter_landing.md",
-        "reviews/{chapter}/chapter_landing.json",
-    ],
-    "candidate": [
-        "drafts/codex/{chapter}.md",
-        "drafts/deepseek/{chapter}.md",
-        "external_runs/deepseek/{chapter}/**",
-    ],
-    "review": [
-        "reviews/{chapter}/codex_integrated_review.md",
-        "reviews/{chapter}/deepseek_integrated_review.md",
-        "reviews/{chapter}/review_manifest.json",
-    ],
-    "continuity": ["reviews/{chapter}/continuity.md"],
-    "decision": [
-        "reviews/{chapter}/model_disagreement.md",
-        "reviews/{chapter}/decision.md",
-    ],
-    "gate": [
-        "state/gates/**",
-        "reader_tests/**",
-    ],
-    "revision": [
-        "chapters/{volume}/{chapter_file}",
-        "reviews/{chapter}/revision.md",
-    ],
-    "state": [
-        "state/event_ledger.jsonl",
-        "state/derived/**",
-        "state/context_pack/{chapter}.md",
-        "state/snapshots/{chapter}_*",
-        "state/gates/**",
-        "state/selections/**",
-        "state/stops/**",
-    ],
-    "chapter": [
-        "outline/chapter_briefs/{chapter}.md",
-        "chapters/{volume}/{chapter_file}",
-        "drafts/codex/{chapter}.md",
-        "drafts/deepseek/{chapter}.md",
-        "external_runs/deepseek/{chapter}/**",
-        "reviews/{chapter}/**",
-        "state/selections/{chapter}.json",
-        "state/event_ledger.jsonl",
-        "state/derived/**",
-        "state/context_pack/{chapter}.md",
-        "state/snapshots/{chapter}_*",
-        "state/stops/**",
-    ],
-    "maintenance": [
-        ".gitignore",
-        ".env.example",
-        "AGENTS.md",
-        "README.md",
-        "ops/**",
-        "scripts/**",
-        "templates/**",
-        "tests/**",
-        "schemas/**",
-        "reader_tests/**",
-        "reviews/**",
-        "state/gates/**",
-        "state/selections/**",
-        "state/stops/**",
-    ],
-}
+try:
+    import yaml
+except ImportError:  # pragma: no cover - exercised only on stripped Python envs
+    yaml = None
+
+
+def load_role_patterns() -> dict[str, list[str]]:
+    if yaml is None:
+        raise RuntimeError("PyYAML is required to read ops/roles.yaml")
+    path = ROOT / "ops" / "roles.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise RuntimeError("ops/roles.yaml must contain a mapping of roles")
+    patterns: dict[str, list[str]] = {}
+    for role, config in data.items():
+        if not isinstance(config, dict) or not isinstance(config.get("allow"), list):
+            raise RuntimeError(f"ops/roles.yaml role {role!r} must define allow: [...]")
+        values: list[str] = []
+        for item in config["allow"]:
+            if not isinstance(item, str) or not item.strip():
+                raise RuntimeError(f"ops/roles.yaml role {role!r} has an invalid allow entry")
+            values.append(posix(item.strip()))
+        patterns[str(role)] = values
+    return patterns
+
+
+ROLE_PATTERNS = load_role_patterns()
 
 
 def run_git(args: list[str]) -> subprocess.CompletedProcess:

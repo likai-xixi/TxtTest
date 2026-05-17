@@ -2,13 +2,41 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from _common import ROOT, chapter_parts, read_json, read_text
 
 
-PLACEHOLDERS = ("待定", "待评", "待生成", "待人类裁决", "TODO", "待填")
+PLACEHOLDERS = (
+    "待定",
+    "待评",
+    "待生成",
+    "待人类裁决",
+    "待填",
+    "TODO",
+    "寰呭畾",
+    "寰呰瘎",
+    "寰呯敓",
+    "寰呬汉",
+    "寰呭～",
+)
 CHOICES = {"Codex", "DeepSeek", "Mixed", "Rewrite brief", "No usable candidate"}
+REQUIRED_MODEL_DISAGREEMENT_SECTIONS = (
+    "## 双方一致的问题",
+    "## Codex 独有问题",
+    "## DeepSeek 独有问题",
+    "## 冲突判断",
+    "## 需要人类裁决事项",
+    "## 建议动作",
+)
+AUXILIARY_REVIEWS = (
+    "ai_taste.md",
+    "web_satisfaction.md",
+    "retention_risk.md",
+    "originality.md",
+)
+ALLOWED_AUXILIARY_STATUS = {"CLEAR", "ACCEPTED_BY_HUMAN"}
 
 
 def has_placeholder(path: Path) -> bool:
@@ -26,6 +54,33 @@ def continuity_has_blocker(chapter: str) -> bool:
 
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def normalized_text(path: Path) -> str:
+    return "".join(path.read_text(encoding="utf-8").split())
+
+
+def parse_time(value: object) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def artifact_mtime(path: Path) -> datetime:
+    return datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+
+
+def status_value(text: str) -> str | None:
+    for line in text.splitlines():
+        if line.lower().startswith("status:"):
+            return line.split(":", 1)[1].strip()
+    return None
 
 
 def validate_manifest_entry(chapter: str, reviewer: str, manifest: dict) -> list[str]:
@@ -50,6 +105,11 @@ def validate_manifest_entry(chapter: str, reviewer: str, manifest: dict) -> list
         f"drafts/deepseek/{chapter}.md",
     }
     failures: list[str] = []
+
+    recorded_at = parse_time(entry.get("recorded_at"))
+    if recorded_at is None:
+        failures.append(f"{chapter}: {reviewer} review manifest missing valid recorded_at")
+
     missing = required - set(paths)
     failures.extend(f"{chapter}: {reviewer} manifest missing input {path}" for path in sorted(missing))
 
@@ -68,6 +128,40 @@ def validate_manifest_entry(chapter: str, reviewer: str, manifest: dict) -> list
         actual = sha256(path)
         if expected != actual:
             failures.append(f"{chapter}: {reviewer} manifest hash mismatch for {rel_path}")
+
+    review_path = ROOT / "reviews" / chapter / f"{reviewer}_integrated_review.md"
+    if recorded_at is not None and review_path.exists():
+        if artifact_mtime(review_path) + timedelta(seconds=2) < recorded_at:
+            failures.append(f"{chapter}: {reviewer} review artifact predates manifest")
+    return failures
+
+
+def selected_deepseek_candidates(selection: dict) -> list[Path]:
+    candidates: list[Path] = []
+    for item in selection.get("selected_candidates", []):
+        rel_path = str(item.get("path", ""))
+        if rel_path.startswith("drafts/deepseek/"):
+            candidates.append(ROOT / rel_path)
+    return candidates
+
+
+def validate_no_direct_deepseek_copy(chapter: str, selection: dict) -> list[str]:
+    volume, chapter_file = chapter_parts(chapter)
+    official = ROOT / "chapters" / volume / chapter_file
+    if not official.exists():
+        return []
+    official_hash = sha256(official)
+    official_normalized = normalized_text(official)
+    failures: list[str] = []
+    for candidate in selected_deepseek_candidates(selection):
+        if not candidate.exists():
+            continue
+        if official_hash == sha256(candidate):
+            failures.append(f"{chapter}: official chapter matches selected DeepSeek candidate hash {candidate.relative_to(ROOT)}")
+        elif official_normalized and official_normalized == normalized_text(candidate):
+            failures.append(
+                f"{chapter}: official chapter matches selected DeepSeek candidate after whitespace normalization {candidate.relative_to(ROOT)}"
+            )
     return failures
 
 
@@ -87,8 +181,11 @@ def validate_landing(chapter: str) -> list[str]:
 
     if record.get("chapter") != chapter:
         failures.append(f"{chapter}: landing record chapter mismatch")
-    if record.get("source") not in {"Codex", "DeepSeek", "Mixed"}:
-        failures.append(f"{chapter}: landing record has invalid source")
+    selected_direction = record.get("selected_direction", record.get("source"))
+    if selected_direction not in {"Codex", "DeepSeek", "Mixed"}:
+        failures.append(f"{chapter}: landing record has invalid selected_direction")
+    if "selected_direction" in record and record.get("integrated_by") != "Codex":
+        failures.append(f"{chapter}: landing record must have integrated_by Codex")
     if not str(record.get("attestation", "")).strip():
         failures.append(f"{chapter}: landing record missing attestation")
     if record.get("codex_integrated") is not True:
@@ -160,15 +257,7 @@ def validate_model_disagreement(chapter: str) -> list[str]:
     path = ROOT / "reviews" / chapter / "model_disagreement.md"
     text = read_text(path)
     failures: list[str] = []
-    required = [
-        "## 双方一致的问题",
-        "## Codex 独有问题",
-        "## DeepSeek 独有问题",
-        "## 冲突判断",
-        "## 需要人类裁决事项",
-        "## 建议动作",
-    ]
-    for heading in required:
+    for heading in REQUIRED_MODEL_DISAGREEMENT_SECTIONS:
         if heading not in text:
             failures.append(f"{chapter}: model_disagreement missing section {heading}")
     if has_placeholder(path):
@@ -193,11 +282,35 @@ def validate_continuity(chapter: str) -> list[str]:
     return failures
 
 
+def validate_auxiliary_review(chapter: str, name: str) -> list[str]:
+    path = ROOT / "reviews" / chapter / name
+    if not path.exists() or not read_text(path).strip():
+        return [f"{chapter}: missing auxiliary review {path.relative_to(ROOT)}"]
+    text = read_text(path)
+    failures: list[str] = []
+    if has_placeholder(path):
+        failures.append(f"{chapter}: auxiliary review still has placeholders {path.relative_to(ROOT)}")
+    status = status_value(text)
+    if status not in ALLOWED_AUXILIARY_STATUS:
+        failures.append(
+            f"{chapter}: auxiliary review {name} status is {status or 'MISSING'}; "
+            f"expected one of {sorted(ALLOWED_AUXILIARY_STATUS)}"
+        )
+    if name == "originality.md":
+        required_terms = ("撞梗", "换皮", "设定名词", "人物关系", "句式", "对白节奏", "标志性表达")
+        for term in required_terms:
+            if term not in text:
+                failures.append(f"{chapter}: originality review missing risk term {term}")
+    return failures
+
+
 def chapter_evidence_failures(chapter: str) -> list[str]:
     failures: list[str] = []
+    selection = read_json(ROOT / "state" / "selections" / f"{chapter}.json", {})
 
     failures.extend(validate_selection(chapter))
     failures.extend(validate_landing(chapter))
+    failures.extend(validate_no_direct_deepseek_copy(chapter, selection))
 
     required_reviews = [
         "codex_integrated_review.md",
@@ -218,6 +331,8 @@ def chapter_evidence_failures(chapter: str) -> list[str]:
     failures.extend(validate_manifest_entry(chapter, "deepseek", manifest))
     failures.extend(validate_model_disagreement(chapter))
     failures.extend(validate_continuity(chapter))
+    for name in AUXILIARY_REVIEWS:
+        failures.extend(validate_auxiliary_review(chapter, name))
 
     if continuity_has_blocker(chapter):
         failures.append(f"{chapter}: continuity report has unresolved P0/P1")

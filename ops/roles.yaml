@@ -51,13 +51,30 @@ state:
     - state/selections/**
     - state/stops/**
 
+chapter:
+  allow:
+    - outline/chapter_briefs/{chapter}.md
+    - chapters/{volume}/{chapter_file}
+    - drafts/codex/{chapter}.md
+    - drafts/deepseek/{chapter}.md
+    - external_runs/deepseek/{chapter}/**
+    - reviews/{chapter}/**
+    - state/selections/{chapter}.json
+    - state/event_ledger.jsonl
+    - state/derived/**
+    - state/context_pack/{chapter}.md
+    - state/snapshots/{chapter}_*
+    - state/stops/**
+
 maintenance:
   allow:
     - .gitignore
     - .env.example
     - AGENTS.md
     - README.md
+    - setup_report.md
     - ops/**
+    - references/**
     - scripts/**
     - templates/**
     - tests/**

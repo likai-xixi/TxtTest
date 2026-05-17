@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 
 from _common import ROOT, chapter_parts, now_iso, read_text, write_text
 from validate_event_ledger import validate as validate_ledger
 
 
-PLACEHOLDERS = ("待定", "待填", "TODO")
+PLACEHOLDERS = ("待定", "待填", "TODO", "寰呭畾", "寰呭～")
 
 
 def add_issue(issues: list[tuple[str, str]], level: str, text: str) -> None:
@@ -44,8 +43,7 @@ def main() -> int:
 
     canon_text = read_text(ROOT / "bible" / "canon.md")
     if "当前状态：暂无 canon 事实" not in canon_text and chapter_text:
-        # This is intentionally conservative. Real canon contradiction checks should
-        # become stricter after the first human-confirmed facts exist.
+        # Real canon contradiction checks become stricter after confirmed facts exist.
         pass
 
     p0_count = sum(1 for level, _text in issues if level == "P0")
@@ -64,11 +62,8 @@ def main() -> int:
         "",
         "## Summary",
         "",
+        "发现需要处理的问题。" if issues else "未发现自动检查可识别的连续性问题。",
     ]
-    if issues:
-        lines.append("发现需要处理的问题。")
-    else:
-        lines.append("未发现自动检查可识别的连续性问题。")
 
     for level in ("P0", "P1", "P2", "P3"):
         lines.extend(["", f"## {level}", ""])
@@ -76,7 +71,7 @@ def main() -> int:
         if matched:
             lines.extend(f"- {text}" for text in matched)
         else:
-            lines.append("无。")
+            lines.append("- 无。")
 
     lines.extend(
         [

@@ -29,7 +29,7 @@ def main() -> int:
             errors.append(f"chapter too short: {count} < {args.min_chars}")
         if args.max_chars and count > args.max_chars:
             errors.append(f"chapter too long: {count} > {args.max_chars}")
-        if "待定" in text or "TODO" in text:
+        if any(marker in text for marker in ("待定", "待填", "TODO", "寰呭畾")):
             errors.append("chapter contains placeholder text")
 
     if not context_path.exists():
@@ -45,4 +45,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

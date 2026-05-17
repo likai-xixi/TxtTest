@@ -21,6 +21,7 @@ gate_b_10_chapters:
 
 gate_c_25_chapters:
   decide_only_after_chapters: 25
+  required_assessment: state/gates/gate_c_assessment.md
   questions:
     - 阶段高潮
     - 不可逆变化
@@ -30,5 +31,11 @@ gate_c_25_chapters:
 
 gate_e_125_chapters:
   decide_only_after_chapters: 125
-  question: 是否进入 300 万字模式
-
+  required_assessment: state/gates/gate_e_300w_assessment.md
+  questions:
+    - 是否进入 300 万字模式
+    - 管理成本
+    - 连续性负担
+    - 读者证据
+    - 模型路由
+    - 预算

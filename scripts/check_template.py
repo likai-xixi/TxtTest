@@ -7,6 +7,11 @@ from pathlib import Path
 from _common import ROOT
 from validate_event_ledger import validate as validate_ledger
 
+try:
+    import yaml
+except ImportError:  # pragma: no cover
+    yaml = None
+
 
 REQUIRED_PATHS = [
     "AGENTS.md",
@@ -48,6 +53,14 @@ REQUIRED_PATHS = [
     "templates/questionnaire_answers.md",
     "templates/chapter_brief.md",
     "templates/candidate_selection.md",
+    "templates/ai_taste.md",
+    "templates/web_satisfaction.md",
+    "templates/retention_risk.md",
+    "templates/originality.md",
+    "templates/model_disagreement.md",
+    "templates/continuity.md",
+    "templates/gate_c_assessment.md",
+    "templates/gate_e_300w_assessment.md",
     "state/stops/project_locks.json",
     "scripts/template_init.py",
     "scripts/apply_questionnaire.py",
@@ -86,6 +99,56 @@ def check_scripts() -> list[str]:
     return errors
 
 
+def check_source_log() -> list[str]:
+    path = ROOT / "references" / "source_log.yaml"
+    errors: list[str] = []
+    if yaml is None:
+        return ["source_log: PyYAML is required to validate references/source_log.yaml"]
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return [f"source_log: invalid YAML: {exc}"]
+    if data is None:
+        return []
+    if not isinstance(data, dict):
+        return ["source_log: top-level value must be a mapping"]
+    sources = data.get("sources", [])
+    if sources in (None, []):
+        return []
+    if not isinstance(sources, list):
+        return ["source_log: sources must be a list"]
+    placeholders = {"待定", "待填", "TODO", "source_id", "寰呭畾"}
+    for index, item in enumerate(sources, start=1):
+        if not isinstance(item, dict):
+            errors.append(f"source_log: source #{index} must be a mapping")
+            continue
+        for key, value in item.items():
+            values = value if isinstance(value, list) else [value]
+            for entry in values:
+                if isinstance(entry, str) and any(marker in entry for marker in placeholders):
+                    errors.append(f"source_log: source #{index} field {key} contains placeholder text")
+    return errors
+
+
+def check_roles_yaml() -> list[str]:
+    path = ROOT / "ops" / "roles.yaml"
+    if yaml is None:
+        return ["roles: PyYAML is required to validate ops/roles.yaml"]
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return [f"roles: invalid YAML: {exc}"]
+    if not isinstance(data, dict):
+        return ["roles: top-level value must be a mapping"]
+    required = {"brief", "draft", "candidate", "review", "continuity", "decision", "gate", "revision", "state", "chapter", "maintenance"}
+    missing = sorted(required - set(data))
+    errors = [f"roles: missing role {role}" for role in missing]
+    for role, config in data.items():
+        if not isinstance(config, dict) or not isinstance(config.get("allow"), list) or not config["allow"]:
+            errors.append(f"roles: role {role} must define a non-empty allow list")
+    return errors
+
+
 def main() -> int:
     errors: list[str] = []
     for item in REQUIRED_PATHS:
@@ -93,6 +156,8 @@ def main() -> int:
             errors.append(f"missing required path: {item}")
 
     errors.extend(check_scripts())
+    errors.extend(check_source_log())
+    errors.extend(check_roles_yaml())
     errors.extend(f"event ledger: {error}" for error in validate_ledger(ROOT / "state" / "event_ledger.jsonl"))
 
     if errors:
