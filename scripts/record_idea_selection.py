@@ -5,6 +5,7 @@ import hashlib
 import json
 import re
 import sys
+from datetime import datetime
 from pathlib import Path
 
 from _common import ROOT, now_iso, read_text, write_text
@@ -19,6 +20,7 @@ REQUIRED_INPUTS = [
     "product_founder_review.md",
     "technical_lead_review.md",
     "qa_release_review.md",
+    "agent_review_manifest.json",
     "codex_synthesis.md",
 ]
 PLACEHOLDER_MARKERS = ("待定", "待填", "待评", "待生成", "TODO", "{idea_id}")
@@ -28,6 +30,12 @@ AGENT_OUTPUTS = [
     "qa_release_review.md",
     "codex_synthesis.md",
 ]
+AGENT_REVIEW_MANIFEST = "agent_review_manifest.json"
+AGENT_ROLES = {
+    "product_founder": "product_founder_review.md",
+    "technical_lead": "technical_lead_review.md",
+    "qa_release": "qa_release_review.md",
+}
 REQUIRED_DIRECTION_FIELDS = [
     "一句话卖点",
     "主角欲望",
@@ -137,6 +145,79 @@ def evidence_text_item(path: Path, text: str) -> dict:
     }
 
 
+def parse_iso_datetime(value: object) -> bool:
+    if not isinstance(value, str) or not value.strip():
+        return False
+    try:
+        datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    return True
+
+
+def validate_manifest_hash(path: Path, expected: object, label: str) -> list[str]:
+    if not isinstance(expected, str) or not expected.strip():
+        return [f"{label} missing sha256"]
+    if not path.exists():
+        return [f"{label} missing file: {path.relative_to(ROOT)}"]
+    if sha256(path) != expected:
+        return [f"{label} hash mismatch: {path.relative_to(ROOT)}"]
+    return []
+
+
+def validate_agent_review_manifest(idea_id: str, lab: Path) -> list[str]:
+    path = lab / AGENT_REVIEW_MANIFEST
+    if not path.exists():
+        return [f"missing idea-lab input: {path.relative_to(ROOT)}"]
+    try:
+        data = json.loads(read_text(path))
+    except json.JSONDecodeError as exc:
+        return [f"agent_review_manifest.json is invalid JSON: {exc}"]
+
+    if not isinstance(data, dict):
+        return ["agent_review_manifest.json must be a JSON object"]
+
+    errors: list[str] = []
+    if data.get("schema_version") != 1:
+        errors.append("agent_review_manifest.json schema_version must be 1")
+    if data.get("idea_id") != idea_id:
+        errors.append("agent_review_manifest.json idea_id mismatch")
+    if not parse_iso_datetime(data.get("recorded_at")):
+        errors.append("agent_review_manifest.json missing valid recorded_at")
+
+    input_paths = {
+        str(item.get("path")): item
+        for item in data.get("inputs", [])
+        if isinstance(item, dict)
+    }
+    for filename in ("original_idea.md", "deepseek_idea.md"):
+        rel_path = (lab / filename).relative_to(ROOT).as_posix()
+        item = input_paths.get(rel_path)
+        if not item:
+            errors.append(f"agent_review_manifest.json missing input {rel_path}")
+            continue
+        errors.extend(validate_manifest_hash(lab / filename, item.get("sha256"), f"agent manifest input {filename}"))
+
+    reviews = data.get("reviews")
+    if not isinstance(reviews, dict):
+        errors.append("agent_review_manifest.json missing reviews mapping")
+        reviews = {}
+    for role, filename in AGENT_ROLES.items():
+        item = reviews.get(role)
+        if not isinstance(item, dict):
+            errors.append(f"agent_review_manifest.json missing review role {role}")
+            continue
+        if item.get("role", role) != role:
+            errors.append(f"agent_review_manifest.json role mismatch for {role}")
+        expected_path = (lab / filename).relative_to(ROOT).as_posix()
+        if item.get("path") != expected_path:
+            errors.append(f"agent_review_manifest.json {role} path must be {expected_path}")
+        if not parse_iso_datetime(item.get("completed_at")):
+            errors.append(f"agent_review_manifest.json {role} missing valid completed_at")
+        errors.extend(validate_manifest_hash(lab / filename, item.get("sha256"), f"{role} review"))
+    return errors
+
+
 def build_core_freeze(
     idea_id: str,
     lab: Path,
@@ -168,6 +249,7 @@ def build_core_freeze(
             "product_founder_review": evidence_item(lab / "product_founder_review.md"),
             "technical_lead_review": evidence_item(lab / "technical_lead_review.md"),
             "qa_release_review": evidence_item(lab / "qa_release_review.md"),
+            "agent_review_manifest": evidence_item(lab / AGENT_REVIEW_MANIFEST),
             "codex_synthesis": evidence_item(lab / "codex_synthesis.md"),
             "selection": evidence_text_item(selection_path, selection_text),
         },
@@ -211,6 +293,7 @@ def validate_ready_contents(idea_id: str, lab: Path, contents: dict[str, str]) -
         if idea_id not in heading:
             errors.append(f"idea-lab input {lab.joinpath(name).relative_to(ROOT)} heading must include {idea_id}")
     errors.extend(validate_codex_synthesis(contents["codex_synthesis.md"]))
+    errors.extend(validate_agent_review_manifest(idea_id, lab))
     errors.extend(validate_output_freshness(lab))
     return errors
 
@@ -420,9 +503,17 @@ selected_direction: {args.choice}
 
 待定。
 
+## 本章可用道具 IDs
+
+TODO：只列 `bible/objects.yaml` 中本章允许使用的 id；没有则写 none。
+
 ## 本章可用技能 / 能力
 
 待定。
+
+## 本章可用技能 IDs
+
+TODO：只列 `bible/abilities.yaml` 中本章允许使用的 id；没有则写 none。
 
 ## 能力限制 / 代价
 
@@ -435,6 +526,14 @@ selected_direction: {args.choice}
 ## 新增设定
 
 待定：新增设定必须先停留在 open_questions，不能直接进 canon。
+
+## 本章允许新增元素
+
+TODO：按 L0/L1/L2/L3/L4 标明本章可新增内容；没有则写 none。
+
+## 本章禁止临场解决
+
+TODO：列明不得靠未授权新道具、新能力或新规则解决的核心问题。
 
 ## 伏笔：新开 / 推进 / 回收
 

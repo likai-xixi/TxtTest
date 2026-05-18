@@ -6,29 +6,13 @@ import os
 import re
 import sys
 import urllib.error
-import urllib.request
 
 from _common import ROOT, now_iso, write_blocked_by_locks, write_text
+from deepseek_client import call_deepseek, model_for
 from deepseek_response import DeepSeekResponseError, extract_message_content
 
 
-API_URL = "https://api.deepseek.com/chat/completions"
 IDEA_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
-
-
-def call_deepseek(payload: dict, api_key: str) -> dict:
-    data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    request = urllib.request.Request(
-        API_URL,
-        data=data,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}",
-        },
-        method="POST",
-    )
-    with urllib.request.urlopen(request, timeout=180) as response:
-        return json.loads(response.read().decode("utf-8"))
 
 
 def validate_idea_id(value: str) -> str:
@@ -97,7 +81,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Ask DeepSeek for zero-to-pilot novel directions.")
     parser.add_argument("--idea-id", required=True, type=validate_idea_id)
     parser.add_argument("--text", required=True)
-    parser.add_argument("--model", default="deepseek-v4-pro")
+    parser.add_argument("--model", default=model_for("deepseek_idea"))
     parser.add_argument("--temperature", type=float, default=0.8)
     parser.add_argument("--max-tokens", type=int, default=5000)
     args = parser.parse_args()

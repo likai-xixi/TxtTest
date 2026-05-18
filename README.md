@@ -52,7 +52,13 @@ Codex 会按 `AGENTS.md` 自己运行检查、生成 context pack、调用 DeepS
 python scripts/novel.py idea --text "赛博民俗悬疑，主角是不信鬼的人"
 ```
 
-这个命令必须真实调用 DeepSeek；没有 `DEEPSEEK_API_KEY` 会直接停止。DeepSeek 完成后，Codex app 必须启用 `product_founder`、`technical_lead`、`qa_release` 三类 agent，并把审查写入 `state/idea_lab/{idea_id}/`。Codex 汇总后，你只需要选择：
+这个命令必须真实调用 DeepSeek；没有 `DEEPSEEK_API_KEY` 会直接停止。DeepSeek 完成后，Codex app 必须启用 `product_founder`、`technical_lead`、`qa_release` 三类 agent，并把审查写入 `state/idea_lab/{idea_id}/`。三类审查完成后先记录 provenance：
+
+```bash
+python scripts/novel.py idea-agent-manifest --id idea_xxx
+```
+
+Codex 汇总后，你只需要选择：
 
 ```bash
 python scripts/novel.py idea-select --id idea_xxx --choice A --reason "商业钩子最强"

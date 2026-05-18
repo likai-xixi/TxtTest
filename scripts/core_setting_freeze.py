@@ -40,6 +40,7 @@ REQUIRED_EVIDENCE_KEYS = (
     "product_founder_review",
     "technical_lead_review",
     "qa_release_review",
+    "agent_review_manifest",
     "codex_synthesis",
     "selection",
 )

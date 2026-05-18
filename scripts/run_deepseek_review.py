@@ -6,29 +6,11 @@ import json
 import os
 import sys
 import urllib.error
-import urllib.request
 from pathlib import Path
 
 from _common import ROOT, chapter_parts, now_iso, read_text, write_blocked_by_locks, write_text
+from deepseek_client import call_deepseek, model_for
 from deepseek_response import DeepSeekResponseError, extract_message_content
-
-
-API_URL = "https://api.deepseek.com/chat/completions"
-
-
-def call_deepseek(payload: dict, api_key: str) -> dict:
-    data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    request = urllib.request.Request(
-        API_URL,
-        data=data,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}",
-        },
-        method="POST",
-    )
-    with urllib.request.urlopen(request, timeout=180) as response:
-        return json.loads(response.read().decode("utf-8"))
 
 
 def default_chapter_path(chapter: str) -> Path:
@@ -87,7 +69,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Ask DeepSeek for an independent chapter review.")
     parser.add_argument("--chapter", required=True)
     parser.add_argument("--input", default=None, help="Optional draft/chapter file to review.")
-    parser.add_argument("--model", default="deepseek-v4-pro")
+    parser.add_argument("--model", default=model_for("deepseek_review"))
     parser.add_argument("--max-tokens", type=int, default=3500)
     parser.add_argument("--dry-run", action="store_true", help="Write the prompt only; do not call the API.")
     args = parser.parse_args()

@@ -14,6 +14,7 @@ from diff_scope_check import ROLE_PATTERNS, changed_files
 from gate_config import load_gate_configs
 from validate_event_ledger import ALLOWED_TYPES
 from core_setting_freeze import validate_freeze
+from deepseek_client import model_for
 
 
 DECISIONS = ["Ship", "Revise once", "Rewrite brief", "Kill chapter", "Pause project"]
@@ -25,6 +26,7 @@ IDEA_FORCE_CLEANUP_FILES = (
     "product_founder_review.md",
     "technical_lead_review.md",
     "qa_release_review.md",
+    "agent_review_manifest.json",
     "codex_synthesis.md",
     "agent_tasks.md",
     "selection.json",
@@ -36,7 +38,9 @@ IDEA_FORCE_CLEANUP_FILES = (
 
 def run_script(script: str, *args: str, check: bool = True) -> int:
     command = [sys.executable, str(ROOT / "scripts" / script), *args]
-    result = subprocess.run(command, cwd=ROOT)
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8:replace"
+    result = subprocess.run(command, cwd=ROOT, env=env)
     if check and result.returncode != 0:
         raise SystemExit(result.returncode)
     return result.returncode
@@ -530,6 +534,10 @@ def command_idea(args: argparse.Namespace) -> int:
 - `state/idea_lab/{idea_id}/technical_lead_review.md`
 - `state/idea_lab/{idea_id}/qa_release_review.md`
 
+随后必须记录 provenance：
+
+- `python scripts/novel.py idea-agent-manifest --id {idea_id}`
+
 Codex 汇总必须写入：
 
 - `state/idea_lab/{idea_id}/codex_synthesis.md`
@@ -538,7 +546,7 @@ Codex 汇总必须写入：
 """,
     )
     print(f"OK: idea lab created at state/idea_lab/{idea_id}")
-    print("next: enable product_founder, technical_lead, and qa_release agents, then write codex_synthesis.md.")
+    print("next: enable product_founder, technical_lead, and qa_release agents, record idea-agent-manifest, then write codex_synthesis.md.")
     return 0
 
 
@@ -552,6 +560,15 @@ def command_idea_select(args: argparse.Namespace) -> int:
     if args.notes:
         script_args.extend(["--notes", args.notes])
     run_script("record_idea_selection.py", *script_args)
+    return 0
+
+
+def command_idea_agent_manifest(args: argparse.Namespace) -> int:
+    ensure_no_open_locks()
+    script_args = ["--id", args.id]
+    if args.completed_at:
+        script_args.extend(["--completed-at", args.completed_at])
+    run_script("record_agent_review_manifest.py", *script_args)
     return 0
 
 
@@ -1195,7 +1212,7 @@ def build_parser() -> argparse.ArgumentParser:
     source.add_argument("--seed", default="")
     p.add_argument("--id", type=validate_idea_id, default=None)
     p.add_argument("--force", action="store_true")
-    p.add_argument("--model", default="deepseek-v4-pro")
+    p.add_argument("--model", default=model_for("deepseek_idea"))
     p.add_argument("--temperature", type=float, default=0.8)
     p.add_argument("--max-tokens", type=int, default=5000)
     p.set_defaults(func=command_idea)
@@ -1207,6 +1224,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--mixed-strategy", default="")
     p.add_argument("--notes", default="")
     p.set_defaults(func=command_idea_select)
+
+    p = sub.add_parser("idea-agent-manifest", help="Record idea-lab multi-agent review provenance.")
+    p.add_argument("--id", required=True, type=validate_idea_id)
+    p.add_argument("--completed-at", default=None)
+    p.set_defaults(func=command_idea_agent_manifest)
 
     p = sub.add_parser("new-chapter", help="Create chapter brief and review workspace.")
     p.add_argument("chapter")
@@ -1222,7 +1244,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("deepseek-generate", help="Generate a DeepSeek candidate draft.")
     p.add_argument("chapter")
-    p.add_argument("--model", default="deepseek-v4-pro")
+    p.add_argument("--model", default=model_for("deepseek_generate"))
     p.add_argument("--dry-run", action="store_true")
     p.set_defaults(func=command_deepseek_generate)
 
@@ -1230,12 +1252,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("chapter")
     p.add_argument("--deepseek", action="store_true", help="Call DeepSeek brief generation after the brief pack is built.")
     p.add_argument("--deepseek-dry-run", action="store_true", help="Write the DeepSeek brief prompt without calling the API.")
-    p.add_argument("--model", default="deepseek-v4-pro")
+    p.add_argument("--model", default=model_for("deepseek_brief"))
     p.set_defaults(func=command_brief_candidates)
 
     p = sub.add_parser("deepseek-brief", help="Generate a DeepSeek candidate chapter brief.")
     p.add_argument("chapter")
-    p.add_argument("--model", default="deepseek-v4-pro")
+    p.add_argument("--model", default=model_for("deepseek_brief"))
     p.add_argument("--dry-run", action="store_true")
     p.set_defaults(func=command_deepseek_brief)
 

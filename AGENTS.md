@@ -23,7 +23,7 @@
 
 - `开书`：运行 `python scripts/novel.py go`；若缺核心设定冻结，必须引导用户先说 `想法：...` / `开书实验`，不得生成正文或 context pack。
 - `想法：...` / `开书实验`：必须进入 idea-lab。先运行 `python scripts/novel.py idea --text "..."` 或 `idea-form`；必须真实调用 DeepSeek，不能 dry-run；必须同时启用 `product_founder`、`technical_lead`、`qa_release` 三类 agent。
-- `定盘` / `锁定设定`：在三类 agent 审查和 `codex_synthesis.md` 完成后，运行 `python scripts/novel.py idea-select --id idea_xxx --choice A`；该命令必须生成 `state/idea_lab/{idea_id}/core_setting_freeze.json` 和 `.md`，并通过 `core-freeze-check`。
+- `定盘` / `锁定设定`：在三类 agent 审查、`agent_review_manifest.json` 和 `codex_synthesis.md` 完成后，运行 `python scripts/novel.py idea-select --id idea_xxx --choice A`；该命令必须生成 `state/idea_lab/{idea_id}/core_setting_freeze.json` 和 `.md`，并通过 `core-freeze-check`。
 - `继续`：运行 `python scripts/novel.py go` 和 `status`，判断下一步；只在需要人类回答、确认或裁决时停下。
 - `加设定：...` / `设定：...`：运行 `python scripts/novel.py setting --text "..."`，若用户指定章节则加 `--chapter {chapter}`；只能暂存到 `bible/open_questions.md` 和当章 brief 的“新增设定”，不得直接写 canon；若触碰已冻结核心设定，必须重新人类裁决，不得暗改。
 - `开章 v01_c001` / `写下一章` / `写书`：优先运行 `python scripts/novel.py write {chapter}`；无明确章节时运行 `python scripts/novel.py write`。若核心设定冻结缺失，停止并回到开书实验；若 brief 缺失或仍有占位，必须先走 brief 候选流程：Codex 写 `drafts/codex/{chapter}_brief.md`，DeepSeek 写 `drafts/deepseek/{chapter}_brief.md`，Codex 汇总优劣，等待人类选择 / 混合 / 修改后，再由 Codex 运行 `select-brief` 与 `land-brief` 落正式 `outline/chapter_briefs/{chapter}.md`；不得直接写正文。
@@ -38,6 +38,7 @@
 - 如果当前 Codex 环境不能启用 `product_founder`、`technical_lead`、`qa_release`，必须停止并说明“开书实验要求多 agent，当前环境不满足”，不能降级成单模型。
 - 如果 `DEEPSEEK_API_KEY` 不可用，必须停止；开书实验不能用 dry-run 替代。
 - idea-lab 只能写 `state/idea_lab/`、`external_runs/deepseek/` 和被人类选择后的试点资产；不得写 `bible/canon.md`、`chapters/`、`state/event_ledger.jsonl`。
+- 三类 agent 审查完成后，必须运行 `python scripts/novel.py idea-agent-manifest --id idea_xxx` 记录 role、输入 hash、输出 hash 和完成时间；缺该 manifest 不得 `idea-select`。
 - Codex 汇总必须固定给三种方向：A 最强商业钩子、B 最强人物驱动、C 最大差异化/反套路。
 - 每个方向必须包含：一句话卖点、主角欲望、核心冲突、世界异常、世界观核心规则、世界观硬边界、主角异常原因、主角家属/亲密关系、家属剧情功能与风险、前三章约束、不可违背红线、仍可开放的问题、前三章验证点、最大风险、适合继续/不适合继续的信号。
 - `core_setting_freeze.json` 是开正文硬门禁；`start`、`write`、`build_context_pack`、`deepseek-generate` 均不得绕过它，包括 `--allow-placeholders`。
@@ -47,6 +48,7 @@
 ```bash
 python scripts/novel.py go
 python scripts/novel.py idea --text "..."
+python scripts/novel.py idea-agent-manifest --id idea_xxx
 python scripts/novel.py idea-select --id idea_xxx --choice A
 python scripts/novel.py core-freeze-check
 python scripts/novel.py setting --text "..."

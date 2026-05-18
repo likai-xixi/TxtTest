@@ -15,7 +15,15 @@ IDEA_READY_FILES = (
     "product_founder_review.md",
     "technical_lead_review.md",
     "qa_release_review.md",
+    "agent_review_manifest.json",
     "codex_synthesis.md",
+)
+AGENT_REVIEW_FILES = (
+    "original_idea.md",
+    "deepseek_idea.md",
+    "product_founder_review.md",
+    "technical_lead_review.md",
+    "qa_release_review.md",
 )
 
 
@@ -32,6 +40,20 @@ def ready_idea_labs() -> list[str]:
         if not lab.is_dir():
             continue
         required = [lab / name for name in IDEA_READY_FILES]
+        if all(path.exists() and read_text(path).strip() for path in required):
+            labs.append((max(path.stat().st_mtime for path in required), lab.name))
+    return [name for _mtime, name in sorted(labs, reverse=True)]
+
+
+def labs_needing_agent_manifest() -> list[str]:
+    root = ROOT / "state" / "idea_lab"
+    if not root.exists():
+        return []
+    labs: list[tuple[float, str]] = []
+    for lab in root.iterdir():
+        if not lab.is_dir() or (lab / "agent_review_manifest.json").exists():
+            continue
+        required = [lab / name for name in AGENT_REVIEW_FILES]
         if all(path.exists() and read_text(path).strip() for path in required):
             labs.append((max(path.stat().st_mtime for path in required), lab.name))
     return [name for _mtime, name in sorted(labs, reverse=True)]
@@ -103,9 +125,13 @@ def main() -> int:
         prompt = "进入 Gate A 检查，汇总前三章证据，并给我是否继续到第 4 章的裁决建议。"
     else:
         labs = ready_idea_labs()
+        manifest_labs = labs_needing_agent_manifest()
         unselected = [lab for lab in labs if not (ROOT / "state" / "idea_lab" / lab / "selection.json").exists()]
         freeze_errors = validate_freeze()
-        if freeze_errors and unselected:
+        if freeze_errors and manifest_labs:
+            idea = manifest_labs[0]
+            prompt = f"记录开书实验 {idea} 的三类 agent provenance：运行 idea-agent-manifest，然后确认 Codex synthesis 并定盘。"
+        elif freeze_errors and unselected:
             idea = unselected[0]
             prompt = (
                 f"总结开书实验 {idea} 的 A/B/C/Mixed 方向，选择一个方向并锁定开书前核心设定："

@@ -17,7 +17,7 @@
 
 ## 开书前定盘
 
-开正文前必须先完成 DeepSeek + `product_founder` + `technical_lead` + `qa_release` 的开书实验，并生成 `core_setting_freeze`。冻结内容至少包括：
+开正文前必须先完成 DeepSeek + `product_founder` + `technical_lead` + `qa_release` 的开书实验，运行 `idea-agent-manifest` 记录三类审查 provenance，并生成 `core_setting_freeze`。冻结内容至少包括：
 
 - 世界观核心规则
 - 世界观硬边界

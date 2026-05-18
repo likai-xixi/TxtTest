@@ -16,7 +16,15 @@ IDEA_READY_FILES = (
     "product_founder_review.md",
     "technical_lead_review.md",
     "qa_release_review.md",
+    "agent_review_manifest.json",
     "codex_synthesis.md",
+)
+AGENT_REVIEW_FILES = (
+    "original_idea.md",
+    "deepseek_idea.md",
+    "product_founder_review.md",
+    "technical_lead_review.md",
+    "qa_release_review.md",
 )
 
 
@@ -47,8 +55,24 @@ def ready_idea_labs() -> list[str]:
     return [name for _, name in sorted(labs, reverse=True)]
 
 
+def labs_needing_agent_manifest() -> list[str]:
+    root = ROOT / "state" / "idea_lab"
+    if not root.exists():
+        return []
+    labs = []
+    for lab in root.iterdir():
+        if not lab.is_dir() or (lab / "agent_review_manifest.json").exists():
+            continue
+        required = [lab / name for name in AGENT_REVIEW_FILES]
+        if all(path.exists() and read_text(path).strip() for path in required):
+            latest_mtime = max(path.stat().st_mtime for path in required)
+            labs.append((latest_mtime, lab.name))
+    return [name for _, name in sorted(labs, reverse=True)]
+
+
 def main() -> int:
     labs = ready_idea_labs()
+    manifest_labs = labs_needing_agent_manifest()
     unselected_labs = [lab for lab in labs if not (ROOT / "state" / "idea_lab" / lab / "selection.json").exists()]
     selected_labs = [lab for lab in labs if (ROOT / "state" / "idea_lab" / lab / "selection.json").exists()]
 
@@ -72,7 +96,9 @@ def main() -> int:
     print()
     print("## Next likely action")
     if freeze_errors:
-        if unselected_labs:
+        if manifest_labs:
+            print(f"Run `python scripts/novel.py idea-agent-manifest --id {manifest_labs[0]}` to record multi-agent provenance.")
+        elif unselected_labs:
             print(f"Run `python scripts/novel.py idea-select --id {unselected_labs[0]} --choice A` to lock core settings.")
         else:
             print("Say `想法：...` / `开书实验`, or run `python scripts/novel.py idea --text \"...\"`; chapters cannot open until core settings are frozen.")

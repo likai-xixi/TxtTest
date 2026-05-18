@@ -75,12 +75,15 @@ REQUIRED_PATHS = [
     "scripts/apply_questionnaire.py",
     "scripts/run_deepseek_idea.py",
     "scripts/run_deepseek_brief.py",
+    "scripts/deepseek_client.py",
     "scripts/core_setting_freeze.py",
     "scripts/record_idea_selection.py",
+    "scripts/record_agent_review_manifest.py",
     "scripts/build_brief_pack.py",
     "scripts/build_context_pack.py",
     "scripts/build_derived_state.py",
     "scripts/context_governance.py",
+    "scripts/gate_policy.py",
     "scripts/context_pack_quality.py",
     "scripts/record_brief_selection.py",
     "scripts/record_brief_landing.py",
@@ -113,6 +116,7 @@ REQUIRED_PATHS = [
     "scripts/review_manifest.py",
     "scripts/self_test.py",
     "tests/test_workflow_guards.py",
+    "tests/test_governance_refactors.py",
 ]
 
 

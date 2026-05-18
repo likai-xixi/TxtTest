@@ -4,9 +4,10 @@ import argparse
 import sys
 from pathlib import Path
 
-from _common import ROOT, chapter_number, chapter_parts, gate_decision, now_iso, read_text, truncate, write_blocked_by_locks, write_text
+from _common import ROOT, chapter_parts, now_iso, read_text, truncate, write_blocked_by_locks, write_text
 from core_setting_freeze import ensure_ready as ensure_core_setting_freeze, freeze_markdown_path
 from element_context import yaml_id_index
+from gate_policy import gate_errors_for_chapter
 
 
 def file_section(title: str, path: Path, limit: int) -> str:
@@ -25,17 +26,7 @@ def id_index_section(title: str, path: Path, root_key: str) -> str:
 
 
 def gate_ready(chapter: str) -> list[str]:
-    number = chapter_number(chapter)
-    errors: list[str] = []
-    if number >= 4 and gate_decision("a") != "continue":
-        errors.append("Gate A must be recorded as continue before preparing chapter 4+.")
-    if number >= 11 and gate_decision("b") != "continue":
-        errors.append("Gate B must be recorded as continue before preparing chapter 11+.")
-    if number >= 26 and gate_decision("c") != "continue":
-        errors.append("Gate C must be recorded as continue before preparing chapter 26+.")
-    if number >= 126 and gate_decision("e") != "continue":
-        errors.append("Gate E must be recorded as continue before preparing chapter 126+.")
-    return errors
+    return gate_errors_for_chapter(chapter, "preparing")
 
 
 def main() -> int:

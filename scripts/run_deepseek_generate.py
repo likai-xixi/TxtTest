@@ -5,37 +5,19 @@ import json
 import os
 import sys
 import urllib.error
-import urllib.request
 
 from _common import ROOT, chapter_parts, read_text, write_blocked_by_locks, write_text
 from context_governance import context_quality_path
 from context_pack_quality import write_quality_report
 from core_setting_freeze import ensure_ready as ensure_core_setting_freeze
+from deepseek_client import call_deepseek, model_for
 from deepseek_response import DeepSeekResponseError, extract_message_content
-
-
-API_URL = "https://api.deepseek.com/chat/completions"
-
-
-def call_deepseek(payload: dict, api_key: str) -> dict:
-    data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    request = urllib.request.Request(
-        API_URL,
-        data=data,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}",
-        },
-        method="POST",
-    )
-    with urllib.request.urlopen(request, timeout=180) as response:
-        return json.loads(response.read().decode("utf-8"))
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Ask DeepSeek for a candidate chapter draft.")
     parser.add_argument("--chapter", required=True)
-    parser.add_argument("--model", default="deepseek-v4-pro")
+    parser.add_argument("--model", default=model_for("deepseek_generate"))
     parser.add_argument("--temperature", type=float, default=0.85)
     parser.add_argument("--max-tokens", type=int, default=6000)
     parser.add_argument("--dry-run", action="store_true", help="Write the prompt only; do not call the API.")

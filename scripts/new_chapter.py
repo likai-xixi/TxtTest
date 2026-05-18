@@ -4,7 +4,8 @@ import argparse
 import sys
 from pathlib import Path
 
-from _common import ROOT, chapter_number, chapter_parts, gate_decision, read_text, unresolved_locks, write_text
+from _common import ROOT, chapter_parts, read_text, unresolved_locks, write_text
+from gate_policy import gate_errors_for_chapter
 
 
 REVIEW_TEMPLATES = [
@@ -52,18 +53,10 @@ def main() -> int:
             print(f"  - {lock.get('id')}: {lock.get('reason')}", file=sys.stderr)
         return 1
 
-    number = chapter_number(args.chapter)
-    if number >= 4 and gate_decision("a") != "continue":
-        print("ERROR: Gate A must be recorded as continue before creating chapter 4+.", file=sys.stderr)
-        return 1
-    if number >= 11 and gate_decision("b") != "continue":
-        print("ERROR: Gate B must be recorded as continue before creating chapter 11+.", file=sys.stderr)
-        return 1
-    if number >= 26 and gate_decision("c") != "continue":
-        print("ERROR: Gate C must be recorded as continue before creating chapter 26+.", file=sys.stderr)
-        return 1
-    if number >= 126 and gate_decision("e") != "continue":
-        print("ERROR: Gate E must be recorded as continue before creating chapter 126+.", file=sys.stderr)
+    gate_errors = gate_errors_for_chapter(args.chapter, "creating")
+    if gate_errors:
+        for error in gate_errors:
+            print(f"ERROR: {error}", file=sys.stderr)
         return 1
 
     volume, _chapter_file = chapter_parts(args.chapter)

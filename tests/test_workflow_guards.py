@@ -324,7 +324,40 @@ def write_ready_idea_lab(repo: Path, idea: str) -> str:
     write(repo, f"{lab}/technical_lead_review.md", f"# Technical Lead Review: {idea}\n\nKeep rules small for three chapters.\n")
     write(repo, f"{lab}/qa_release_review.md", f"# QA Release Review: {idea}\n\nGate A needs protagonist agency evidence.\n")
     write(repo, f"{lab}/codex_synthesis.md", IDEA_SYNTHESIS_READY.format(idea=idea))
+    write_agent_review_manifest(repo, idea)
     return lab
+
+
+def write_agent_review_manifest(repo: Path, idea: str) -> None:
+    lab = f"state/idea_lab/{idea}"
+    inputs = [
+        f"{lab}/original_idea.md",
+        f"{lab}/deepseek_idea.md",
+    ]
+    reviews = {}
+    for role, name in [
+        ("product_founder", "product_founder_review.md"),
+        ("technical_lead", "technical_lead_review.md"),
+        ("qa_release", "qa_release_review.md"),
+    ]:
+        path = f"{lab}/{name}"
+        reviews[role] = {
+            "role": role,
+            "path": path,
+            "sha256": file_sha(repo, path),
+            "completed_at": "2026-01-01T00:00:00+00:00",
+        }
+    manifest = {
+        "schema_version": 1,
+        "idea_id": idea,
+        "recorded_at": "2026-01-01T00:00:00+00:00",
+        "inputs": [
+            {"path": path, "sha256": file_sha(repo, path)}
+            for path in inputs
+        ],
+        "reviews": reviews,
+    }
+    write(repo, f"{lab}/agent_review_manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
 
 
 def write_core_setting_freeze(repo: Path, idea: str = "idea_core") -> None:
@@ -347,6 +380,7 @@ def write_core_setting_freeze(repo: Path, idea: str = "idea_core") -> None:
         "product_founder_review": f"{lab}/product_founder_review.md",
         "technical_lead_review": f"{lab}/technical_lead_review.md",
         "qa_release_review": f"{lab}/qa_release_review.md",
+        "agent_review_manifest": f"{lab}/agent_review_manifest.json",
         "codex_synthesis": f"{lab}/codex_synthesis.md",
         "selection": f"{lab}/selection.json",
     }
@@ -673,6 +707,7 @@ class WorkflowGuardTests(unittest.TestCase):
                 "idea",
                 "idea-form",
                 "idea-select",
+                "idea-agent-manifest",
                 "self-test",
                 "diff-scope",
                 "continuity",
