@@ -8,6 +8,9 @@ import urllib.error
 import urllib.request
 
 from _common import ROOT, chapter_parts, read_text, write_blocked_by_locks, write_text
+from context_governance import context_quality_path
+from context_pack_quality import write_quality_report
+from core_setting_freeze import ensure_ready as ensure_core_setting_freeze
 from deepseek_response import DeepSeekResponseError, extract_message_content
 
 
@@ -46,10 +49,21 @@ def main() -> int:
     except ValueError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
+    if not ensure_core_setting_freeze():
+        return 1
 
     context_path = ROOT / "state" / "context_pack" / f"{args.chapter}.md"
     if not context_path.exists():
         print(f"ERROR: missing context pack: {context_path.relative_to(ROOT)}", file=sys.stderr)
+        return 1
+    quality_path = context_quality_path(args.chapter)
+    quality = write_quality_report(args.chapter)
+    if quality.get("status") != "READY":
+        print(
+            f"ERROR: context pack quality is not READY: {quality_path.relative_to(ROOT)}. "
+            "Run `python scripts/context_pack_quality.py --chapter ...` after rebuilding context.",
+            file=sys.stderr,
+        )
         return 1
 
     context = read_text(context_path)
@@ -57,6 +71,9 @@ def main() -> int:
         "你是外部候选生成模型。只输出候选正文，不声称它是 canon，"
         "不修改状态，不追加 event ledger，不自称最终稿。"
         "如果 context_pack 信息不足，列出缺口并停止。"
+        "可以创造 L0 场景细节和 L1 一次性线索；L2 新道具/异常/人物只能作为伏笔或提案，不能立刻解决本章核心问题；"
+        "L3 长期机制和 L4 核心设定只能使用 context_pack/brief 明确授权的内容。"
+        "不得用未授权的新道具、新能力或新规则作为本章破局钥匙。"
     )
     user = (
         f"请只依据下面的 context_pack 为 {args.chapter} 生成候选稿。"

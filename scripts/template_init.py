@@ -110,7 +110,7 @@ def main() -> int:
     print(f"root: {ROOT}")
     print(f"generated files removed: {removed}")
     print(f"git initialized: {'yes' if git_created else 'no'}")
-    print("next: copy templates/questionnaire_answers.md to setup_answers.md and fill it")
+    print("next: run `python scripts/novel.py idea --text \"...\"` to start the DeepSeek + multi-agent opening lab")
     return 0
 
 

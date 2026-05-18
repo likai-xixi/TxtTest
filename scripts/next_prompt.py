@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 from _common import ROOT, chapter_number, chapter_parts, gate_decision, read_text
+from core_setting_freeze import validate_freeze
 
 
 PLACEHOLDERS = ("待定", "待填", "待评", "待生成", "待人类裁决", "TODO", "寰呭畾", "寰呭～")
@@ -66,9 +67,11 @@ def prompt_for_chapter(chapter: str) -> str:
 
     if not brief.exists() or has_placeholders(brief):
         return (
-            f"按防漂移流程生成 {chapter} brief：先清点人物状态、道具、技能、能力限制和未解决伏笔，"
-            "再写本章功能、主角目标、阻力、主动选择和章末问题；新增道具/技能只放“新增设定”等我确认。"
+            f"写下一章：先为 {chapter} 生成 brief 候选。Codex 写 drafts/codex/{chapter}_brief.md，"
+            f"DeepSeek 写 drafts/deepseek/{chapter}_brief.md；然后汇总优劣，让我选择 / 混合 / 修改后再落正式 brief。"
         )
+    if not (ROOT / "reviews" / chapter / "brief_landing.json").exists():
+        return f"正式 brief 已有内容，但还缺 brief landing provenance。请汇总 brief 候选，让我裁决后运行 select-brief 和 land-brief。"
     if not context.exists():
         return f"确认 brief，开章 {chapter}。"
     if not codex_draft.exists() or not read_text(codex_draft).strip():
@@ -76,7 +79,7 @@ def prompt_for_chapter(chapter: str) -> str:
     if not selection.exists():
         return f"比较 {chapter} 的 Codex/DeepSeek 候选，给我推荐选择和理由。"
     if not official.exists() or not read_text(official).strip():
-        return f"按已选候选方向，落正式正文 {chapter}；不得直接复制 DeepSeek，必须由 Codex 整合重写。"
+        return f"按已选候选方向，落正式正文 {chapter}；若人类已选 DeepSeek，可直采用其候选稿，但仍需由 Codex 记录 landing provenance。"
     if decision_for(chapter) != "Ship":
         return f"收章 {chapter}。"
     next_number = chapter_number(chapter) + 1
@@ -101,7 +104,16 @@ def main() -> int:
     else:
         labs = ready_idea_labs()
         unselected = [lab for lab in labs if not (ROOT / "state" / "idea_lab" / lab / "selection.json").exists()]
-        if unselected:
+        freeze_errors = validate_freeze()
+        if freeze_errors and unselected:
+            idea = unselected[0]
+            prompt = (
+                f"总结开书实验 {idea} 的 A/B/C/Mixed 方向，选择一个方向并锁定开书前核心设定："
+                "世界观核心规则、主角异常原因、主角家属/亲密关系、前三章约束和不可违背红线。"
+            )
+        elif freeze_errors:
+            prompt = "开书前先走开书实验：用 DeepSeek 和 product_founder/technical_lead/qa_release 三类 agent 固定世界观、主角异常原因和主角家属关系。"
+        elif unselected:
             idea = unselected[0]
             prompt = (
                 f"总结开书实验 {idea} 的 A/B/C/Mixed 方向，并给我 2-3 个裁决选项；"

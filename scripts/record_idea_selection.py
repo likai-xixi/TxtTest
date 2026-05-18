@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
 from pathlib import Path
 
 from _common import ROOT, now_iso, read_text, write_text
+from core_setting_freeze import FREEZE_JSON, FREEZE_MD, REQUIRED_FIELDS, sha256
 
 
 IDEA_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
@@ -31,6 +33,7 @@ REQUIRED_DIRECTION_FIELDS = [
     "主角欲望",
     "核心冲突",
     "世界异常",
+    *REQUIRED_FIELDS.values(),
     "前三章验证点",
     "最大风险",
     "适合继续的信号",
@@ -79,6 +82,118 @@ def validate_codex_synthesis(text: str) -> list[str]:
     return errors
 
 
+def field_value(section: str, field: str) -> str:
+    lines = section.splitlines()
+    collected: list[str] = []
+    in_field = False
+    for line in lines:
+        stripped = line.strip()
+        match = re.match(rf"^(?:[-*]\s*)?{re.escape(field)}\s*[：:]\s*(.*)$", stripped)
+        if match:
+            collected = [match.group(1).strip()]
+            in_field = True
+            continue
+        if in_field:
+            if re.match(r"^[-*]\s*\S+?[：:]", stripped) or stripped.startswith("## "):
+                break
+            if stripped:
+                collected.append(stripped)
+    return "\n".join(item for item in collected if item).strip()
+
+
+def freeze_source_for_choice(args: argparse.Namespace, contents: dict[str, str]) -> str:
+    if args.choice == "Mixed":
+        return args.mixed_strategy
+    section = direction_sections(contents["codex_synthesis.md"]).get(args.choice, "")
+    return section
+
+
+def core_fields(args: argparse.Namespace, contents: dict[str, str]) -> dict[str, str]:
+    source = freeze_source_for_choice(args, contents)
+    return {key: field_value(source, label) for key, label in REQUIRED_FIELDS.items()}
+
+
+def validate_core_fields(fields: dict[str, str]) -> list[str]:
+    errors: list[str] = []
+    for key, label in REQUIRED_FIELDS.items():
+        value = fields.get(key, "").strip()
+        if not value or has_placeholder(value):
+            errors.append(f"core setting freeze missing field {key} ({label})")
+    return errors
+
+
+def evidence_item(path: Path) -> dict:
+    return {
+        "path": path.relative_to(ROOT).as_posix(),
+        "sha256": sha256(path),
+        "mtime": path.stat().st_mtime,
+    }
+
+
+def evidence_text_item(path: Path, text: str) -> dict:
+    return {
+        "path": path.relative_to(ROOT).as_posix(),
+        "sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+    }
+
+
+def build_core_freeze(
+    idea_id: str,
+    lab: Path,
+    args: argparse.Namespace,
+    contents: dict[str, str],
+    selection_text: str,
+) -> dict:
+    raw = ROOT / "external_runs" / "deepseek" / idea_id / "idea.raw.json"
+    if not raw.exists():
+        raise FileNotFoundError(f"missing DeepSeek raw evidence: {raw.relative_to(ROOT)}")
+    selection_path = lab / "selection.json"
+    fields = core_fields(args, contents)
+    field_errors = validate_core_fields(fields)
+    if field_errors:
+        raise ValueError("; ".join(field_errors))
+
+    return {
+        "idea_id": idea_id,
+        "status": "LOCKED",
+        "locked_at": now_iso(),
+        "selected_direction": args.choice,
+        "human_approved": True,
+        "verified_by": "human",
+        "fields": fields,
+        "evidence": {
+            "original_idea": evidence_item(lab / "original_idea.md"),
+            "deepseek_idea": evidence_item(lab / "deepseek_idea.md"),
+            "deepseek_raw": evidence_item(raw),
+            "product_founder_review": evidence_item(lab / "product_founder_review.md"),
+            "technical_lead_review": evidence_item(lab / "technical_lead_review.md"),
+            "qa_release_review": evidence_item(lab / "qa_release_review.md"),
+            "codex_synthesis": evidence_item(lab / "codex_synthesis.md"),
+            "selection": evidence_text_item(selection_path, selection_text),
+        },
+        "writes_canon": False,
+        "writes_chapters": False,
+        "writes_event_ledger": False,
+    }
+
+
+def build_core_freeze_md(idea_id: str, data: dict) -> str:
+    fields = data["fields"]
+    lines = [
+        f"# Core Setting Freeze: {idea_id}",
+        "",
+        f"status: {data['status']}",
+        f"selected_direction: {data['selected_direction']}",
+        "human_approved: true",
+        "",
+        "本文件是开书前定盘证据，不是 canon。正文出现并由人类确认后，事实才可进入 bible/canon.md。",
+        "",
+    ]
+    for key, label in REQUIRED_FIELDS.items():
+        lines.extend([f"## {label}", "", fields[key], ""])
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def validate_output_freshness(lab: Path) -> list[str]:
     input_mtime = max((lab / "original_idea.md").stat().st_mtime, (lab / "deepseek_idea.md").stat().st_mtime)
     errors: list[str] = []
@@ -122,6 +237,7 @@ def require_ready_lab(idea_id: str) -> tuple[Path, dict[str, str]]:
 
 
 def build_premise(idea_id: str, args: argparse.Namespace, contents: dict[str, str]) -> str:
+    fields = core_fields(args, contents)
     return f"""# Premise
 
 idea_lab_id: {idea_id}
@@ -151,6 +267,19 @@ selected_at: {now_iso()}
 ## 前三章验证目标
 
 待人类确认。
+
+## 开书前核心设定冻结
+
+以下内容来自 DeepSeek 开书实验、三类 agent 审查与 Codex synthesis，经人类选择方向后锁定。它们是前三章试点的硬边界，不直接写入 canon。
+
+- 世界观核心规则：{fields["worldview_core"]}
+- 世界观硬边界：{fields["worldview_hard_limits"]}
+- 主角异常原因：{fields["protagonist_anomaly_cause"]}
+- 主角家属/亲密关系：{fields["protagonist_family"]}
+- 家属剧情功能与风险：{fields["family_stakes"]}
+- 前三章约束：{fields["first_three_chapter_constraints"]}
+- 不可违背红线：{fields["forbidden_changes"]}
+- 仍可开放的问题：{fields["open_questions_allowed"]}
 
 ## 选择理由
 
@@ -205,10 +334,10 @@ selected_direction: {args.choice}
 
 ## 后续必须确认
 
-- 主角欲望是否足够强。
-- 世界异常是否只保留前三章够用部分。
 - 第一章开篇吸引点是否明确。
-- 哪些事实可以进入 canon，必须等正文出现后再确认。
+- 冻结设定在正文中如何展示，必须等章节 brief 决定。
+- 哪些已冻结事实可以进入 canon，必须等正文出现并由人类确认后再提议。
+- 非核心支线、完整势力谱系、终局细节、地图年表和数值规则仍可开放。
 """
 
 
@@ -325,6 +454,24 @@ selected_direction: {args.choice}
 """
 
 
+def build_selection_md(args: argparse.Namespace) -> str:
+    return (
+        "\n".join(
+            [
+                f"# Idea Selection: {args.id}",
+                "",
+                f"choice: {args.choice}",
+                f"reason: {args.reason or '待人类补充。'}",
+                f"mixed_strategy: {args.mixed_strategy or '无。'}",
+                f"notes: {args.notes or '无。'}",
+                "verified_by: human",
+                "",
+            ]
+        )
+        + "\n"
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Record human-selected idea direction and create pilot assets.")
     parser.add_argument("--id", required=True, type=validate_idea_id)
@@ -356,26 +503,43 @@ def main() -> int:
         "writes_chapters": False,
         "writes_event_ledger": False,
     }
-    write_text(lab / "selection.json", json.dumps(record, ensure_ascii=False, indent=2) + "\n")
-    write_text(
-        lab / "selection.md",
-        "\n".join(
-            [
-                f"# Idea Selection: {args.id}",
-                "",
-                f"choice: {args.choice}",
-                f"reason: {args.reason or '待人类补充。'}",
-                f"mixed_strategy: {args.mixed_strategy or '无。'}",
-                f"notes: {args.notes or '无。'}",
-                "verified_by: human",
-                "",
-            ]
-        ),
+    selection_json = json.dumps(record, ensure_ascii=False, indent=2) + "\n"
+    selection_md = build_selection_md(args)
+    try:
+        freeze = build_core_freeze(args.id, lab, args, contents, selection_json)
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+
+    freeze_json = json.dumps(freeze, ensure_ascii=False, indent=2) + "\n"
+    freeze_md = build_core_freeze_md(args.id, freeze)
+    selected_pointer = (
+        json.dumps(
+            {
+                "idea_id": args.id,
+                "selected_at": record["selected_at"],
+                "selection_path": f"state/idea_lab/{args.id}/selection.json",
+                "core_setting_freeze_path": f"state/idea_lab/{args.id}/{FREEZE_JSON}",
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n"
     )
-    write_text(ROOT / "outline" / "premise.md", build_premise(args.id, args, contents))
-    write_text(ROOT / "bible" / "open_questions.md", build_open_questions(args.id, args, contents))
-    write_text(ROOT / "outline" / "gate_a_3_chapters.md", build_gate_a(args.id, args))
-    write_text(ROOT / "outline" / "chapter_briefs" / "v01_c001.md", build_c001_brief(args.id, args))
+    premise = build_premise(args.id, args, contents)
+    open_questions = build_open_questions(args.id, args, contents)
+    gate_a = build_gate_a(args.id, args)
+    c001_brief = build_c001_brief(args.id, args)
+
+    write_text(lab / "selection.json", selection_json)
+    write_text(lab / "selection.md", selection_md)
+    write_text(lab / FREEZE_JSON, freeze_json)
+    write_text(lab / FREEZE_MD, freeze_md)
+    write_text(ROOT / "state" / "idea_lab" / "selected.json", selected_pointer)
+    write_text(ROOT / "outline" / "premise.md", premise)
+    write_text(ROOT / "bible" / "open_questions.md", open_questions)
+    write_text(ROOT / "outline" / "gate_a_3_chapters.md", gate_a)
+    write_text(ROOT / "outline" / "chapter_briefs" / "v01_c001.md", c001_brief)
     print(f"OK: recorded idea selection {args.id} -> {args.choice}")
     print("next: human confirms or edits outline/chapter_briefs/v01_c001.md, then run `开章 v01_c001`.")
     return 0

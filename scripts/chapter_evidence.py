@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from _common import ROOT, chapter_parts, read_json, read_text
+from context_governance import context_manifest_path, context_quality_path
 
 
 PLACEHOLDERS = (
@@ -145,23 +147,43 @@ def selected_deepseek_candidates(selection: dict) -> list[Path]:
     return candidates
 
 
-def validate_no_direct_deepseek_copy(chapter: str, selection: dict) -> list[str]:
+def matching_selected_deepseek_candidates(chapter: str, selection: dict) -> list[Path]:
     volume, chapter_file = chapter_parts(chapter)
     official = ROOT / "chapters" / volume / chapter_file
     if not official.exists():
         return []
     official_hash = sha256(official)
     official_normalized = normalized_text(official)
-    failures: list[str] = []
+    matches: list[Path] = []
     for candidate in selected_deepseek_candidates(selection):
         if not candidate.exists():
             continue
         if official_hash == sha256(candidate):
-            failures.append(f"{chapter}: official chapter matches selected DeepSeek candidate hash {candidate.relative_to(ROOT)}")
+            matches.append(candidate)
         elif official_normalized and official_normalized == normalized_text(candidate):
-            failures.append(
-                f"{chapter}: official chapter matches selected DeepSeek candidate after whitespace normalization {candidate.relative_to(ROOT)}"
-            )
+            matches.append(candidate)
+    return matches
+
+
+def validate_deepseek_direct_adoption(chapter: str, selection: dict, landing: dict) -> list[str]:
+    matches = matching_selected_deepseek_candidates(chapter, selection)
+    if not matches:
+        return []
+
+    failures: list[str] = []
+    selected_direction = landing.get("selected_direction", landing.get("source"))
+    if selection.get("choice") != "DeepSeek":
+        failures.append(f"{chapter}: direct DeepSeek official chapter requires candidate selection choice DeepSeek")
+    if selected_direction != "DeepSeek":
+        failures.append(f"{chapter}: direct DeepSeek official chapter requires landing selected_direction DeepSeek")
+    if landing.get("deepseek_direct_adoption") is not True:
+        failures.append(f"{chapter}: landing record must confirm deepseek_direct_adoption")
+
+    direct_candidate = landing.get("direct_deepseek_candidate")
+    direct_path = direct_candidate.get("path") if isinstance(direct_candidate, dict) else None
+    match_paths = {candidate.relative_to(ROOT).as_posix() for candidate in matches}
+    if direct_path not in match_paths:
+        failures.append(f"{chapter}: landing record direct_deepseek_candidate does not match selected DeepSeek draft")
     return failures
 
 
@@ -176,6 +198,7 @@ def validate_landing(chapter: str) -> list[str]:
     chapter_rel = f"chapters/{volume}/{chapter_file}"
     required_inputs = {
         f"state/context_pack/{chapter}.md",
+        f"state/derived/context_quality/{chapter}.json",
         f"outline/chapter_briefs/{chapter}.md",
     }
 
@@ -184,14 +207,16 @@ def validate_landing(chapter: str) -> list[str]:
     selected_direction = record.get("selected_direction", record.get("source"))
     if selected_direction not in {"Codex", "DeepSeek", "Mixed"}:
         failures.append(f"{chapter}: landing record has invalid selected_direction")
-    if "selected_direction" in record and record.get("integrated_by") != "Codex":
-        failures.append(f"{chapter}: landing record must have integrated_by Codex")
+    landed_by = record.get("landed_by", record.get("integrated_by"))
+    if landed_by != "Codex":
+        failures.append(f"{chapter}: landing record must have landed_by Codex")
     if not str(record.get("attestation", "")).strip():
         failures.append(f"{chapter}: landing record missing attestation")
-    if record.get("codex_integrated") is not True:
+    deepseek_direct_adoption = record.get("deepseek_direct_adoption") is True
+    if deepseek_direct_adoption and selected_direction != "DeepSeek":
+        failures.append(f"{chapter}: landing record deepseek_direct_adoption requires selected_direction DeepSeek")
+    if not deepseek_direct_adoption and record.get("codex_integrated") is not True:
         failures.append(f"{chapter}: landing record must confirm codex_integrated")
-    if record.get("not_direct_deepseek_copy") is not True:
-        failures.append(f"{chapter}: landing record must confirm not_direct_deepseek_copy")
 
     official = record.get("official_chapter")
     if not isinstance(official, dict):
@@ -222,6 +247,65 @@ def validate_landing(chapter: str) -> list[str]:
             failures.append(f"{chapter}: landing input missing on disk {rel_path}")
         elif item.get("sha256") != sha256(disk_path):
             failures.append(f"{chapter}: landing input hash mismatch for {rel_path}")
+    return failures
+
+
+def validate_context_quality(chapter: str, landing: dict) -> list[str]:
+    failures: list[str] = []
+    quality_path = context_quality_path(chapter)
+    manifest_path = context_manifest_path(chapter)
+    pack_path = ROOT / "state" / "context_pack" / f"{chapter}.md"
+    if not quality_path.exists():
+        return [f"{chapter}: missing context quality report {quality_path.relative_to(ROOT)}"]
+    quality = read_json(quality_path, {})
+    if quality.get("status") != "READY":
+        failures.append(f"{chapter}: context quality status is {quality.get('status', 'MISSING')}")
+    if not pack_path.exists():
+        failures.append(f"{chapter}: missing context pack for quality hash")
+    elif quality.get("context_pack_sha256") != sha256(pack_path):
+        failures.append(f"{chapter}: context quality context_pack_sha256 is stale")
+    if not manifest_path.exists():
+        failures.append(f"{chapter}: missing context manifest for quality hash")
+    elif quality.get("manifest_sha256") != sha256(manifest_path):
+        failures.append(f"{chapter}: context quality manifest_sha256 is stale")
+
+    input_hashes = quality.get("input_hashes", {})
+    if not isinstance(input_hashes, dict):
+        failures.append(f"{chapter}: context quality input_hashes must be a mapping")
+
+    landing_inputs = landing.get("inputs", [])
+    landing_paths = {item.get("path"): item for item in landing_inputs if isinstance(item, dict)}
+    quality_rel = f"state/derived/context_quality/{chapter}.json"
+    if quality_rel not in landing_paths:
+        failures.append(f"{chapter}: landing record missing context quality input {quality_rel}")
+    elif landing_paths[quality_rel].get("sha256") != sha256(quality_path):
+        failures.append(f"{chapter}: landing context quality hash mismatch")
+    return failures
+
+
+def authorized_ids_from_quality(chapter: str) -> tuple[set[str], set[str]]:
+    quality = read_json(context_quality_path(chapter), {})
+    objects = {str(item) for item in quality.get("object_ids", []) if str(item).strip()}
+    abilities = {str(item) for item in quality.get("ability_ids", []) if str(item).strip()}
+    return objects, abilities
+
+
+def validate_authorized_breakers(chapter: str) -> list[str]:
+    volume, chapter_file = chapter_parts(chapter)
+    chapter_path = ROOT / "chapters" / volume / chapter_file
+    text = read_text(chapter_path)
+    object_ids, ability_ids = authorized_ids_from_quality(chapter)
+    failures: list[str] = []
+    for match in re.finditer(r"\[(object|ability):([A-Za-z0-9_.-]+)\]", text):
+        kind, item_id = match.group(1), match.group(2)
+        if kind == "object" and item_id not in object_ids:
+            failures.append(f"{chapter}: unauthorized object marker used in official chapter: {item_id}")
+        if kind == "ability" and item_id not in ability_ids:
+            failures.append(f"{chapter}: unauthorized ability marker used in official chapter: {item_id}")
+    if re.search(r"\bL[34]\b", text):
+        brief = read_text(ROOT / "outline" / "chapter_briefs" / f"{chapter}.md")
+        if not re.search(r"\bL[34]\b", brief):
+            failures.append(f"{chapter}: official chapter contains L3/L4 marker not authorized by brief")
     return failures
 
 
@@ -307,10 +391,13 @@ def validate_auxiliary_review(chapter: str, name: str) -> list[str]:
 def chapter_evidence_failures(chapter: str) -> list[str]:
     failures: list[str] = []
     selection = read_json(ROOT / "state" / "selections" / f"{chapter}.json", {})
+    landing = read_json(ROOT / "reviews" / chapter / "chapter_landing.json", {})
 
     failures.extend(validate_selection(chapter))
     failures.extend(validate_landing(chapter))
-    failures.extend(validate_no_direct_deepseek_copy(chapter, selection))
+    failures.extend(validate_context_quality(chapter, landing))
+    failures.extend(validate_authorized_breakers(chapter))
+    failures.extend(validate_deepseek_direct_adoption(chapter, selection, landing))
 
     required_reviews = [
         "codex_integrated_review.md",

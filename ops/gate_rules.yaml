@@ -74,3 +74,53 @@ gate_e_125_chapters:
     - 读者证据
     - 模型路由
     - 预算
+gate_f_200_chapters:
+  gate: F
+  decide_only_after_chapters: 200
+  criteria: ops/gate_rules.yaml
+  reader_synthesis:
+  reader_response_dir:
+  min_reader_responses: 0
+  required_assessment: state/gates/gate_f_context_governance.md
+  assessment_sections:
+    - 状态索引可靠性
+    - 伏笔账本可靠性
+    - context quality 趋势
+    - 预算压力
+  questions:
+    - 状态索引和伏笔账本是否可靠
+    - 是否允许继续进入 201-500 章
+
+gate_g_500_chapters:
+  gate: G
+  decide_only_after_chapters: 500
+  criteria: ops/gate_rules.yaml
+  reader_synthesis:
+  reader_response_dir:
+  min_reader_responses: 0
+  required_assessment: state/gates/gate_g_longform_debt.md
+  assessment_sections:
+    - 重复套路
+    - 设定债务
+    - 长线兑现计划
+    - arc chunk 覆盖
+  questions:
+    - 重复套路和设定债务是否可控
+    - 是否允许继续进入 501-800 章
+
+gate_h_800_chapters:
+  gate: H
+  decide_only_after_chapters: 800
+  criteria: ops/gate_rules.yaml
+  reader_synthesis:
+  reader_response_dir:
+  min_reader_responses: 0
+  required_assessment: state/gates/gate_h_terminal_governance.md
+  assessment_sections:
+    - 终局治理
+    - 新长期机制限制
+    - 兑现计划
+    - 读者承诺
+  questions:
+    - 是否进入终局治理
+    - 是否限制新增长期机制

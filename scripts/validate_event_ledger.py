@@ -32,6 +32,13 @@ REQUIRED = {
     "consequence",
     "verified_by",
 }
+OPTIONAL = {
+    "entities",
+    "thread_id",
+    "importance",
+    "tags",
+}
+IMPORTANCE_LEVELS = {"P0", "P1", "P2", "P3"}
 
 EVENT_RE = re.compile(r"^v\d{2}_c\d{3}_e\d{3}$")
 CHAPTER_RE = re.compile(r"^v\d{2}_c\d{3}$")
@@ -76,7 +83,7 @@ def validate(path: Path) -> list[str]:
         if missing:
             errors.append(f"line {line_no}: missing fields: {', '.join(sorted(missing))}")
 
-        extra = set(entry) - REQUIRED
+        extra = set(entry) - REQUIRED - OPTIONAL
         if extra:
             errors.append(f"line {line_no}: extra fields: {', '.join(sorted(extra))}")
 
@@ -108,6 +115,24 @@ def validate(path: Path) -> list[str]:
         for field in ("fact", "evidence_quote", "consequence"):
             if not str(entry.get(field, "")).strip():
                 errors.append(f"line {line_no}: {field} must not be empty")
+
+        entities = entry.get("entities", [])
+        if entities is not None:
+            if not isinstance(entities, list) or any(not isinstance(item, str) or not item.strip() for item in entities):
+                errors.append(f"line {line_no}: entities must be a list of non-empty strings")
+
+        thread_id = entry.get("thread_id")
+        if thread_id is not None and (not isinstance(thread_id, str) or not thread_id.strip()):
+            errors.append(f"line {line_no}: thread_id must be a non-empty string")
+
+        importance = entry.get("importance")
+        if importance is not None and importance not in IMPORTANCE_LEVELS:
+            errors.append(f"line {line_no}: importance must be one of {', '.join(sorted(IMPORTANCE_LEVELS))}")
+
+        tags = entry.get("tags", [])
+        if tags is not None:
+            if not isinstance(tags, list) or any(not isinstance(item, str) or not item.strip() for item in tags):
+                errors.append(f"line {line_no}: tags must be a list of non-empty strings")
 
         quote = str(entry.get("evidence_quote", "")).strip()
         if chapter_valid and quote:

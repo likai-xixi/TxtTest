@@ -15,6 +15,9 @@ GATE_KEYS = {
     "B": "gate_b_10_chapters",
     "C": "gate_c_25_chapters",
     "E": "gate_e_125_chapters",
+    "F": "gate_f_200_chapters",
+    "G": "gate_g_500_chapters",
+    "H": "gate_h_800_chapters",
 }
 
 DEFAULT_CRITERIA = {
@@ -22,6 +25,9 @@ DEFAULT_CRITERIA = {
     "B": "outline/gate_b_10_chapters.md",
     "C": "ops/gate_rules.yaml",
     "E": "ops/gate_rules.yaml",
+    "F": "ops/gate_rules.yaml",
+    "G": "ops/gate_rules.yaml",
+    "H": "ops/gate_rules.yaml",
 }
 
 DEFAULT_READER_SYNTHESIS = {
@@ -29,6 +35,9 @@ DEFAULT_READER_SYNTHESIS = {
     "B": "reader_tests/gate_b_synthesis.md",
     "C": None,
     "E": None,
+    "F": None,
+    "G": None,
+    "H": None,
 }
 
 DEFAULT_READER_RESPONSE_DIR = {
@@ -36,6 +45,9 @@ DEFAULT_READER_RESPONSE_DIR = {
     "B": "reader_tests/responses/gate_b",
     "C": None,
     "E": None,
+    "F": None,
+    "G": None,
+    "H": None,
 }
 
 DEFAULT_MIN_READER_RESPONSES = {
@@ -43,6 +55,29 @@ DEFAULT_MIN_READER_RESPONSES = {
     "B": 3,
     "C": 0,
     "E": 0,
+    "F": 0,
+    "G": 0,
+    "H": 0,
+}
+
+DEFAULT_NEEDED = {
+    "A": 3,
+    "B": 10,
+    "C": 25,
+    "E": 125,
+    "F": 200,
+    "G": 500,
+    "H": 800,
+}
+
+DEFAULT_ASSESSMENT = {
+    "A": None,
+    "B": None,
+    "C": "state/gates/gate_c_assessment.md",
+    "E": "state/gates/gate_e_300w_assessment.md",
+    "F": "state/gates/gate_f_context_governance.md",
+    "G": "state/gates/gate_g_longform_debt.md",
+    "H": "state/gates/gate_h_terminal_governance.md",
 }
 
 
@@ -85,7 +120,17 @@ def load_gate_configs() -> dict[str, dict[str, Any]]:
 
     configs: dict[str, dict[str, Any]] = {}
     for gate, key in GATE_KEYS.items():
-        raw = _as_mapping(data.get(key), key)
+        raw_value = data.get(key)
+        if raw_value is None and gate in {"F", "G", "H"}:
+            raw = {
+                "gate": gate,
+                "decide_only_after_chapters": DEFAULT_NEEDED[gate],
+                "criteria": DEFAULT_CRITERIA[gate],
+                "required_assessment": DEFAULT_ASSESSMENT[gate],
+                "assessment_sections": [],
+            }
+        else:
+            raw = _as_mapping(raw_value, key)
         gate_id = _as_optional_text(raw.get("gate"), f"{key}.gate")
         if gate_id != gate:
             raise RuntimeError(f"ops/gate_rules.yaml {key}.gate must be {gate!r}")
@@ -106,7 +151,7 @@ def load_gate_configs() -> dict[str, dict[str, Any]]:
                 raw.get("min_reader_responses", DEFAULT_MIN_READER_RESPONSES[gate]),
                 f"{key}.min_reader_responses",
             ),
-            "assessment": _as_optional_text(raw.get("required_assessment"), f"{key}.required_assessment"),
+            "assessment": _as_optional_text(raw.get("required_assessment", DEFAULT_ASSESSMENT[gate]), f"{key}.required_assessment"),
             "assessment_sections": _as_text_list(raw.get("assessment_sections"), f"{key}.assessment_sections"),
         }
     return configs

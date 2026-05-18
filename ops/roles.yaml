@@ -1,6 +1,15 @@
 brief:
   allow:
     - outline/chapter_briefs/{chapter}.md
+    - drafts/codex/{chapter}_brief.md
+    - drafts/deepseek/{chapter}_brief.md
+    - external_runs/deepseek/{chapter}/brief.prompt.md
+    - external_runs/deepseek/{chapter}/brief.raw.json
+    - reviews/{chapter}/brief_candidate_selection.md
+    - reviews/{chapter}/brief_landing.md
+    - reviews/{chapter}/brief_landing.json
+    - state/context_pack/{chapter}_brief.md
+    - state/selections/{chapter}_brief.json
 
 draft:
   allow:
@@ -12,8 +21,14 @@ candidate:
   allow:
     - drafts/codex/{chapter}.md
     - drafts/deepseek/{chapter}.md
+    - drafts/codex/{chapter}_brief.md
+    - drafts/deepseek/{chapter}_brief.md
     - external_runs/deepseek/{chapter}/**
+    - reviews/{chapter}/brief_candidate_selection.md
+    - reviews/{chapter}/brief_landing.md
+    - reviews/{chapter}/brief_landing.json
     - reviews/{chapter}/candidate_selection.md
+    - state/selections/{chapter}_brief.json
     - state/selections/{chapter}.json
 
 review:
@@ -60,6 +75,7 @@ state:
     - bible/objects.yaml
     - bible/abilities.yaml
     - state/context_pack/{chapter}.md
+    - state/context_pack/{chapter}_brief.md
     - state/snapshots/{chapter}_*
     - state/gates/**
     - state/idea_lab/**
@@ -72,14 +88,18 @@ chapter:
     - chapters/{volume}/{chapter_file}
     - bible/objects.yaml
     - bible/abilities.yaml
+    - drafts/codex/{chapter}_brief.md
+    - drafts/deepseek/{chapter}_brief.md
     - drafts/codex/{chapter}.md
     - drafts/deepseek/{chapter}.md
     - external_runs/deepseek/{chapter}/**
     - reviews/{chapter}/**
+    - state/selections/{chapter}_brief.json
     - state/selections/{chapter}.json
     - state/event_ledger.jsonl
     - state/derived/**
     - state/context_pack/{chapter}.md
+    - state/context_pack/{chapter}_brief.md
     - state/snapshots/{chapter}_*
     - state/stops/**
 

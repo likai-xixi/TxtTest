@@ -5,6 +5,9 @@
   "fact": "主角决定隐瞒光痕",
   "evidence_quote": "他把手缩进袖中",
   "consequence": "形成信息差",
-  "verified_by": "human"
+  "verified_by": "human",
+  "entities": ["protagonist"],
+  "thread_id": "thread_id_or_empty_if_not_applicable",
+  "importance": "P1",
+  "tags": ["rule", "relationship"]
 }
-

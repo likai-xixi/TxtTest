@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 
 from _common import ROOT, chapter_parts, write_blocked_by_locks
-from validate_event_ledger import ALLOWED_TYPES, validate
+from validate_event_ledger import ALLOWED_TYPES, IMPORTANCE_LEVELS, validate
 
 
 EVENT_RE = re.compile(r"^v\d{2}_c\d{3}_e(?P<num>\d{3})$")
@@ -61,6 +61,10 @@ def main() -> int:
     parser.add_argument("--evidence-quote", required=True)
     parser.add_argument("--consequence", required=True)
     parser.add_argument("--event-id", default=None)
+    parser.add_argument("--entity", action="append", default=[], help="Entity id touched by this event; may be repeated.")
+    parser.add_argument("--thread-id", default="", help="Long-running thread id when the event opens/advances/pays off a thread.")
+    parser.add_argument("--importance", choices=sorted(IMPORTANCE_LEVELS), default=None)
+    parser.add_argument("--tag", action="append", default=[], help="Search tag for this event; may be repeated.")
     args = parser.parse_args()
 
     if write_blocked_by_locks("event ledger append"):
@@ -82,6 +86,14 @@ def main() -> int:
                 "consequence": args.consequence,
                 "verified_by": "human",
             }
+            if args.entity:
+                entry["entities"] = args.entity
+            if args.thread_id:
+                entry["thread_id"] = args.thread_id
+            if args.importance:
+                entry["importance"] = args.importance
+            if args.tag:
+                entry["tags"] = args.tag
             proposed_line = json.dumps(entry, ensure_ascii=False, separators=(",", ":")) + "\n"
             proposed = current + proposed_line
             with tempfile.NamedTemporaryFile(

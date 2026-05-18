@@ -19,7 +19,7 @@ def run_gate_check(gate: str) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Record a human gate decision after evidence is ready.")
-    parser.add_argument("--gate", required=True, choices=["A", "B", "C", "E"])
+    parser.add_argument("--gate", required=True, choices=["A", "B", "C", "E", "F", "G", "H"])
     parser.add_argument("--decision", required=True, choices=DECISIONS)
     parser.add_argument("--reason", required=True)
     parser.add_argument("--next-limits", default="")

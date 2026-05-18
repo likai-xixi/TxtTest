@@ -62,6 +62,70 @@ def file_sha(repo: Path, relative: str) -> str:
     return hashlib.sha256((repo / relative).read_bytes()).hexdigest()
 
 
+def write_context_quality(repo: Path, chapter: str) -> None:
+    context_rel = f"state/context_pack/{chapter}.md"
+    manifest_rel = f"state/context_pack/{chapter}.manifest.json"
+    quality_rel = f"state/derived/context_quality/{chapter}.json"
+    manifest = {
+        "schema_version": 2,
+        "chapter": chapter,
+        "budget_chars": 6000,
+        "hard_max_chars": 24000,
+        "allow_truncated": False,
+        "pack_truncated": False,
+        "pack_chars": len((repo / context_rel).read_text(encoding="utf-8")),
+        "object_ids": [],
+        "ability_ids": [],
+        "sections": [
+            {"id": "core_freeze", "body_chars": 10, "sources": [{"path": "state/idea_lab/selected.json"}]},
+            {"id": "chapter_brief", "body_chars": 10, "sources": [{"path": f"outline/chapter_briefs/{chapter}.md"}]},
+            {"id": "authorized_elements_full", "body_chars": 10, "sources": [{"path": f"outline/chapter_briefs/{chapter}.md"}]},
+            {"id": "rules_and_boundaries", "body_chars": 10, "sources": [{"path": "bible/rules.md"}]},
+        ],
+        "input_hashes": [{"path": context_rel, "sha256": file_sha(repo, context_rel)}],
+        "context_pack": {"path": context_rel, "sha256": file_sha(repo, context_rel)},
+    }
+    write(repo, manifest_rel, json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
+    quality = {
+        "schema_version": 1,
+        "chapter": chapter,
+        "status": "READY",
+        "pack_path": context_rel,
+        "manifest_path": manifest_rel,
+        "context_pack_sha256": file_sha(repo, context_rel),
+        "manifest_sha256": file_sha(repo, manifest_rel),
+        "budget_chars": 6000,
+        "pack_chars": manifest["pack_chars"],
+        "required_fact_coverage": 1.0,
+        "unsupported_key_fact_count": 0,
+        "active_thread_coverage": 1.0,
+        "irrelevant_section_ratio": 0.0,
+        "truncation_count": 0,
+        "source_traceability": {"ok": True, "failure_count": 0},
+        "input_hashes": {context_rel: file_sha(repo, context_rel)},
+        "object_ids": [],
+        "ability_ids": [],
+        "blockers": [],
+        "warnings": [],
+    }
+    write(repo, quality_rel, json.dumps(quality, ensure_ascii=False, indent=2) + "\n")
+
+
+def write_minimal_derived_governance(repo: Path, chapter: str) -> None:
+    number = int(chapter[-3:])
+    start = ((number - 1) // 50) * 50 + 1
+    end = start + 49
+    write(repo, "state/derived/current_state.yaml", "schema_version: 2\n")
+    write(repo, "state/derived/threads/open.yaml", "threads: []\n")
+    write(repo, "state/derived/threads/active.yaml", "threads: []\n")
+    write(repo, "state/derived/threads/paid_off_index.yaml", "threads: []\n")
+    write(repo, f"state/derived/indexes/events_by_chapter/{chapter}.json", "[]\n")
+    write(repo, "state/derived/indexes/events_by_type/character_decision.json", "[]\n")
+    write(repo, "state/derived/entities/characters/protagonist.yaml", "id: protagonist\n")
+    write(repo, "state/derived/arcs/volume_01.md", "# Volume 01 Derived Arc\n")
+    write(repo, f"state/derived/arcs/chunk_{start:03d}_{end:03d}.md", f"# Arc Chunk {start:03d}-{end:03d}\n")
+
+
 MODEL_DISAGREEMENT_READY = """# Model Disagreement
 
 status: CLEAR
@@ -102,6 +166,14 @@ IDEA_SYNTHESIS_READY = """# Codex Synthesis: {idea}
 - 主角欲望：A desire.
 - 核心冲突：A conflict.
 - 世界异常：A anomaly.
+- 世界观核心规则：A worldview core.
+- 世界观硬边界：A hard limits.
+- 主角异常原因：A anomaly cause.
+- 主角家属/亲密关系：A family anchor.
+- 家属剧情功能与风险：A family stakes.
+- 前三章约束：A first three constraints.
+- 不可违背红线：A forbidden changes.
+- 仍可开放的问题：A open questions.
 - 前三章验证点：A checks.
 - 最大风险：A risk.
 - 适合继续的信号：A continue.
@@ -113,6 +185,14 @@ IDEA_SYNTHESIS_READY = """# Codex Synthesis: {idea}
 - 主角欲望：B desire.
 - 核心冲突：B conflict.
 - 世界异常：B anomaly.
+- 世界观核心规则：B worldview core.
+- 世界观硬边界：B hard limits.
+- 主角异常原因：B anomaly cause.
+- 主角家属/亲密关系：B family anchor.
+- 家属剧情功能与风险：B family stakes.
+- 前三章约束：B first three constraints.
+- 不可违背红线：B forbidden changes.
+- 仍可开放的问题：B open questions.
 - 前三章验证点：B checks.
 - 最大风险：B risk.
 - 适合继续的信号：B continue.
@@ -124,6 +204,14 @@ IDEA_SYNTHESIS_READY = """# Codex Synthesis: {idea}
 - 主角欲望：C desire.
 - 核心冲突：C conflict.
 - 世界异常：C anomaly.
+- 世界观核心规则：C worldview core.
+- 世界观硬边界：C hard limits.
+- 主角异常原因：C anomaly cause.
+- 主角家属/亲密关系：C family anchor.
+- 家属剧情功能与风险：C family stakes.
+- 前三章约束：C first three constraints.
+- 不可违背红线：C forbidden changes.
+- 仍可开放的问题：C open questions.
 - 前三章验证点：C checks.
 - 最大风险：C risk.
 - 适合继续的信号：C continue.
@@ -177,9 +265,17 @@ COMPLETE_BRIEF = """# {chapter} Brief
 
 只使用已记录的检测设备。
 
+## 本章可用道具 IDs
+
+none
+
 ## 本章可用技能 / 能力
 
 只使用已记录的数据分析能力。
+
+## 本章可用技能 IDs
+
+none
 
 ## 能力限制 / 代价
 
@@ -192,6 +288,14 @@ COMPLETE_BRIEF = """# {chapter} Brief
 ## 新增设定
 
 无。
+
+## 本章允许新增元素
+
+L0 场景细节和 L1 一次性线索可以新增；没有 L3/L4 新机制。
+
+## 本章禁止临场解决
+
+不得靠未授权新道具、新能力或新规则解决本章核心问题。
 
 ## 伏笔：新开 / 推进 / 回收
 
@@ -215,11 +319,97 @@ def write_ready_idea_lab(repo: Path, idea: str) -> str:
     lab = f"state/idea_lab/{idea}"
     write(repo, f"{lab}/original_idea.md", f"# Original Idea: {idea}\n\n赛博民俗悬疑。\n")
     write(repo, f"{lab}/deepseek_idea.md", f"# DeepSeek Idea Directions: {idea}\n\nDirection A/B/C ready.\n")
+    write(repo, f"external_runs/deepseek/{idea}/idea.raw.json", '{"choices":[{"message":{"content":"ok"}}]}\n')
     write(repo, f"{lab}/product_founder_review.md", f"# Product Founder Review: {idea}\n\nA has the clearest hook.\n")
     write(repo, f"{lab}/technical_lead_review.md", f"# Technical Lead Review: {idea}\n\nKeep rules small for three chapters.\n")
     write(repo, f"{lab}/qa_release_review.md", f"# QA Release Review: {idea}\n\nGate A needs protagonist agency evidence.\n")
     write(repo, f"{lab}/codex_synthesis.md", IDEA_SYNTHESIS_READY.format(idea=idea))
     return lab
+
+
+def write_core_setting_freeze(repo: Path, idea: str = "idea_core") -> None:
+    lab = write_ready_idea_lab(repo, idea)
+    write(repo, f"{lab}/selection.json", json.dumps({"idea_id": idea, "choice": "A", "verified_by": "human"}, ensure_ascii=False) + "\n")
+    fields = {
+        "worldview_core": "A worldview core.",
+        "worldview_hard_limits": "A hard limits.",
+        "protagonist_anomaly_cause": "A anomaly cause.",
+        "protagonist_family": "A family anchor.",
+        "family_stakes": "A family stakes.",
+        "first_three_chapter_constraints": "A first three constraints.",
+        "forbidden_changes": "A forbidden changes.",
+        "open_questions_allowed": "A open questions.",
+    }
+    evidence_paths = {
+        "original_idea": f"{lab}/original_idea.md",
+        "deepseek_idea": f"{lab}/deepseek_idea.md",
+        "deepseek_raw": f"external_runs/deepseek/{idea}/idea.raw.json",
+        "product_founder_review": f"{lab}/product_founder_review.md",
+        "technical_lead_review": f"{lab}/technical_lead_review.md",
+        "qa_release_review": f"{lab}/qa_release_review.md",
+        "codex_synthesis": f"{lab}/codex_synthesis.md",
+        "selection": f"{lab}/selection.json",
+    }
+    evidence = {
+        key: {"path": path, "sha256": file_sha(repo, path), "mtime": (repo / path).stat().st_mtime}
+        for key, path in evidence_paths.items()
+    }
+    freeze = {
+        "idea_id": idea,
+        "status": "LOCKED",
+        "locked_at": "2026-01-01T00:00:00+00:00",
+        "selected_direction": "A",
+        "human_approved": True,
+        "verified_by": "human",
+        "fields": fields,
+        "evidence": evidence,
+        "writes_canon": False,
+        "writes_chapters": False,
+        "writes_event_ledger": False,
+    }
+    write(repo, f"{lab}/core_setting_freeze.json", json.dumps(freeze, ensure_ascii=False, indent=2) + "\n")
+    write(
+        repo,
+        f"{lab}/core_setting_freeze.md",
+        "# Core Setting Freeze: idea_core\n\n## 世界观核心规则\n\nA worldview core.\n\n## 主角异常原因\n\nA anomaly cause.\n\n## 主角家属/亲密关系\n\nA family anchor.\n",
+    )
+    write(
+        repo,
+        "state/idea_lab/selected.json",
+        json.dumps(
+            {
+                "idea_id": idea,
+                "selection_path": f"{lab}/selection.json",
+                "core_setting_freeze_path": f"{lab}/core_setting_freeze.json",
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+    )
+
+
+def write_brief_landing(repo: Path, chapter: str = "v01_c001", source: str = "Manual") -> None:
+    brief_rel = f"outline/chapter_briefs/{chapter}.md"
+    if not (repo / brief_rel).exists():
+        write(repo, brief_rel, COMPLETE_BRIEF.format(chapter=chapter))
+    selection = {
+        "chapter": chapter,
+        "choice": source,
+        "reason": "human selected official brief",
+        "selected_candidates": [],
+    }
+    write(repo, f"state/selections/{chapter}_brief.json", json.dumps(selection) + "\n")
+    landing = {
+        "chapter": chapter,
+        "recorded_at": "2000-01-01T00:00:00+00:00",
+        "source": source,
+        "landed_by": "Codex",
+        "attestation": "Human selected and Codex landed the official brief.",
+        "inputs": [{"path": f"state/selections/{chapter}_brief.json", "sha256": file_sha(repo, f"state/selections/{chapter}_brief.json")}],
+        "official_brief": {"path": brief_rel, "sha256": file_sha(repo, brief_rel)},
+    }
+    write(repo, f"reviews/{chapter}/brief_landing.json", json.dumps(landing) + "\n")
+    write(repo, f"reviews/{chapter}/brief_landing.md", "# Brief Landing\n\nsource: Manual\n")
 
 
 def run_deepseek_module_with_response(
@@ -272,6 +462,8 @@ def write_complete_chapter_evidence(repo: Path, chapter: str, number: int) -> No
     write(repo, brief_rel, "brief " + ("A" * 320) + "\n")
     write(repo, chapter_rel, f"Official chapter {chapter} with independent Codex prose.\n")
     write(repo, draft_rel, f"Codex candidate {chapter}.\n")
+    write_context_quality(repo, chapter)
+    write_minimal_derived_governance(repo, chapter)
     write(repo, f"reviews/{chapter}/candidate_selection.md", f"# Candidate Selection\n\nchoice: Codex\n")
     selection = {
         "chapter": chapter,
@@ -285,12 +477,17 @@ def write_complete_chapter_evidence(repo: Path, chapter: str, number: int) -> No
         "recorded_at": "2000-01-01T00:00:00+00:00",
         "selected_direction": "Codex",
         "source": "Codex",
+        "official_source": "Codex",
+        "landed_by": "Codex",
         "integrated_by": "Codex",
+        "integration_mode": "codex_integrated",
         "attestation": "Codex integrated from context pack, brief, and selected direction.",
         "codex_integrated": True,
-        "not_direct_deepseek_copy": True,
+        "deepseek_direct_adoption": False,
+        "direct_deepseek_candidate": None,
         "inputs": [
             {"path": context_rel, "sha256": file_sha(repo, context_rel)},
+            {"path": f"state/derived/context_quality/{chapter}.json", "sha256": file_sha(repo, f"state/derived/context_quality/{chapter}.json")},
             {"path": brief_rel, "sha256": file_sha(repo, brief_rel)},
             {"path": f"state/selections/{chapter}.json", "sha256": file_sha(repo, f"state/selections/{chapter}.json")},
             {"path": draft_rel, "sha256": file_sha(repo, draft_rel)},
@@ -355,8 +552,8 @@ class WorkflowGuardTests(unittest.TestCase):
             write(repo, "bible/locations.yaml", "locations: []\n")
             write(repo, "bible/rules.md", "# Rules\n\nNo special rule yet.\n")
             write(repo, "bible/style_guide.md", "# Style Guide\n\nClear, direct prose.\n")
-            brief_body = "A" * 320
-            write(repo, "outline/chapter_briefs/v01_c001.md", f"# v01_c001 Brief\n\n{brief_body}\n")
+            write_core_setting_freeze(repo)
+            write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF.format(chapter="v01_c001"))
 
             self.assertEqual(run(repo, "scripts/build_derived_state.py").returncode, 0)
             context = run(repo, "scripts/build_context_pack.py", "--chapter", "v01_c001", "--limit", "5000")
@@ -391,7 +588,7 @@ class WorkflowGuardTests(unittest.TestCase):
                 "--selected-direction",
                 "Codex",
                 "--attestation",
-                "Codex integrated the official chapter from the context pack, brief, and selected direction; no direct DeepSeek copy.",
+                "Codex integrated the official chapter from the context pack, brief, and selected direction.",
             )
             self.assertEqual(landing.returncode, 0, landing.stderr)
             manifest = run(repo, "scripts/novel.py", "codex-review-start", "v01_c001")
@@ -462,7 +659,26 @@ class WorkflowGuardTests(unittest.TestCase):
             repo = temp
             help_result = run(repo, "scripts/novel.py", "--help")
             self.assertEqual(help_result.returncode, 0)
-            for command in ("go", "draft", "idea", "idea-form", "idea-select", "self-test", "diff-scope", "continuity", "compare", "evidence"):
+            for command in (
+                "go",
+                "draft",
+                "write",
+                "brief-candidates",
+                "deepseek-brief",
+                "select-brief",
+                "land-brief",
+                "setting",
+                "desk",
+                "core-freeze-check",
+                "idea",
+                "idea-form",
+                "idea-select",
+                "self-test",
+                "diff-scope",
+                "continuity",
+                "compare",
+                "evidence",
+            ):
                 self.assertIn(command, help_result.stdout)
 
             diff_scope = run(repo, "scripts/novel.py", "diff-scope", "--role", "chapter", "--chapter", "v01_c001")
@@ -472,25 +688,192 @@ class WorkflowGuardTests(unittest.TestCase):
             self.assertNotEqual(evidence.returncode, 0)
             self.assertIn("status: NOT_READY", evidence.stdout)
 
-    def test_go_initializes_copy_and_creates_questionnaire(self) -> None:
+    def test_go_blocks_before_core_setting_freeze(self) -> None:
         with copy_repo() as temp:
             repo = temp
             result = run(repo, "scripts/novel.py", "go", "--name", "Test Book")
 
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertNotEqual(result.returncode, 0)
             self.assertTrue((repo / ".git").exists())
-            self.assertTrue((repo / "setup_answers.md").exists())
+            self.assertFalse((repo / "setup_answers.md").exists())
             self.assertIn("DEEPSEEK_API_KEY:", result.stdout)
-            self.assertIn("next: fill", result.stdout)
+            self.assertIn("core setting freeze: NOT_READY", result.stdout)
 
-    def test_draft_is_chapter_friendly_go_alias(self) -> None:
+    def test_draft_blocks_before_core_setting_freeze(self) -> None:
         with copy_repo() as temp:
             repo = temp
             result = run(repo, "scripts/novel.py", "draft", "v01_c001")
 
+            self.assertNotEqual(result.returncode, 0)
+            self.assertFalse((repo / "setup_answers.md").exists())
+            self.assertIn("core setting freeze: NOT_READY", result.stdout)
+
+    def test_write_blocks_before_core_setting_freeze(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            result = run(repo, "scripts/novel.py", "write")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertFalse((repo / "setup_answers.md").exists())
+            self.assertIn("chapter: v01_c001", result.stdout)
+            self.assertIn("core setting freeze: NOT_READY", result.stdout)
+
+    def test_desk_handles_gbk_parent_output(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            env = os.environ.copy()
+            env["PYTHONIOENCODING"] = "gbk:strict"
+
+            result = run_with_env(repo, ("scripts/novel.py", "desk"), env)
+
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            self.assertTrue((repo / "setup_answers.md").exists())
-            self.assertIn("next: fill", result.stdout)
+            self.assertIn("Project Status", result.stdout)
+            self.assertIn("Next Prompt", result.stdout)
+
+    def test_setting_parks_note_without_changing_canon_or_ledger(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            canon_before = (repo / "bible/canon.md").read_text(encoding="utf-8")
+            ledger_before = (repo / "state/event_ledger.jsonl").read_text(encoding="utf-8")
+
+            result = run(
+                repo,
+                "scripts/novel.py",
+                "setting",
+                "--chapter",
+                "v01_c001",
+                "--text",
+                "灵犀镜只能照见说谎者的影子。",
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("parked setting", result.stdout)
+            self.assertIn(
+                "灵犀镜只能照见说谎者的影子。",
+                (repo / "bible/open_questions.md").read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                "灵犀镜只能照见说谎者的影子。",
+                (repo / "outline/chapter_briefs/v01_c001.md").read_text(encoding="utf-8"),
+            )
+            self.assertEqual(canon_before, (repo / "bible/canon.md").read_text(encoding="utf-8"))
+            self.assertEqual(ledger_before, (repo / "state/event_ledger.jsonl").read_text(encoding="utf-8"))
+
+    def test_start_blocks_without_core_setting_freeze(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF.format(chapter="v01_c001"))
+
+            result = run(repo, "scripts/novel.py", "start", "v01_c001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("core setting freeze", result.stderr)
+            self.assertFalse((repo / "state/context_pack/v01_c001.md").exists())
+
+    def test_start_default_context_limit_allows_ready_initial_pilot(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_core_setting_freeze(repo)
+            write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF.format(chapter="v01_c001"))
+            write_brief_landing(repo, "v01_c001")
+
+            result = run(repo, "scripts/novel.py", "start", "v01_c001")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertTrue((repo / "state/context_pack/v01_c001.md").exists())
+            self.assertTrue((repo / "state/context_pack/v01_c001.manifest.json").exists())
+            quality = json.loads((repo / "state/derived/context_quality/v01_c001.json").read_text(encoding="utf-8"))
+            self.assertEqual(quality["status"], "READY")
+            self.assertEqual(quality["budget_chars"], 6000)
+
+    def test_write_routes_placeholder_brief_to_brief_candidates(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_core_setting_freeze(repo)
+
+            result = run(repo, "scripts/novel.py", "write", "v01_c001")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertTrue((repo / "state/context_pack/v01_c001_brief.md").exists())
+            self.assertFalse((repo / "state/context_pack/v01_c001.md").exists())
+            self.assertIn("drafts/codex/v01_c001_brief.md", result.stdout)
+            self.assertIn("select-brief", result.stdout)
+
+    def test_start_requires_brief_landing_after_ready_brief(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_core_setting_freeze(repo)
+            write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF.format(chapter="v01_c001"))
+
+            result = run(repo, "scripts/novel.py", "start", "v01_c001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("missing brief landing record", result.stderr)
+            self.assertFalse((repo / "state/context_pack/v01_c001.md").exists())
+
+    def test_deepseek_generate_blocks_without_core_setting_freeze(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write(repo, "state/context_pack/v01_c001.md", "context\n")
+
+            result = run(repo, "scripts/run_deepseek_generate.py", "--chapter", "v01_c001", "--dry-run")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("core setting freeze", result.stderr)
+            self.assertFalse((repo / "external_runs/deepseek/v01_c001/generate.prompt.md").exists())
+
+    def test_deepseek_brief_dry_run_blocks_without_core_setting_freeze(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write(repo, "state/context_pack/v01_c001_brief.md", "brief pack\n")
+
+            result = run(repo, "scripts/run_deepseek_brief.py", "--chapter", "v01_c001", "--dry-run")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("core setting freeze", result.stderr)
+            self.assertFalse((repo / "external_runs/deepseek/v01_c001/brief.prompt.md").exists())
+
+    def test_deepseek_brief_dry_run_prompt_requires_complete_brief_fields(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_core_setting_freeze(repo)
+            write(repo, "state/context_pack/v01_c001_brief.md", "brief pack\n")
+
+            result = run(repo, "scripts/run_deepseek_brief.py", "--chapter", "v01_c001", "--dry-run")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            prompt = (repo / "external_runs/deepseek/v01_c001/brief.prompt.md").read_text(encoding="utf-8")
+            required = [
+                "本章功能",
+                "开篇吸引点",
+                "主角目标",
+                "主要阻力",
+                "主角主动选择",
+                "本章推进",
+                "信息增量",
+                "章末问题",
+                "本章使用设定",
+                "本章可用人物状态",
+                "本章可用道具 / 装备",
+                "本章可用道具 IDs",
+                "本章可用技能 / 能力",
+                "本章可用技能 IDs",
+                "能力限制 / 代价",
+                "未解决伏笔",
+                "新增设定",
+                "本章允许新增元素",
+                "本章禁止临场解决",
+                "伏笔：新开 / 推进 / 回收",
+                "本章禁止新增",
+                "本章禁止解决",
+                "禁止新增 / 禁止解决 / 禁止模仿",
+            ]
+            for field in required:
+                self.assertIn(field, prompt)
+            self.assertIn("字段名必须逐字一致", prompt)
+            self.assertIn("不能删减、合并、改名或换成 JSON", prompt)
+            self.assertIn("L0/L1/L2/L3/L4", prompt)
+            self.assertIn("不得写“待定”“待填”“TODO”“待人类确认”", prompt)
 
     def test_status_prefers_ready_idea_lab_over_questionnaire(self) -> None:
         with copy_repo() as temp:
@@ -512,7 +895,7 @@ class WorkflowGuardTests(unittest.TestCase):
             result = run(repo, "scripts/novel.py", "status")
 
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            self.assertIn("python scripts/novel.py questionnaire", result.stdout)
+            self.assertIn("python scripts/novel.py idea --text", result.stdout)
 
     def test_idea_requires_deepseek_key_before_writing_lab(self) -> None:
         with copy_repo() as temp:
@@ -557,13 +940,45 @@ class WorkflowGuardTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertTrue((repo / f"{lab}/selection.json").exists())
+            self.assertTrue((repo / f"{lab}/core_setting_freeze.json").exists())
+            self.assertTrue((repo / "state/idea_lab/selected.json").exists())
             self.assertIn("idea_lab_id: idea_test", (repo / "outline/premise.md").read_text(encoding="utf-8"))
+            self.assertIn("开书前核心设定冻结", (repo / "outline/premise.md").read_text(encoding="utf-8"))
             self.assertIn("不得直接视为 canon", (repo / "bible/open_questions.md").read_text(encoding="utf-8"))
             self.assertIn("Gate A", (repo / "outline/gate_a_3_chapters.md").read_text(encoding="utf-8"))
             self.assertIn("待定", (repo / "outline/chapter_briefs/v01_c001.md").read_text(encoding="utf-8"))
             self.assertEqual(canon_before, (repo / "bible/canon.md").read_text(encoding="utf-8"))
             self.assertEqual(ledger_before, (repo / "state/event_ledger.jsonl").read_text(encoding="utf-8"))
             self.assertFalse((repo / "chapters/v01/c001.md").exists())
+
+    def test_idea_select_rejects_placeholder_core_setting_field(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            idea = "idea_placeholder_core"
+            lab = write_ready_idea_lab(repo, idea)
+            text = (repo / f"{lab}/codex_synthesis.md").read_text(encoding="utf-8")
+            write(repo, f"{lab}/codex_synthesis.md", text.replace("A anomaly cause.", ""))
+
+            result = run(repo, "scripts/novel.py", "idea-select", "--id", idea, "--choice", "A")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("core setting freeze missing field protagonist_anomaly_cause", result.stderr)
+            self.assertFalse((repo / f"{lab}/selection.json").exists())
+            self.assertFalse((repo / f"{lab}/selection.md").exists())
+            self.assertFalse((repo / f"{lab}/core_setting_freeze.json").exists())
+            self.assertFalse((repo / "state/idea_lab/selected.json").exists())
+
+    def test_core_freeze_check_detects_changed_evidence(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_core_setting_freeze(repo, "idea_changed")
+            write(repo, "state/idea_lab/idea_changed/codex_synthesis.md", IDEA_SYNTHESIS_READY.format(idea="idea_changed") + "\nchanged\n")
+
+            result = run(repo, "scripts/novel.py", "core-freeze-check")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("status: NOT_READY", result.stdout)
+            self.assertIn("changed after freeze", result.stdout)
 
     def test_idea_select_requires_multi_agent_outputs(self) -> None:
         with copy_repo() as temp:
@@ -748,6 +1163,10 @@ print("OK: stub deepseek idea")
 
             commands = [
                 ("start", "v01_c001", "--allow-placeholders"),
+                ("brief-candidates", "v01_c001"),
+                ("deepseek-brief", "v01_c001", "--dry-run"),
+                ("select-brief", "v01_c001", "--choice", "Manual", "--reason", "blocked"),
+                ("land-brief", "v01_c001", "--source", "Manual", "--attestation", "blocked"),
                 ("deepseek-generate", "v01_c001", "--dry-run"),
                 ("select-candidate", "v01_c001", "--choice", "Codex", "--reason", "blocked"),
                 ("review", "v01_c001", "--allow-missing-reviews"),
@@ -1035,7 +1454,10 @@ print("OK: stub deepseek idea")
     def test_deepseek_generate_rejects_malformed_response_without_artifacts(self) -> None:
         with copy_repo() as temp:
             repo = temp
+            write_core_setting_freeze(repo)
             write(repo, "state/context_pack/v01_c001.md", "context\n")
+            write(repo, "outline/chapter_briefs/v01_c001.md", "brief " + ("A" * 320) + "\n")
+            write_context_quality(repo, "v01_c001")
 
             result = run_deepseek_module_with_response(
                 repo,
@@ -1075,7 +1497,10 @@ print("OK: stub deepseek idea")
     def test_deepseek_generate_valid_response_writes_candidate_and_raw_json(self) -> None:
         with copy_repo() as temp:
             repo = temp
+            write_core_setting_freeze(repo)
             write(repo, "state/context_pack/v01_c001.md", "context\n")
+            write(repo, "outline/chapter_briefs/v01_c001.md", "brief " + ("A" * 320) + "\n")
+            write_context_quality(repo, "v01_c001")
 
             result = run_deepseek_module_with_response(
                 repo,
@@ -1089,7 +1514,62 @@ print("OK: stub deepseek idea")
             self.assertEqual((repo / "drafts/deepseek/v01_c001.md").read_text(encoding="utf-8"), "candidate text\n")
             self.assertTrue((repo / "external_runs/deepseek/v01_c001/generate.raw.json").exists())
 
-    def test_land_rejects_identical_selected_deepseek_candidate(self) -> None:
+    def test_deepseek_brief_valid_response_writes_candidate_and_raw_json(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_core_setting_freeze(repo)
+            write(repo, "state/context_pack/v01_c001_brief.md", "brief pack\n")
+
+            result = run_deepseek_module_with_response(
+                repo,
+                "run_deepseek_brief",
+                "{'choices': [{'message': {'content': '# v01_c001 Brief\\n\\n## 本章功能\\n\\n候选。'}}]}",
+                "--chapter",
+                "v01_c001",
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertTrue((repo / "drafts/deepseek/v01_c001_brief.md").exists())
+            self.assertTrue((repo / "external_runs/deepseek/v01_c001/brief.raw.json").exists())
+
+    def test_select_and_land_brief_from_codex_candidate(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write(repo, "drafts/codex/v01_c001_brief.md", COMPLETE_BRIEF.format(chapter="v01_c001"))
+
+            selection = run(
+                repo,
+                "scripts/novel.py",
+                "select-brief",
+                "v01_c001",
+                "--choice",
+                "Codex",
+                "--reason",
+                "human selected Codex brief",
+            )
+            self.assertEqual(selection.returncode, 0, selection.stdout + selection.stderr)
+
+            landing = run(
+                repo,
+                "scripts/novel.py",
+                "land-brief",
+                "v01_c001",
+                "--source",
+                "Codex",
+                "--from-candidate",
+                "Codex",
+                "--attestation",
+                "Human selected the Codex brief candidate and Codex landed it.",
+            )
+
+            self.assertEqual(landing.returncode, 0, landing.stdout + landing.stderr)
+            self.assertEqual(
+                (repo / "outline/chapter_briefs/v01_c001.md").read_text(encoding="utf-8"),
+                COMPLETE_BRIEF.format(chapter="v01_c001"),
+            )
+            self.assertTrue((repo / "reviews/v01_c001/brief_landing.json").exists())
+
+    def test_land_allows_identical_selected_deepseek_candidate(self) -> None:
         with copy_repo() as temp:
             repo = temp
             chapter_text = "DeepSeek candidate copied exactly.\n"
@@ -1097,6 +1577,7 @@ print("OK: stub deepseek idea")
             write(repo, "outline/chapter_briefs/v01_c001.md", "brief " + ("A" * 320) + "\n")
             write(repo, "chapters/v01/c001.md", chapter_text)
             write(repo, "drafts/deepseek/v01_c001.md", chapter_text)
+            write_context_quality(repo, "v01_c001")
             selection = run(
                 repo,
                 "scripts/novel.py",
@@ -1117,11 +1598,99 @@ print("OK: stub deepseek idea")
                 "--selected-direction",
                 "DeepSeek",
                 "--attestation",
-                "Codex integrated the direction.",
+                "Human selected the DeepSeek draft as the official chapter.",
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            landing = json.loads((repo / "reviews/v01_c001/chapter_landing.json").read_text(encoding="utf-8"))
+            self.assertTrue(landing["deepseek_direct_adoption"])
+            self.assertFalse(landing["codex_integrated"])
+            self.assertEqual(landing["direct_deepseek_candidate"]["path"], "drafts/deepseek/v01_c001.md")
+
+    def test_land_rejects_identical_deepseek_candidate_mislabeled_as_codex(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            chapter_text = "DeepSeek candidate copied exactly.\n"
+            write(repo, "state/context_pack/v01_c001.md", "context\n")
+            write(repo, "outline/chapter_briefs/v01_c001.md", "brief " + ("A" * 320) + "\n")
+            write(repo, "chapters/v01/c001.md", chapter_text)
+            write(repo, "drafts/deepseek/v01_c001.md", chapter_text)
+            write_context_quality(repo, "v01_c001")
+            selection = run(
+                repo,
+                "scripts/novel.py",
+                "select-candidate",
+                "v01_c001",
+                "--choice",
+                "DeepSeek",
+                "--reason",
+                "human selected external direction",
+            )
+            self.assertEqual(selection.returncode, 0, selection.stdout + selection.stderr)
+
+            result = run(
+                repo,
+                "scripts/novel.py",
+                "land",
+                "v01_c001",
+                "--selected-direction",
+                "Codex",
+                "--attestation",
+                "Mislabeled direct adoption.",
             )
 
             self.assertNotEqual(result.returncode, 0)
-            self.assertIn("matches selected DeepSeek candidate", result.stderr)
+            self.assertIn("use --selected-direction DeepSeek", result.stderr)
+
+    def test_chapter_evidence_allows_direct_deepseek_adoption(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            chapter_text = "DeepSeek candidate copied exactly with a concrete protagonist choice.\n"
+            write(repo, "state/context_pack/v01_c001.md", "context\n")
+            write(repo, "outline/chapter_briefs/v01_c001.md", "brief " + ("A" * 320) + "\n")
+            write(repo, "chapters/v01/c001.md", chapter_text)
+            write(repo, "drafts/deepseek/v01_c001.md", chapter_text)
+            write_context_quality(repo, "v01_c001")
+            selection = run(
+                repo,
+                "scripts/novel.py",
+                "select-candidate",
+                "v01_c001",
+                "--choice",
+                "DeepSeek",
+                "--reason",
+                "human selected external direction",
+            )
+            self.assertEqual(selection.returncode, 0, selection.stdout + selection.stderr)
+            landing = run(
+                repo,
+                "scripts/novel.py",
+                "land",
+                "v01_c001",
+                "--selected-direction",
+                "DeepSeek",
+                "--attestation",
+                "Human selected the DeepSeek draft as the official chapter.",
+            )
+            self.assertEqual(landing.returncode, 0, landing.stdout + landing.stderr)
+
+            context_item = {"path": "state/context_pack/v01_c001.md", "sha256": file_sha(repo, "state/context_pack/v01_c001.md")}
+            chapter_item = {"path": "chapters/v01/c001.md", "sha256": file_sha(repo, "chapters/v01/c001.md")}
+            manifest = {
+                "codex": {"recorded_at": "2000-01-01T00:00:00+00:00", "inputs": [context_item, chapter_item]},
+                "deepseek": {"recorded_at": "2000-01-01T00:00:00+00:00", "inputs": [context_item, chapter_item]},
+            }
+            write(repo, "reviews/v01_c001/review_manifest.json", json.dumps(manifest) + "\n")
+            write(repo, "reviews/v01_c001/codex_integrated_review.md", "# Codex Review\n\naction: Ship\n")
+            write(repo, "reviews/v01_c001/deepseek_integrated_review.md", "# DeepSeek Review\n\naction: Ship\n")
+            write(repo, "reviews/v01_c001/model_disagreement.md", MODEL_DISAGREEMENT_READY)
+            write(repo, "reviews/v01_c001/continuity.md", "# Continuity\n\nstatus: CLEAR\np0_count: 0\np1_count: 0\n")
+            write_auxiliary_reviews(repo, "v01_c001")
+
+            result = run(repo, "scripts/novel.py", "evidence", "v01_c001")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("status: READY", result.stdout)
 
     def test_empty_export_fails(self) -> None:
         with copy_repo() as temp:
@@ -1264,6 +1833,32 @@ print("OK: stub deepseek idea")
 
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("Gate C", result.stderr)
+
+    def test_start_chapter_blocks_longform_gate_thresholds(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            for gate in ("a", "b", "c", "e"):
+                write(repo, f"state/gates/gate_{gate}.json", '{"decision":"continue"}\n')
+            write(repo, "outline/chapter_briefs/v01_c201.md", "# v01_c201 Brief\n\n" + ("A" * 320) + "\n")
+
+            gate_f = run(repo, "scripts/start_chapter.py", "--chapter", "v01_c201")
+
+            self.assertNotEqual(gate_f.returncode, 0)
+            self.assertIn("Gate F", gate_f.stderr)
+
+            write(repo, "state/gates/gate_f.json", '{"decision":"continue"}\n')
+            write(repo, "outline/chapter_briefs/v01_c501.md", "# v01_c501 Brief\n\n" + ("A" * 320) + "\n")
+            gate_g = run(repo, "scripts/start_chapter.py", "--chapter", "v01_c501")
+
+            self.assertNotEqual(gate_g.returncode, 0)
+            self.assertIn("Gate G", gate_g.stderr)
+
+            write(repo, "state/gates/gate_g.json", '{"decision":"continue"}\n')
+            write(repo, "outline/chapter_briefs/v01_c801.md", "# v01_c801 Brief\n\n" + ("A" * 320) + "\n")
+            gate_h = run(repo, "scripts/start_chapter.py", "--chapter", "v01_c801")
+
+            self.assertNotEqual(gate_h.returncode, 0)
+            self.assertIn("Gate H", gate_h.stderr)
 
     def test_stop_check_records_project_lock_on_stop(self) -> None:
         with copy_repo() as temp:
@@ -1418,6 +2013,17 @@ print("OK: stub deepseek idea")
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("status is BLOCKED", result.stdout)
 
+    def test_chapter_evidence_rejects_stale_context_quality_hash(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_complete_chapter_evidence(repo, "v01_c001", 1)
+            write(repo, "state/context_pack/v01_c001.md", "changed context after quality\n")
+
+            result = run(repo, "scripts/chapter_evidence.py", "--chapter", "v01_c001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("context quality context_pack_sha256 is stale", result.stdout)
+
     def test_chapter_evidence_rejects_review_written_before_manifest(self) -> None:
         with copy_repo() as temp:
             repo = temp
@@ -1464,13 +2070,92 @@ print("OK: stub deepseek idea")
     def test_context_pack_oversize_fails_without_allow_truncated(self) -> None:
         with copy_repo() as temp:
             repo = temp
+            write_core_setting_freeze(repo)
             write(repo, "outline/premise.md", "# Premise\n\n" + ("x" * 4000) + "\n")
+            write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF.format(chapter="v01_c001"))
 
             result = run(repo, "scripts/build_context_pack.py", "--chapter", "v01_c001", "--limit", "500")
 
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("context pack exceeds", result.stdout)
             self.assertTrue((repo / "state/snapshots/v01_c001_oversize_context.md").exists())
+
+    def test_context_quality_rejects_allow_truncated_pack(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_core_setting_freeze(repo)
+            write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF.format(chapter="v01_c001"))
+
+            build = run(repo, "scripts/build_context_pack.py", "--chapter", "v01_c001", "--limit", "500", "--allow-truncated")
+            quality = run(repo, "scripts/context_pack_quality.py", "--chapter", "v01_c001")
+
+            self.assertEqual(build.returncode, 0, build.stdout + build.stderr)
+            self.assertNotEqual(quality.returncode, 0)
+            self.assertIn("allow-truncated", quality.stdout)
+
+    def test_context_pack_includes_selected_object_and_ability_entries(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_core_setting_freeze(repo)
+            long_rule = "A" * 650
+            write(
+                repo,
+                "bible/objects.yaml",
+                "objects:\n"
+                "  - id: mirror_lingxi\n"
+                "    name: 灵犀镜\n"
+                "    current_state: 主角持有\n"
+                "    limits:\n"
+                f"      - {long_rule}\n"
+                "  - id: unselected_compass\n"
+                "    name: 误导罗盘\n"
+                "    current_state: 不在本章使用\n",
+            )
+            write(
+                repo,
+                "bible/abilities.yaml",
+                "abilities:\n"
+                "  - id: signal_trace\n"
+                "    name: 信号追踪\n"
+                "    can_do:\n"
+                "      - 定位被放大的执念信号\n"
+                "    cannot_do:\n"
+                "      - 不能证明鬼存在\n",
+            )
+            brief = COMPLETE_BRIEF.format(chapter="v01_c001").replace(
+                "## 本章可用道具 IDs\n\nnone",
+                "## 本章可用道具 IDs\n\n- mirror_lingxi",
+            ).replace(
+                "## 本章可用技能 IDs\n\nnone",
+                "## 本章可用技能 IDs\n\n- signal_trace",
+            )
+            write(repo, "outline/chapter_briefs/v01_c001.md", brief)
+
+            result = run(repo, "scripts/build_context_pack.py", "--chapter", "v01_c001", "--limit", "12000")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            pack = (repo / "state/context_pack/v01_c001.md").read_text(encoding="utf-8")
+            self.assertIn("## 本章可用道具完整条目", pack)
+            self.assertIn("mirror_lingxi", pack)
+            self.assertIn(long_rule, pack)
+            self.assertIn("signal_trace", pack)
+            self.assertNotIn("误导罗盘", pack)
+            self.assertIn("不得靠未授权新道具、新能力或新规则解决", pack)
+
+    def test_context_pack_rejects_unknown_declared_element_id(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_core_setting_freeze(repo)
+            brief = COMPLETE_BRIEF.format(chapter="v01_c001").replace(
+                "## 本章可用道具 IDs\n\nnone",
+                "## 本章可用道具 IDs\n\n- missing_object",
+            )
+            write(repo, "outline/chapter_briefs/v01_c001.md", brief)
+
+            result = run(repo, "scripts/build_context_pack.py", "--chapter", "v01_c001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("unknown object id: missing_object", result.stderr)
 
     def test_backup_excludes_secrets_raw_json_and_prompts(self) -> None:
         with copy_repo() as temp:
@@ -1590,6 +2275,7 @@ print("OK: stub deepseek idea")
                 + "\n",
             )
             write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF.format(chapter="v01_c001"))
+            write_core_setting_freeze(repo)
 
             derived = run(repo, "scripts/build_derived_state.py")
             self.assertEqual(derived.returncode, 0, derived.stdout + derived.stderr)
@@ -1599,8 +2285,47 @@ print("OK: stub deepseek idea")
             context = run(repo, "scripts/build_context_pack.py", "--chapter", "v01_c001", "--limit", "10000")
             self.assertEqual(context.returncode, 0, context.stdout + context.stderr)
             pack = (repo / "state/context_pack/v01_c001.md").read_text(encoding="utf-8")
-            self.assertIn("道具 / 装备台账", pack)
+            self.assertIn("开书前核心设定冻结", pack)
+            self.assertIn("A anomaly cause.", pack)
+            self.assertIn("A family anchor.", pack)
+            self.assertIn("当前道具 / 装备变化", pack)
             self.assertIn("当前技能 / 规则揭示", pack)
+
+    def test_derived_state_simulates_200_500_800_chapter_indexes(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            entries = []
+            for number in (200, 500, 800):
+                chapter = f"v01_c{number:03d}"
+                quote = f"Official chapter {chapter}"
+                write(repo, f"chapters/v01/c{number:03d}.md", f"{quote} keeps the long thread visible.\n")
+                entries.append(
+                    json.dumps(
+                        {
+                            "event_id": f"{chapter}_e001",
+                            "chapter": chapter,
+                            "type": "thread_advanced",
+                            "fact": f"thread milestone {number}",
+                            "evidence_quote": quote,
+                            "consequence": "long-range governance must retain this fact",
+                            "verified_by": "human",
+                            "entities": ["protagonist"],
+                            "thread_id": "thread_main",
+                            "importance": "P1",
+                            "tags": ["thread", "longform"],
+                        },
+                        ensure_ascii=False,
+                    )
+                )
+            write(repo, "state/event_ledger.jsonl", "\n".join(entries) + "\n")
+
+            result = run(repo, "scripts/build_derived_state.py")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            for chunk in ("chunk_151_200.md", "chunk_451_500.md", "chunk_751_800.md"):
+                self.assertTrue((repo / f"state/derived/arcs/{chunk}").exists())
+            self.assertTrue((repo / "state/derived/indexes/events_by_chapter/v01_c800.json").exists())
+            self.assertIn("thread_main", (repo / "state/derived/threads/active.yaml").read_text(encoding="utf-8"))
 
     def test_suggestion_commands_do_not_write_canon_or_ledger(self) -> None:
         with copy_repo() as temp:

@@ -1,6 +1,30 @@
+context_pack:
+  hard_max_chars: 24000
+  tiers:
+    - max_chapter: 3
+      limit_chars: 6000
+    - max_chapter: 10
+      limit_chars: 8000
+    - max_chapter: 50
+      limit_chars: 10000
+    - max_chapter: 200
+      limit_chars: 12000
+    - max_chapter: 500
+      limit_chars: 16000
+    - max_chapter: 800
+      limit_chars: 20000
+  section_budgets:
+    core_freeze: 1600
+    chapter_brief: 2500
+    authorized_elements_full: 4000
+    active_entity_cards: 3500
+    open_threads: 2500
+    recent_events: 2000
+    arc_summary: 2000
+    rules_and_boundaries: 2000
+
 pilot:
   chapters: 3
-  context_pack_limit_chars: 3000
   chapter_brief_chars:
     min: 300
     max: 800
@@ -8,10 +32,3 @@ pilot:
   deepseek:
     generation_model: deepseek-v4-pro
     review_model: deepseek-v4-pro
-
-after_10_chapters:
-  context_pack_limit_chars: 5000
-
-after_50_chapters:
-  context_pack_limit_chars: 8000
-

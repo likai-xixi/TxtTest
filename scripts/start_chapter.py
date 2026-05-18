@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import subprocess
 import sys
 
-from _common import ROOT, chapter_number, chapter_parts, gate_decision, non_ws_count, read_text, unresolved_locks
+from _common import ROOT, chapter_number, chapter_parts, gate_decision, non_ws_count, read_json, read_text, unresolved_locks
+from core_setting_freeze import ensure_ready as ensure_core_setting_freeze
 
 
 PLACEHOLDERS = ("待定", "待填", "TODO")
@@ -29,6 +31,39 @@ def validate_brief(chapter: str, allow_placeholders: bool) -> list[str]:
         errors.append(f"brief too long for pilot rule: {count} > 800 non-whitespace chars")
     if not allow_placeholders and any(marker in text for marker in PLACEHOLDERS):
         errors.append("brief still contains placeholders")
+    return errors
+
+
+def sha256(path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def validate_brief_landing(chapter: str) -> list[str]:
+    path = ROOT / "reviews" / chapter / "brief_landing.json"
+    if not path.exists():
+        return [
+            f"missing brief landing record: {path.relative_to(ROOT)}; "
+            "run select-brief and land-brief before start"
+        ]
+    record = read_json(path, {})
+    brief = ROOT / "outline" / "chapter_briefs" / f"{chapter}.md"
+    official = record.get("official_brief")
+    errors: list[str] = []
+    if record.get("chapter") != chapter:
+        errors.append("brief landing record chapter mismatch")
+    if record.get("landed_by") != "Codex":
+        errors.append("brief landing record must have landed_by Codex")
+    if not str(record.get("attestation", "")).strip():
+        errors.append("brief landing record missing attestation")
+    if not isinstance(official, dict):
+        errors.append("brief landing record missing official_brief")
+    else:
+        if official.get("path") != f"outline/chapter_briefs/{chapter}.md":
+            errors.append("brief landing official brief path mismatch")
+        if not brief.exists():
+            errors.append(f"brief landing official brief missing on disk: {brief.relative_to(ROOT)}")
+        elif official.get("sha256") != sha256(brief):
+            errors.append("brief landing official brief hash mismatch")
     return errors
 
 
@@ -59,8 +94,22 @@ def main() -> int:
     if number >= 126 and gate_decision("e") != "continue":
         print("ERROR: Gate E must be recorded as continue before starting chapter 126+.", file=sys.stderr)
         return 1
+    if number >= 201 and gate_decision("f") != "continue":
+        print("ERROR: Gate F must be recorded as continue before starting chapter 201+.", file=sys.stderr)
+        return 1
+    if number >= 501 and gate_decision("g") != "continue":
+        print("ERROR: Gate G must be recorded as continue before starting chapter 501+.", file=sys.stderr)
+        return 1
+    if number >= 801 and gate_decision("h") != "continue":
+        print("ERROR: Gate H must be recorded as continue before starting chapter 801+.", file=sys.stderr)
+        return 1
+
+    if not ensure_core_setting_freeze():
+        return 1
 
     errors = validate_brief(args.chapter, args.allow_placeholders)
+    if not args.allow_placeholders:
+        errors.extend(validate_brief_landing(args.chapter))
     if errors:
         for error in errors:
             print(f"ERROR: {error}", file=sys.stderr)
@@ -73,6 +122,7 @@ def main() -> int:
     for step in [
         ["scripts/build_derived_state.py"],
         ["scripts/build_context_pack.py", "--chapter", args.chapter],
+        ["scripts/context_pack_quality.py", "--chapter", args.chapter],
     ]:
         code = run(step)
         if code != 0:

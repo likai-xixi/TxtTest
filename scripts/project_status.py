@@ -4,6 +4,7 @@ import os
 import subprocess
 
 from _common import ROOT, gate_decision, read_text, unresolved_locks
+from core_setting_freeze import validate_freeze
 
 
 PLACEHOLDERS = ("待定", "待填", "待评", "待生成", "待人类裁决", "寰呭畾", "寰呭～", "寰呰瘎", "TODO")
@@ -58,6 +59,8 @@ def main() -> int:
     print(f"DEEPSEEK_API_KEY: {'set' if os.environ.get('DEEPSEEK_API_KEY') else 'missing'}")
     print()
     print("## Setup")
+    freeze_errors = validate_freeze()
+    print(f"- core setting freeze: {'ready' if not freeze_errors else 'missing'}")
     print(f"- premise placeholders: {'yes' if has_placeholders('outline/premise.md') else 'no'}")
     print(f"- c001 brief placeholders: {'yes' if has_placeholders('outline/chapter_briefs/v01_c001.md') else 'no'}")
     print(f"- event ledger exists: {'yes' if (ROOT / 'state/event_ledger.jsonl').exists() else 'no'}")
@@ -68,16 +71,21 @@ def main() -> int:
     print(f"- Gate B decision: {gate_decision('b') or 'not recorded'}")
     print()
     print("## Next likely action")
-    if unselected_labs:
+    if freeze_errors:
+        if unselected_labs:
+            print(f"Run `python scripts/novel.py idea-select --id {unselected_labs[0]} --choice A` to lock core settings.")
+        else:
+            print("Say `想法：...` / `开书实验`, or run `python scripts/novel.py idea --text \"...\"`; chapters cannot open until core settings are frozen.")
+    elif unselected_labs:
         print(f"Run `python scripts/novel.py idea-select --id {unselected_labs[0]} --choice A` to record the human-selected direction.")
     elif selected_labs and has_placeholders("outline/chapter_briefs/v01_c001.md"):
-        print("Confirm or fill `outline/chapter_briefs/v01_c001.md`, then run `python scripts/novel.py draft v01_c001`.")
+        print("Say `写下一章`; Codex/DeepSeek should first produce brief candidates before the official brief is landed.")
     elif has_placeholders("outline/premise.md"):
-        print("Run `python scripts/novel.py questionnaire`, fill setup_answers.md, then run `python scripts/novel.py apply-questionnaire`.")
+        print("Say `继续`, or ask Codex to update outline/premise.md from core_setting_freeze.")
     elif has_placeholders("outline/chapter_briefs/v01_c001.md"):
-        print("Fill outline/chapter_briefs/v01_c001.md, then run `python scripts/novel.py start v01_c001`.")
+        print("Say `写下一章`; brief candidates must be selected and landed before context pack generation.")
     else:
-        print("Run `python scripts/novel.py start v01_c001`.")
+        print("Say `写下一章`, or run `python scripts/novel.py write v01_c001`.")
     return 0
 
 

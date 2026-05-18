@@ -13,6 +13,7 @@ from _common import ROOT, chapter_parts, now_iso, read_text, unresolved_locks, w
 from diff_scope_check import ROLE_PATTERNS, changed_files
 from gate_config import load_gate_configs
 from validate_event_ledger import ALLOWED_TYPES
+from core_setting_freeze import validate_freeze
 
 
 DECISIONS = ["Ship", "Revise once", "Rewrite brief", "Kill chapter", "Pause project"]
@@ -28,6 +29,8 @@ IDEA_FORCE_CLEANUP_FILES = (
     "agent_tasks.md",
     "selection.json",
     "selection.md",
+    "core_setting_freeze.json",
+    "core_setting_freeze.md",
 )
 
 
@@ -36,6 +39,41 @@ def run_script(script: str, *args: str, check: bool = True) -> int:
     result = subprocess.run(command, cwd=ROOT)
     if check and result.returncode != 0:
         raise SystemExit(result.returncode)
+    return result.returncode
+
+
+def write_process_output(stream, text: str) -> None:
+    if not text:
+        return
+    try:
+        print(text, end="", file=stream)
+    except UnicodeEncodeError:
+        encoding = getattr(stream, "encoding", None) or "utf-8"
+        data = text.encode(encoding, errors="replace")
+        buffer = getattr(stream, "buffer", None)
+        if buffer is not None:
+            buffer.write(data)
+            buffer.flush()
+        else:
+            stream.write(data.decode(encoding, errors="replace"))
+            stream.flush()
+
+
+def run_script_text(script: str, *args: str, encoding: str = "utf-8") -> int:
+    command = [sys.executable, str(ROOT / "scripts" / script), *args]
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8:replace"
+    result = subprocess.run(
+        command,
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        encoding=encoding,
+        errors="replace",
+        env=env,
+    )
+    write_process_output(sys.stdout, result.stdout)
+    write_process_output(sys.stderr, result.stderr)
     return result.returncode
 
 
@@ -112,6 +150,14 @@ def cleanup_forced_idea_lab(lab: Path) -> None:
         path = lab / name
         if path.exists():
             path.unlink()
+    selected = ROOT / "state" / "idea_lab" / "selected.json"
+    if selected.exists():
+        try:
+            data = json.loads(read_text(selected))
+        except json.JSONDecodeError:
+            data = {}
+        if data.get("idea_id") == lab.name:
+            selected.unlink()
 
 
 def seed_text(path: Path) -> str:
@@ -135,6 +181,90 @@ def chapter_has_events(chapter: str) -> bool:
         if entry.get("chapter") == chapter and entry.get("verified_by") == "human":
             return True
     return False
+
+
+def brief_landing_path(chapter: str) -> Path:
+    return ROOT / "reviews" / chapter / "brief_landing.json"
+
+
+def brief_landing_ready(chapter: str) -> bool:
+    path = brief_landing_path(chapter)
+    if not path.exists():
+        return False
+    try:
+        data = json.loads(read_text(path))
+    except json.JSONDecodeError:
+        return False
+    official = data.get("official_brief")
+    if not isinstance(official, dict):
+        return False
+    brief = ROOT / "outline" / "chapter_briefs" / f"{chapter}.md"
+    return official.get("path") == f"outline/chapter_briefs/{chapter}.md" and brief.exists()
+
+
+def decision_for_chapter(chapter: str) -> str | None:
+    text = read_text(ROOT / "reviews" / chapter / "decision.md")
+    for line in text.splitlines():
+        if line.startswith("decision:"):
+            return line.split(":", 1)[1].strip()
+    return None
+
+
+def first_unshipped_chapter(limit: int = 126) -> str:
+    for idx in range(1, limit + 1):
+        chapter = f"v01_c{idx:03d}"
+        if decision_for_chapter(chapter) != "Ship":
+            return chapter
+    return f"v01_c{limit + 1:03d}"
+
+
+def setting_note_block(text: str, chapter: str | None) -> str:
+    chapter_line = f"- 关联章节：{chapter}\n" if chapter else ""
+    return (
+        f"\n\n## 设定暂存 {now_iso()}\n\n"
+        f"{chapter_line}"
+        f"- 状态：待人类确认；不得直接进入 canon。\n"
+        f"- 内容：{text.strip()}\n"
+        f"- 晋升规则：只有正文出现、event ledger 有人类确认后，才可提议进入 bible/canon.md。\n"
+    )
+
+
+def append_setting_to_open_questions(text: str, chapter: str | None) -> None:
+    path = ROOT / "bible" / "open_questions.md"
+    existing = read_text(path)
+    write_text(path, existing.rstrip() + setting_note_block(text, chapter))
+
+
+def section_has_placeholder(lines: list[str]) -> bool:
+    body = "\n".join(lines).strip()
+    return not body or any(marker in body for marker in PLACEHOLDER_MARKERS)
+
+
+def append_to_brief_section(path: Path, section_title: str, item: str) -> bool:
+    if not path.exists():
+        return False
+    lines = read_text(path).splitlines()
+    heading = f"## {section_title}"
+    try:
+        start = next(idx for idx, line in enumerate(lines) if line.strip() == heading)
+    except StopIteration:
+        return False
+    end = len(lines)
+    for idx in range(start + 1, len(lines)):
+        if lines[idx].startswith("## "):
+            end = idx
+            break
+
+    body = lines[start + 1 : end]
+    replacement = ["", f"- {item.strip()}"]
+    if not section_has_placeholder(body):
+        replacement = body
+        if replacement and replacement[-1].strip():
+            replacement.append("")
+        replacement.append(f"- {item.strip()}")
+    lines[start + 1 : end] = replacement
+    write_text(path, "\n".join(lines).rstrip() + "\n")
+    return True
 
 
 def command_init(args: argparse.Namespace) -> int:
@@ -178,24 +308,31 @@ def command_go(args: argparse.Namespace) -> int:
     print(f"DEEPSEEK_API_KEY: {'set' if os.environ.get('DEEPSEEK_API_KEY') else 'missing'}")
     print()
 
+    freeze_errors = validate_freeze()
+    if freeze_errors:
+        print("core setting freeze: NOT_READY")
+        for error in freeze_errors:
+            print(f"- {error}")
+        print()
+        print("next: run `python scripts/novel.py idea --text \"...\"`, complete the three agent reviews, then run `python scripts/novel.py idea-select --id idea_xxx --choice A`.")
+        print("guardrail: chapters cannot open until worldview, protagonist anomaly cause, and family stakes are fixed.")
+        return 1
+
     answers = Path(args.answers)
     if not answers.is_absolute():
         answers = ROOT / answers
 
-    if not answers.exists():
-        copy_questionnaire(answers, force=False)
-        print()
-        print(f"next: fill `{display_path(answers)}`, then run `python scripts/novel.py go` again.")
-        return 0
-
-    if has_placeholders(answers):
-        print(f"next: finish `{display_path(answers)}`, then run `python scripts/novel.py go` again.")
-        return 0
-
     premise = ROOT / "outline" / "premise.md"
-    if has_placeholders(premise):
+    if answers.exists() and has_placeholders(premise):
+        if has_placeholders(answers):
+            print(f"next: finish `{display_path(answers)}`, then run `python scripts/novel.py go` again.")
+            return 0
         run_script("apply_questionnaire.py", "--answers", str(answers))
         print("OK: applied startup questionnaire.")
+        print()
+
+    if has_placeholders(premise):
+        print("info: outline/premise.md still has placeholders; core_setting_freeze remains the hard source of truth for brief candidates.")
         print()
 
     setup_assets = [
@@ -206,16 +343,29 @@ def command_go(args: argparse.Namespace) -> int:
         ROOT / "outline" / "volume_01.md",
     ]
     if any(has_placeholders(path) for path in setup_assets):
-        print("next: ask Codex to draft the minimal worldview, protagonist card, relationships seed, and volume mini-outline.")
-        print("guardrail: keep canon empty until the human editor confirms hard facts.")
-        return 0
+        print("info: legacy setup assets still have placeholders; core_setting_freeze is the source of truth for opening hard boundaries.")
+        print("optional: ask Codex to sync worldview, protagonist card, relationships seed, and volume mini-outline from the freeze.")
+        print()
 
     brief = ROOT / "outline" / "chapter_briefs" / f"{args.chapter}.md"
     if not brief.exists():
         run_script("new_chapter.py", "--chapter", args.chapter)
         print()
     if has_placeholders(brief):
-        print(f"next: fill `{display_path(brief)}`, then run `python scripts/novel.py go --chapter {args.chapter}` again.")
+        run_script("build_derived_state.py")
+        run_script("build_brief_pack.py", "--chapter", args.chapter)
+        print(f"brief: NOT_READY `{display_path(brief)}`")
+        print(f"next: Codex writes `drafts/codex/{args.chapter}_brief.md` from `state/context_pack/{args.chapter}_brief.md`.")
+        if os.environ.get("DEEPSEEK_API_KEY"):
+            print(f"then: run `python scripts/novel.py deepseek-brief {args.chapter}` for the DeepSeek brief candidate.")
+        else:
+            print(f"then: DeepSeek key is missing in this process; run `python scripts/novel.py deepseek-brief {args.chapter} --dry-run` only for prompt inspection.")
+        print(f"after human choice: run `python scripts/novel.py select-brief {args.chapter} --choice ... --reason ...`, then `python scripts/novel.py land-brief {args.chapter} --source ... --attestation ...`.")
+        return 0
+
+    if not brief_landing_ready(args.chapter):
+        print(f"brief: content exists, but landing provenance is missing: `reviews/{args.chapter}/brief_landing.json`")
+        print(f"next: record human brief selection with `python scripts/novel.py select-brief {args.chapter} --choice ... --reason ...`, then land it with `python scripts/novel.py land-brief {args.chapter} --source ... --attestation ...`.")
         return 0
 
     context = ROOT / "state" / "context_pack" / f"{args.chapter}.md"
@@ -246,6 +396,51 @@ def command_draft(args: argparse.Namespace) -> int:
             deepseek_dry_run=args.deepseek_dry_run,
         )
     )
+
+
+def command_write(args: argparse.Namespace) -> int:
+    chapter = args.chapter or first_unshipped_chapter()
+    print(f"# Write")
+    print()
+    print(f"chapter: {chapter}")
+    print()
+    return command_draft(
+        argparse.Namespace(
+            name=args.name,
+            answers=args.answers,
+            chapter=chapter,
+            deepseek_dry_run=args.deepseek_dry_run,
+        )
+    )
+
+
+def command_setting(args: argparse.Namespace) -> int:
+    ensure_no_open_locks()
+    text = args.text.strip()
+    if not text:
+        print("ERROR: --text must not be empty.", file=sys.stderr)
+        return 1
+    chapter = args.chapter
+    if chapter:
+        try:
+            chapter_parts(chapter)
+        except ValueError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+
+    append_setting_to_open_questions(text, chapter)
+    print("OK: parked setting in bible/open_questions.md")
+    print("guardrail: this did not change bible/canon.md or state/event_ledger.jsonl")
+
+    if chapter and args.brief:
+        brief = ROOT / "outline" / "chapter_briefs" / f"{chapter}.md"
+        if not brief.exists():
+            run_script("new_chapter.py", "--chapter", chapter)
+        if append_to_brief_section(brief, "新增设定", text):
+            print(f"OK: also added it to outline/chapter_briefs/{chapter}.md under 新增设定")
+        else:
+            print(f"warning: could not find 新增设定 section in outline/chapter_briefs/{chapter}.md", file=sys.stderr)
+    return 0
 
 
 def command_idea_form(args: argparse.Namespace) -> int:
@@ -365,7 +560,7 @@ def command_new_chapter(args: argparse.Namespace) -> int:
     if args.force:
         script_args.append("--force")
     run_script("new_chapter.py", *script_args)
-    print(f"next: fill outline/chapter_briefs/{args.chapter}.md")
+    print(f"next: run `python scripts/novel.py brief-candidates {args.chapter}`")
     return 0
 
 
@@ -391,6 +586,63 @@ def command_deepseek_generate(args: argparse.Namespace) -> int:
     if args.dry_run:
         script_args.append("--dry-run")
     run_script("run_deepseek_generate.py", *script_args)
+    return 0
+
+
+def command_brief_candidates(args: argparse.Namespace) -> int:
+    ensure_no_open_locks()
+    brief = ROOT / "outline" / "chapter_briefs" / f"{args.chapter}.md"
+    if not brief.exists():
+        run_script("new_chapter.py", "--chapter", args.chapter)
+    run_script("build_derived_state.py")
+    run_script("build_brief_pack.py", "--chapter", args.chapter)
+    if args.deepseek or args.deepseek_dry_run:
+        script_args = ["--chapter", args.chapter]
+        if args.model:
+            script_args.extend(["--model", args.model])
+        if args.deepseek_dry_run:
+            script_args.append("--dry-run")
+        run_script("run_deepseek_brief.py", *script_args)
+    print(f"next: Codex writes drafts/codex/{args.chapter}_brief.md from state/context_pack/{args.chapter}_brief.md")
+    print(f"then: select with `python scripts/novel.py select-brief {args.chapter} --choice ... --reason ...`")
+    print(f"then: land official brief with `python scripts/novel.py land-brief {args.chapter} --source ... --attestation ...`")
+    return 0
+
+
+def command_deepseek_brief(args: argparse.Namespace) -> int:
+    ensure_no_open_locks()
+    script_args = ["--chapter", args.chapter]
+    if args.model:
+        script_args.extend(["--model", args.model])
+    if args.dry_run:
+        script_args.append("--dry-run")
+    run_script("run_deepseek_brief.py", *script_args)
+    return 0
+
+
+def command_select_brief(args: argparse.Namespace) -> int:
+    ensure_no_open_locks()
+    script_args = ["--chapter", args.chapter, "--choice", args.choice, "--reason", args.reason]
+    if args.adopt:
+        script_args.extend(["--adopt", args.adopt])
+    if args.reject:
+        script_args.extend(["--reject", args.reject])
+    if args.mixed_strategy:
+        script_args.extend(["--mixed-strategy", args.mixed_strategy])
+    if args.notes:
+        script_args.extend(["--notes", args.notes])
+    run_script("record_brief_selection.py", *script_args)
+    return 0
+
+
+def command_land_brief(args: argparse.Namespace) -> int:
+    ensure_no_open_locks()
+    script_args = ["--chapter", args.chapter, "--source", args.source, "--attestation", args.attestation]
+    if args.from_candidate:
+        script_args.extend(["--from-candidate", args.from_candidate])
+    if args.notes:
+        script_args.extend(["--notes", args.notes])
+    run_script("record_brief_landing.py", *script_args)
     return 0
 
 
@@ -506,6 +758,14 @@ def command_event(args: argparse.Namespace) -> int:
     ]
     if args.event_id:
         script_args.extend(["--event-id", args.event_id])
+    for entity in args.entity or []:
+        script_args.extend(["--entity", entity])
+    if args.thread_id:
+        script_args.extend(["--thread-id", args.thread_id])
+    if args.importance:
+        script_args.extend(["--importance", args.importance])
+    for tag in args.tag or []:
+        script_args.extend(["--tag", tag])
     run_script("append_event.py", *script_args)
     if args.rebuild:
         run_script("build_derived_state.py")
@@ -618,6 +878,10 @@ def command_chapter_evidence(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_context_quality(args: argparse.Namespace) -> int:
+    return run_script("context_pack_quality.py", "--chapter", args.chapter, check=False)
+
+
 def command_continuity(args: argparse.Namespace) -> int:
     run_script("continuity_check.py", "--chapter", args.chapter)
     return 0
@@ -634,6 +898,13 @@ def command_compare(args: argparse.Namespace) -> int:
 def command_diff_scope(args: argparse.Namespace) -> int:
     run_script("diff_scope_check.py", "--role", args.role, "--chapter", args.chapter)
     return 0
+
+
+def command_core_freeze_check(args: argparse.Namespace) -> int:
+    script_args: list[str] = []
+    if args.idea_id:
+        script_args.extend(["--idea-id", args.idea_id])
+    return run_script("core_setting_freeze.py", *script_args, check=False)
 
 
 def command_doctor(_args: argparse.Namespace) -> int:
@@ -756,6 +1027,26 @@ def command_status(_args: argparse.Namespace) -> int:
     return 0
 
 
+def command_desk(args: argparse.Namespace) -> int:
+    print("# 总编工作台")
+    print()
+    print("日常只记四个口令：")
+    print("- 继续：让 Codex 判断下一步。")
+    print("- 加设定：...：先暂存到 open questions，不直接进 canon。")
+    print("- 写下一章：准备 brief / context pack / 候选稿。")
+    print("- 收章 v01_c001：跑选择、落章、审查和证据检查。")
+    print()
+    sys.stdout.flush()
+    status_code = run_script_text("project_status.py")
+    print()
+    sys.stdout.flush()
+    prompt_args: list[str] = []
+    if args.chapter:
+        prompt_args.extend(["--chapter", args.chapter])
+    prompt_code = run_script_text("next_prompt.py", *prompt_args)
+    return status_code or prompt_code
+
+
 def command_check(_args: argparse.Namespace) -> int:
     run_script("check_template.py")
     return 0
@@ -768,61 +1059,73 @@ def command_flow(_args: argparse.Namespace) -> int:
 1. Open a copied template in Codex app.
    python scripts/novel.py init --name "Book Name"
 
-2. Prepare and apply questionnaire.
-   Easiest path:
-   python scripts/novel.py go --name "Book Name"
-   Fill setup_answers.md, then run:
-   python scripts/novel.py go
-
-3. Or start from idea lab.
+2. Start from idea lab.
+   Chapters cannot open until DeepSeek plus product_founder, technical_lead, and qa_release have fixed the core opening settings.
    python scripts/novel.py idea --text "A cyber-folk suspense story about someone who refuses to believe in ghosts."
    Enable product_founder, technical_lead, and qa_release agents.
    python scripts/novel.py idea-select --id idea_... --choice A --reason "..."
+   python scripts/novel.py core-freeze-check
 
-4. Ask Codex to draft setup assets for human confirmation.
-   Minimal worldview, protagonist card, relationships seed, volume mini-outline.
-   Do not write canon until human confirms facts.
+3. Core setting freeze.
+   idea-select writes state/idea_lab/{idea_id}/core_setting_freeze.json and .md.
+   It fixes worldview rules, protagonist anomaly cause, family stakes, first-three-chapter constraints, and forbidden changes.
+   This is not canon; canon still waits for text evidence and human confirmation.
 
-5. Start a chapter.
+4. Park new settings safely.
+   Easiest path in Codex app:
+   加设定：the protagonist's mirror can only reveal lies after a personal cost.
+   CLI equivalent:
+   python scripts/novel.py setting --chapter v01_c001 --text "..."
+
+5. Prepare chapter brief candidates.
    Easiest path:
-   python scripts/novel.py draft v01_c001
-   Fill the brief if requested, then run the same command again.
+   python scripts/novel.py write
+   Codex writes drafts/codex/v01_c001_brief.md from state/context_pack/v01_c001_brief.md.
+   DeepSeek candidate: python scripts/novel.py deepseek-brief v01_c001
+   Human chooses Codex, DeepSeek, Mixed, or Manual.
+   python scripts/novel.py select-brief v01_c001 --choice "Mixed" --reason "..."
+   Codex lands the official brief:
+   python scripts/novel.py land-brief v01_c001 --source Mixed --attestation "Human selected and Codex landed the official brief."
 
-6. Generate candidates.
+6. Start a chapter.
+   python scripts/novel.py start v01_c001
+   This builds state/context_pack/v01_c001.md from the landed official brief.
+
+7. Generate chapter candidates.
    Codex candidate: Codex writes drafts/codex/v01_c001.md from context pack.
    DeepSeek candidate: python scripts/novel.py deepseek-generate v01_c001
    Human chooses Codex, DeepSeek, or mixed direction.
-   python scripts/novel.py select-candidate v01_c001 --choice "Mixed" --reason "..." --mixed-strategy "..." --notes "..."
+   python scripts/novel.py select-candidate v01_c001 --choice "DeepSeek" --reason "..."
 
-7. Land official chapter.
-   Codex writes chapters/v01/c001.md.
-   Do not copy DeepSeek directly into chapters.
-   python scripts/novel.py land v01_c001 --selected-direction "Codex" --attestation "Codex integrated from context pack, brief, and selected direction; no direct DeepSeek copy."
+8. Land official chapter.
+   Codex writes chapters/v01/c001.md and records provenance.
+   If the human selected DeepSeek, the official chapter may be the selected DeepSeek draft exactly.
+   python scripts/novel.py land v01_c001 --selected-direction "DeepSeek" --attestation "Human selected the DeepSeek draft as the official chapter; Codex recorded provenance before review."
 
-8. Review.
+9. Review.
    python scripts/novel.py codex-review-start v01_c001
    Codex writes reviews/v01_c001/codex_integrated_review.md without reading DeepSeek review.
    python scripts/novel.py review v01_c001 --deepseek
 
-9. Human decision.
+10. Human decision.
    python scripts/novel.py decision v01_c001 --decision "Revise once"
    or
    python scripts/novel.py decision v01_c001 --decision "Ship"
 
-10. Record human-verified facts.
+11. Record human-verified facts.
    python scripts/novel.py event v01_c001 --type character_decision --fact "..." --evidence-quote "..." --consequence "..."
 
-11. Close chapter.
+12. Close chapter.
     python scripts/novel.py close v01_c001 --decision "Ship" --commit-message "complete v01 c001"
 
-12. Gates.
+13. Gates.
     python scripts/novel.py reader-test summarize --gate A --risk "..." --recommendation "..."
     python scripts/novel.py gate-check A
     After 3 chapters: python scripts/novel.py gate A
     python scripts/novel.py gate-close A --decision continue --reason "..." --next-limits "..." --continue-to v01_c010 --budget "10章小连载验证" --primary-model Codex --must-fix "..." --stop-trigger "..."
     Human decides whether to continue to 10-chapter validation.
 
-13. Maintenance.
+14. Maintenance.
     python scripts/novel.py backup --label before_gate_a
     python scripts/novel.py export --volume v01
     python scripts/novel.py status
@@ -868,6 +1171,19 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--deepseek-dry-run", action="store_true", help="When the brief is ready, also write the DeepSeek prompt without calling the API.")
     p.set_defaults(func=command_draft)
 
+    p = sub.add_parser("write", help="Friendly writing entrypoint; defaults to the first unshipped chapter.")
+    p.add_argument("chapter", nargs="?")
+    p.add_argument("--name", default="Untitled Novel")
+    p.add_argument("--answers", default="setup_answers.md")
+    p.add_argument("--deepseek-dry-run", action="store_true", help="When the brief is ready, also write the DeepSeek prompt without calling the API.")
+    p.set_defaults(func=command_write)
+
+    p = sub.add_parser("setting", aliases=["add-setting"], help="Park a proposed setting without changing canon.")
+    p.add_argument("--text", required=True)
+    p.add_argument("--chapter", default=None)
+    p.add_argument("--no-brief", dest="brief", action="store_false", help="Do not also add the note to the chapter brief.")
+    p.set_defaults(func=command_setting, brief=True)
+
     p = sub.add_parser("idea-form", help="Create a short idea seed form.")
     p.add_argument("--output", default="idea_seed.md")
     p.add_argument("--force", action="store_true")
@@ -909,6 +1225,37 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--model", default="deepseek-v4-pro")
     p.add_argument("--dry-run", action="store_true")
     p.set_defaults(func=command_deepseek_generate)
+
+    p = sub.add_parser("brief-candidates", help="Prepare Codex/DeepSeek brief candidates before official brief landing.")
+    p.add_argument("chapter")
+    p.add_argument("--deepseek", action="store_true", help="Call DeepSeek brief generation after the brief pack is built.")
+    p.add_argument("--deepseek-dry-run", action="store_true", help="Write the DeepSeek brief prompt without calling the API.")
+    p.add_argument("--model", default="deepseek-v4-pro")
+    p.set_defaults(func=command_brief_candidates)
+
+    p = sub.add_parser("deepseek-brief", help="Generate a DeepSeek candidate chapter brief.")
+    p.add_argument("chapter")
+    p.add_argument("--model", default="deepseek-v4-pro")
+    p.add_argument("--dry-run", action="store_true")
+    p.set_defaults(func=command_deepseek_brief)
+
+    p = sub.add_parser("select-brief", help="Record the human-selected brief candidate direction.")
+    p.add_argument("chapter")
+    p.add_argument("--choice", required=True, choices=["Codex", "DeepSeek", "Mixed", "Manual", "Rewrite brief", "No usable brief"])
+    p.add_argument("--reason", required=True)
+    p.add_argument("--adopt", default="")
+    p.add_argument("--reject", default="")
+    p.add_argument("--mixed-strategy", default="")
+    p.add_argument("--notes", default="")
+    p.set_defaults(func=command_select_brief)
+
+    p = sub.add_parser("land-brief", help="Land the official chapter brief after human selection.")
+    p.add_argument("chapter")
+    p.add_argument("--source", required=True, choices=["Codex", "DeepSeek", "Mixed", "Manual"])
+    p.add_argument("--from-candidate", choices=["Codex", "DeepSeek"], default=None)
+    p.add_argument("--attestation", required=True)
+    p.add_argument("--notes", default="")
+    p.set_defaults(func=command_land_brief)
 
     p = sub.add_parser("select-candidate", help="Record the human-selected candidate direction.")
     p.add_argument("chapter")
@@ -961,6 +1308,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--evidence-quote", required=True)
     p.add_argument("--consequence", required=True)
     p.add_argument("--event-id", default=None)
+    p.add_argument("--entity", action="append", default=[])
+    p.add_argument("--thread-id", default="")
+    p.add_argument("--importance", choices=["P0", "P1", "P2", "P3"], default=None)
+    p.add_argument("--tag", action="append", default=[])
     p.add_argument("--no-rebuild", dest="rebuild", action="store_false")
     p.set_defaults(func=command_event, rebuild=True)
 
@@ -1025,6 +1376,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("chapter")
     p.set_defaults(func=command_chapter_evidence)
 
+    p = sub.add_parser("context-quality", help="Check context pack quality before drafting.")
+    p.add_argument("chapter")
+    p.set_defaults(func=command_context_quality)
+
     p = sub.add_parser("continuity", help="Run continuity check for one chapter.")
     p.add_argument("chapter")
     p.set_defaults(func=command_continuity)
@@ -1038,6 +1393,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--role", required=True, choices=sorted(ROLE_PATTERNS))
     p.add_argument("--chapter", required=True)
     p.set_defaults(func=command_diff_scope)
+
+    p = sub.add_parser("core-freeze-check", help="Check the pre-opening core setting freeze.")
+    p.add_argument("--idea-id", default=None)
+    p.set_defaults(func=command_core_freeze_check)
 
     p = sub.add_parser("doctor", help="Check whether the project environment is ready to run the workflow.")
     p.set_defaults(func=command_doctor)
@@ -1093,6 +1452,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("status", help="Show project status and next likely action.")
     p.set_defaults(func=command_status)
+
+    p = sub.add_parser("desk", help="Show the editor dashboard, daily shortcuts, status, and next Codex prompt.")
+    p.add_argument("--chapter", default=None)
+    p.set_defaults(func=command_desk)
 
     p = sub.add_parser("check", help="Run template integrity check.")
     p.set_defaults(func=command_check)

@@ -7,6 +7,7 @@ from pathlib import Path
 
 from _common import ROOT, read_text
 from chapter_evidence import chapter_evidence_failures
+from context_governance import context_quality_path
 from gate_config import load_gate_configs
 from reader_test import GATE_QUESTIONS
 
@@ -174,6 +175,48 @@ def check_chapter(chapter: str, chapters_with_events: set[str], failures: list[s
     failures.extend(chapter_evidence_failures(chapter))
 
 
+def chunk_file_for_chapter_number(number: int) -> str:
+    start = ((number - 1) // 50) * 50 + 1
+    return f"state/derived/arcs/chunk_{start:03d}_{start + 49:03d}.md"
+
+
+def check_context_governance(gate: str, config: dict, failures: list[str]) -> None:
+    required = [
+        "ops/process_budget.yaml",
+        "state/derived/current_state.yaml",
+        "state/derived/entities",
+        "state/derived/threads/open.yaml",
+        "state/derived/threads/active.yaml",
+        "state/derived/threads/paid_off_index.yaml",
+        "state/derived/indexes/events_by_chapter",
+        "state/derived/indexes/events_by_type",
+        "state/derived/arcs/volume_01.md",
+    ]
+    if gate in {"F", "G", "H"}:
+        required.append(chunk_file_for_chapter_number(config["needed"]))
+    for item in required:
+        path = ROOT / item
+        if not path.exists():
+            failures.append(f"context governance missing required derived path: {item}")
+
+    if gate in {"F", "G", "H"}:
+        for number in (200, 500, 800):
+            if number <= config["needed"]:
+                chunk = ROOT / chunk_file_for_chapter_number(number)
+                if not chunk.exists():
+                    failures.append(f"context governance missing simulated long-range chunk: {chunk.relative_to(ROOT)}")
+
+    missing_quality = []
+    for number in range(1, config["needed"] + 1):
+        chapter = chapter_id(number)
+        if not context_quality_path(chapter).exists():
+            missing_quality.append(chapter)
+            if len(missing_quality) >= 5:
+                break
+    if missing_quality:
+        failures.append(f"context governance missing context quality reports, first missing: {', '.join(missing_quality)}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Check machine-verifiable evidence before a human gate decision.")
     parser.add_argument("--gate", required=True, choices=sorted(GATES))
@@ -185,6 +228,7 @@ def main() -> int:
     chapters_with_events = event_chapters()
 
     check_assessment(config, failures)
+    check_context_governance(gate, config, failures)
     for number in range(1, config["needed"] + 1):
         check_chapter(chapter_id(number), chapters_with_events, failures)
     check_reader_synthesis(config["reader_synthesis"], failures)

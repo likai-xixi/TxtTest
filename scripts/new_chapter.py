@@ -8,6 +8,7 @@ from _common import ROOT, chapter_number, chapter_parts, gate_decision, read_tex
 
 
 REVIEW_TEMPLATES = [
+    "brief_candidate_selection.md",
     "candidate_selection.md",
     "codex_integrated_review.md",
     "deepseek_integrated_review.md",

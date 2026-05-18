@@ -5,6 +5,18 @@ import sys
 from pathlib import Path
 
 from _common import ROOT, chapter_parts, read_text
+from element_context import (
+    ALLOWED_NEW_ELEMENT_SECTIONS,
+    PROHIBITED_INSTANT_SOLUTION_SECTIONS,
+    USABLE_ABILITY_ID_SECTIONS,
+    USABLE_OBJECT_ID_SECTIONS,
+    declared_ids,
+    has_placeholder,
+    markdown_sections,
+    missing_section,
+    section_body,
+    yaml_id_index,
+)
 
 
 PLACEHOLDER_MARKERS = ("待定", "待填", "TODO", "寰呭畾", "寰呭～")
@@ -23,19 +35,12 @@ REQUIRED_SECTIONS = (
     "本章禁止新增",
     "本章禁止解决",
 )
-
-
-def sections(text: str) -> dict[str, str]:
-    result: dict[str, list[str]] = {}
-    current: str | None = None
-    for line in text.splitlines():
-        if line.startswith("## "):
-            current = line[3:].strip()
-            result.setdefault(current, [])
-            continue
-        if current is not None:
-            result[current].append(line)
-    return {key: "\n".join(value).strip() for key, value in result.items()}
+REQUIRED_ELEMENT_SECTIONS = (
+    USABLE_OBJECT_ID_SECTIONS,
+    USABLE_ABILITY_ID_SECTIONS,
+    ALLOWED_NEW_ELEMENT_SECTIONS,
+    PROHIBITED_INSTANT_SOLUTION_SECTIONS,
+)
 
 
 def check_brief(path: Path) -> list[str]:
@@ -43,7 +48,7 @@ def check_brief(path: Path) -> list[str]:
     if not path.exists():
         return [f"missing brief: {path.relative_to(ROOT)}"]
     text = read_text(path)
-    parsed = sections(text)
+    parsed = markdown_sections(text)
     for name in REQUIRED_SECTIONS:
         if name not in parsed:
             failures.append(f"missing required section: {name}")
@@ -53,6 +58,27 @@ def check_brief(path: Path) -> list[str]:
             failures.append(f"empty required section: {name}")
         elif any(marker in body for marker in PLACEHOLDER_MARKERS):
             failures.append(f"section still has placeholder text: {name}")
+    for aliases in REQUIRED_ELEMENT_SECTIONS:
+        label = aliases[0]
+        if missing_section(parsed, aliases):
+            failures.append(f"missing required section: {label}")
+            continue
+        body = section_body(parsed, aliases)
+        if not body:
+            failures.append(f"empty required section: {label}")
+        elif has_placeholder(body):
+            failures.append(f"section still has placeholder text: {label}")
+
+    object_ids = declared_ids(section_body(parsed, USABLE_OBJECT_ID_SECTIONS))
+    ability_ids = declared_ids(section_body(parsed, USABLE_ABILITY_ID_SECTIONS))
+    known_objects = set(yaml_id_index(ROOT / "bible" / "objects.yaml", "objects"))
+    known_abilities = set(yaml_id_index(ROOT / "bible" / "abilities.yaml", "abilities"))
+    for item in object_ids:
+        if item not in known_objects:
+            failures.append(f"unknown object id in brief: {item}")
+    for item in ability_ids:
+        if item not in known_abilities:
+            failures.append(f"unknown ability id in brief: {item}")
     if any(marker in text for marker in PLACEHOLDER_MARKERS):
         failures.append("brief still contains placeholder text")
     return failures

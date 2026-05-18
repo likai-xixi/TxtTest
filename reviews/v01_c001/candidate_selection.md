@@ -1,6 +1,6 @@
 # Candidate Selection: v01_c001
 
-由人类总编选择本章候选方向；DeepSeek 候选不得直接进入 `chapters/`。
+由人类总编选择本章候选方向；若选择 DeepSeek，DeepSeek 候选可由 Codex 原样落入 `chapters/` 并记录 provenance。
 
 当前选择：待人类裁决。
 
