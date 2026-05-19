@@ -698,15 +698,70 @@ def run_deepseek_module_with_response(
 
 
 def write_auxiliary_reviews(repo: Path, chapter: str, status: str = "CLEAR") -> None:
-    for name in ("ai_taste", "web_satisfaction", "retention_risk", "originality"):
+    for name in ("ai_taste", "web_satisfaction", "retention_risk", "originality", "similarity_risk"):
         findings = "- Checked."
         if name == "originality":
             findings = "- 撞梗、换皮、设定名词、人物关系、句式、对白节奏、标志性表达风险已检查。"
+        if name == "similarity_risk":
+            findings = "- Similarity risk checked; no reskinned plot beats or copied protected expression."
         write(
             repo,
             f"reviews/{chapter}/{name}.md",
             f"# {name}: {chapter}\n\nstatus: {status}\n\n## Findings\n\n{findings}\n",
         )
+
+
+def write_fact_cards_report(repo: Path, chapter: str) -> None:
+    volume = chapter[:3]
+    chapter_file = f"c{int(chapter[-3:]):03d}.md"
+    chapter_rel = f"chapters/{volume}/{chapter_file}"
+    brief_rel = f"outline/chapter_briefs/{chapter}.md"
+    chapter_text = (repo / chapter_rel).read_text(encoding="utf-8")
+    quote = next((line.strip() for line in chapter_text.splitlines() if line.strip()), "")[:120]
+    report = {
+        "schema_version": 1,
+        "chapter": chapter,
+        "generated_at": "2000-01-01T00:00:00+00:00",
+        "source_chapter": chapter_rel,
+        "source_hashes": {
+            "official_chapter": file_sha(repo, chapter_rel),
+            "official_brief": file_sha(repo, brief_rel),
+        },
+        "cards": [
+            {
+                "id": "chapter_anchor",
+                "type": "chapter_anchor",
+                "importance": "P1",
+                "fact": "Record the visible end state: time, place, people present, protagonist state, carried items, unfinished action.",
+                "evidence_quote": quote,
+                "consequence": "The next chapter brief and context pack must inherit this anchor.",
+                "entities": [],
+                "tags": ["chapter_anchor"],
+            },
+            {
+                "id": "minimum_ledger_event",
+                "type": "character_decision",
+                "importance": "P1",
+                "fact": "Record the brief's minimum ledger event: character_decision.",
+                "evidence_quote": quote,
+                "consequence": "Ship evidence can verify the brief progress contract.",
+                "entities": [],
+                "tags": ["minimum_ledger_event"],
+            },
+            {
+                "id": "protagonist_choice",
+                "type": "character_decision",
+                "importance": "P1",
+                "fact": "Record the protagonist's most important active choice in this chapter.",
+                "evidence_quote": quote,
+                "consequence": "Preserves agency and motivation continuity.",
+                "entities": [],
+                "tags": ["protagonist_choice"],
+            },
+        ],
+    }
+    write(repo, f"reviews/{chapter}/fact_cards.json", json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+    write(repo, f"reviews/{chapter}/fact_cards.md", f"# Fact Cards: {chapter}\n\nstatus: READY\n")
 
 
 def write_complete_chapter_evidence(repo: Path, chapter: str, number: int) -> None:
@@ -736,6 +791,7 @@ def write_complete_chapter_evidence(repo: Path, chapter: str, number: int) -> No
                 "consequence": f"{chapter} changes the investigation state",
                 "verified_by": "human",
                 "importance": "P1",
+                "tags": ["minimum_ledger_event"],
             },
             ensure_ascii=False,
         )
@@ -798,6 +854,7 @@ def write_complete_chapter_evidence(repo: Path, chapter: str, number: int) -> No
     write(repo, f"reviews/{chapter}/decision.md", "# Decision\n\ndecision: Ship\n")
     write_auxiliary_reviews(repo, chapter)
     write_element_usage_report(repo, chapter)
+    write_fact_cards_report(repo, chapter)
 
 
 def write_human_events(repo: Path, count: int) -> None:
@@ -814,6 +871,7 @@ def write_human_events(repo: Path, count: int) -> None:
                     "evidence_quote": f"Official chapter {chapter}",
                     "consequence": f"consequence {number}",
                     "verified_by": "human",
+                    "tags": ["minimum_ledger_event"],
                 }
             )
         )
@@ -890,6 +948,8 @@ class WorkflowGuardTests(unittest.TestCase):
             review = run(repo, "scripts/novel.py", "review", "v01_c001")
             self.assertEqual(review.returncode, 0, review.stdout + review.stderr)
             write_auxiliary_reviews(repo, "v01_c001")
+            fact_cards = run(repo, "scripts/novel.py", "fact-cards", "v01_c001", "--write")
+            self.assertEqual(fact_cards.returncode, 0, fact_cards.stdout + fact_cards.stderr)
             event = run(
                 repo,
                 "scripts/novel.py",
@@ -903,6 +963,8 @@ class WorkflowGuardTests(unittest.TestCase):
                 "concrete protagonist choice",
                 "--consequence",
                 "The pilot can continue.",
+                "--tag",
+                "minimum_ledger_event",
             )
             self.assertEqual(event.returncode, 0, event.stderr)
             anchor_event = run(
@@ -1006,6 +1068,15 @@ class WorkflowGuardTests(unittest.TestCase):
                 "opening-status",
                 "freeze-preview",
                 "fact-cards",
+                "market-scan",
+                "market-scan-check",
+                "commercial-idea-check",
+                "table-build",
+                "table-check",
+                "similarity-risk-check",
+                "fact-card-check",
+                "polish-start",
+                "polish-check",
                 "accept-fact-card",
                 "element-usage",
                 "long-health",
@@ -1107,6 +1178,21 @@ class WorkflowGuardTests(unittest.TestCase):
             self.assertEqual(data["mode"], "project")
             codes = {step["code"] for step in data["steps"]}
             self.assertIn("CORE_FREEZE_CHECK_NOT_READY", codes)
+
+    def test_audit_template_mode_ignores_nested_story_not_ready(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            env = os.environ.copy()
+            env["DEEPSEEK_API_KEY"] = "test-key"
+            env["NOVEL_AUDIT_DEPTH"] = "1"
+
+            result = run_with_env(repo, ("scripts/novel.py", "audit", "--mode", "template", "--json"), env)
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            data = json.loads(result.stdout)
+            self.assertEqual(data["overall"], "READY")
+            workflow = next(step for step in data["steps"] if step["name"] == "workflow-smoke")
+            self.assertEqual(workflow["status"], "READY")
 
     def test_local_ci_entrypoint_runs_template_checks(self) -> None:
         with copy_repo() as temp:
@@ -2253,6 +2339,7 @@ print("OK: stub deepseek idea")
                         "consequence": "The investigation state changes.",
                         "verified_by": "human",
                         "importance": "P1",
+                        "tags": ["minimum_ledger_event"],
                     },
                     ensure_ascii=False,
                 )
@@ -2260,6 +2347,7 @@ print("OK: stub deepseek idea")
             )
             write(repo, "chapters/v01/c001.md", chapter_text)
             write(repo, "drafts/deepseek/v01_c001.md", chapter_text)
+            write_fact_cards_report(repo, "v01_c001")
             write_context_quality(repo, "v01_c001")
             selection = run(
                 repo,
@@ -2623,6 +2711,62 @@ print("OK: stub deepseek idea")
 
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("status is BLOCKED", result.stdout)
+
+    def test_chapter_evidence_requires_accepted_fact_card(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_complete_chapter_evidence(repo, "v01_c001", 1)
+            event = json.loads((repo / "state/event_ledger.jsonl").read_text(encoding="utf-8"))
+            event.pop("tags", None)
+            write(repo, "state/event_ledger.jsonl", json.dumps(event, ensure_ascii=False) + "\n")
+
+            result = run(repo, "scripts/novel.py", "evidence", "v01_c001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("accepted fact card", result.stdout)
+
+    def test_chapter_evidence_rejects_blocked_similarity_risk(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_complete_chapter_evidence(repo, "v01_c001", 1)
+            write(
+                repo,
+                "reviews/v01_c001/similarity_risk.md",
+                "# Similarity Risk\n\nstatus: BLOCKED\n\n## Findings\n\n- Too close.\n",
+            )
+
+            result = run(repo, "scripts/novel.py", "evidence", "v01_c001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("similarity_risk.md status is BLOCKED", result.stdout)
+
+    def test_end_state_change_p1_thread_requires_ledger_entry(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_complete_chapter_evidence(repo, "v01_c001", 1)
+            brief_path = repo / "outline/chapter_briefs/v01_c001.md"
+            brief = brief_path.read_text(encoding="utf-8")
+            write(
+                repo,
+                "outline/chapter_briefs/v01_c001.md",
+                brief
+                + "\n\n## 章末状态变化\n\n"
+                "- type：风险显形\n"
+                "- affected_thread：thread_missing_p1\n"
+                "- reader_question：P1 thread_missing_p1 之后如何追查\n"
+                "- next_required_continuity：下一章必须承接 P1 thread_missing_p1\n",
+            )
+            landing = json.loads((repo / "reviews/v01_c001/chapter_landing.json").read_text(encoding="utf-8"))
+            for item in landing["inputs"]:
+                if item["path"] == "outline/chapter_briefs/v01_c001.md":
+                    item["sha256"] = file_sha(repo, "outline/chapter_briefs/v01_c001.md")
+            write(repo, "reviews/v01_c001/chapter_landing.json", json.dumps(landing) + "\n")
+            write_fact_cards_report(repo, "v01_c001")
+
+            result = run(repo, "scripts/novel.py", "evidence", "v01_c001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("章末状态变化 declares P0/P1 thread", result.stdout)
 
     def test_chapter_evidence_requires_progress_contract_ledger_event(self) -> None:
         with copy_repo() as temp:
@@ -3472,6 +3616,66 @@ print("OK: stub deepseek idea")
             ledger = (repo / "state/event_ledger.jsonl").read_text(encoding="utf-8")
             self.assertIn("character_decision", ledger)
             self.assertIn("protagonist_choice", ledger)
+
+    def test_market_scan_blocks_fact_source_writes(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_ready_idea_lab(repo, "idea_market")
+            scan = run(repo, "scripts/novel.py", "market-scan", "--id", "idea_market")
+            self.assertEqual(scan.returncode, 0, scan.stdout + scan.stderr)
+            data = json.loads((repo / "state/idea_lab/idea_market/market_scan.json").read_text(encoding="utf-8"))
+            data["writes_canon"] = True
+            write(repo, "state/idea_lab/idea_market/market_scan.json", json.dumps(data) + "\n")
+
+            result = run(repo, "scripts/novel.py", "market-scan-check", "--id", "idea_market")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("writes_canon", result.stdout)
+
+    def test_table_check_blocks_context_manifest_table_source(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write(
+                repo,
+                "state/context_pack/v01_c001.manifest.json",
+                json.dumps(
+                    {
+                        "schema_version": 2,
+                        "chapter": "v01_c001",
+                        "sections": [{"id": "bad", "sources": [{"path": "state/derived/tables/chapters.md"}]}],
+                        "input_hashes": [],
+                    }
+                )
+                + "\n",
+            )
+
+            result = run(repo, "scripts/novel.py", "table-check")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("uses advisory table as fact source", result.stdout)
+
+    def test_polish_check_blocks_official_mutation_after_manifest(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write(repo, "chapters/v01/c001.md", "Official chapter text.\n")
+            start = run(repo, "scripts/novel.py", "polish-start", "v01_c001")
+            self.assertEqual(start.returncode, 0, start.stdout + start.stderr)
+            write(repo, "chapters/v01/c001.md", "Official chapter text changed after polish.\n")
+
+            result = run(repo, "scripts/novel.py", "polish-check", "v01_c001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("official chapter changed after polish manifest", result.stdout)
+
+    def test_brief_check_rejects_chapter_intro_todo(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF.format(chapter="v01_c001") + "\n\n## 章节简介\n\nTODO\n")
+
+            result = run(repo, "scripts/novel.py", "brief-check", "v01_c001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("章节简介", result.stdout)
 
     def test_element_usage_blocks_unauthorized_marker(self) -> None:
         with copy_repo() as temp:

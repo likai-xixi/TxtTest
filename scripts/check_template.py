@@ -62,8 +62,11 @@ REQUIRED_PATHS = [
     "schemas/context_quality.schema.json",
     "schemas/selection.schema.json",
     "schemas/landing.schema.json",
+    "schemas/market_scan.schema.json",
+    "schemas/commercial_idea.schema.json",
     "templates/questionnaire_answers.md",
     "templates/idea_seed.md",
+    "templates/commercial_idea.md",
     "templates/chapter_brief.md",
     "templates/brief_candidate_selection.md",
     "templates/candidate_selection.md",
@@ -102,6 +105,12 @@ REQUIRED_PATHS = [
     "scripts/element_usage.py",
     "scripts/fact_cards.py",
     "scripts/accept_fact_card.py",
+    "scripts/market_scan.py",
+    "scripts/commercial_idea.py",
+    "scripts/table_view.py",
+    "scripts/polish.py",
+    "scripts/similarity_risk_check.py",
+    "scripts/fact_card_check.py",
     "scripts/start_here.py",
     "scripts/opening_preflight.py",
     "scripts/freeze_preview.py",
@@ -173,6 +182,8 @@ SCHEMA_PATHS = [
     "schemas/context_quality.schema.json",
     "schemas/selection.schema.json",
     "schemas/landing.schema.json",
+    "schemas/market_scan.schema.json",
+    "schemas/commercial_idea.schema.json",
 ]
 
 RUNTIME_SCHEMA_GLOBS = [
@@ -185,6 +196,8 @@ RUNTIME_SCHEMA_GLOBS = [
     ("state/selections/*.json", "schemas/selection.schema.json"),
     ("reviews/*/brief_landing.json", "schemas/landing.schema.json"),
     ("reviews/*/chapter_landing.json", "schemas/landing.schema.json"),
+    ("state/idea_lab/*/market_scan.json", "schemas/market_scan.schema.json"),
+    ("state/idea_lab/*/commercial_idea.json", "schemas/commercial_idea.schema.json"),
 ]
 
 

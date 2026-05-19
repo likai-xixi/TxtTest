@@ -17,6 +17,29 @@
 
 正式流程以 `scripts/novel.py` 为准。底层脚本保留给统一入口、测试和排查调用；不得绕过 `novel.py` 直接落候选选择、裁决、Gate、事件或提交。
 
+## 商业辅助 + 事实硬门禁
+
+商业化、标题、简介、赛道扫描、表格视图、章末阅读理由、润色，只能作为总编辅助层；不得直接写入 `bible/canon.md`、`chapters/`、`state/event_ledger.jsonl`，不得进入 `state/context_pack/*.manifest.json` 的事实源输入链。
+
+事实、设定、授权、因果、后果、相似风险、落账，继续作为 Ship 硬门禁。`reviews/{chapter}/similarity_risk.md`、`reviews/{chapter}/fact_cards.json` 与至少一张已通过 `accept-fact-card` 写入 event ledger 的 fact card，是 `chapter-evidence` 的必查证据。fact card 只能写 `state/event_ledger.jsonl`，不能写 canon。
+
+辅助入口：
+
+```bash
+python scripts/novel.py idea-form --commercial --id idea_xxx
+python scripts/novel.py commercial-idea-check --id idea_xxx
+python scripts/novel.py market-scan --id idea_xxx
+python scripts/novel.py market-scan-check --id idea_xxx
+python scripts/novel.py table-build
+python scripts/novel.py table-check
+python scripts/novel.py polish-start v01_c001
+python scripts/novel.py polish-check v01_c001
+python scripts/novel.py similarity-risk-check v01_c001
+python scripts/novel.py fact-card-check v01_c001
+```
+
+`audit --mode project/release` 会汇总这些辅助检查，但硬裁决仍以 `core-freeze-check`、`brief-check`、`context-quality` 和 `chapter-evidence` 为准。
+
 ## 总编口令
 
 人类总编不需要记脚本细节。若用户使用下列口令，Codex app 必须自动翻译为流程动作：

@@ -468,6 +468,15 @@ def command_setting(args: argparse.Namespace) -> int:
 
 
 def command_idea_form(args: argparse.Namespace) -> int:
+    if getattr(args, "commercial", False):
+        script_args = []
+        if args.id:
+            script_args.extend(["--id", args.id])
+        if args.output:
+            script_args.extend(["--output", args.output])
+        if args.force:
+            script_args.append("--force")
+        return run_script("commercial_idea.py", *script_args, check=False)
     output = Path(args.output)
     if not output.is_absolute():
         output = ROOT / output
@@ -1118,6 +1127,42 @@ def command_fact_cards(args: argparse.Namespace) -> int:
     return run_script("fact_cards.py", *script_args, check=False)
 
 
+def command_market_scan(args: argparse.Namespace) -> int:
+    return run_script("market_scan.py", "--id", args.id, check=False)
+
+
+def command_market_scan_check(args: argparse.Namespace) -> int:
+    return run_script("market_scan.py", "--id", args.id, "--check", check=False)
+
+
+def command_commercial_idea_check(args: argparse.Namespace) -> int:
+    return run_script("commercial_idea.py", "--id", args.id, "--check", check=False)
+
+
+def command_table_build(_args: argparse.Namespace) -> int:
+    return run_script("table_view.py", check=False)
+
+
+def command_table_check(_args: argparse.Namespace) -> int:
+    return run_script("table_view.py", "--check", check=False)
+
+
+def command_similarity_risk_check(args: argparse.Namespace) -> int:
+    return run_script("similarity_risk_check.py", args.chapter, check=False)
+
+
+def command_fact_card_check(args: argparse.Namespace) -> int:
+    return run_script("fact_card_check.py", args.chapter, check=False)
+
+
+def command_polish_start(args: argparse.Namespace) -> int:
+    return run_script("polish.py", args.chapter, check=False)
+
+
+def command_polish_check(args: argparse.Namespace) -> int:
+    return run_script("polish.py", args.chapter, "--check", check=False)
+
+
 def command_accept_fact_card(args: argparse.Namespace) -> int:
     ensure_no_open_locks()
     script_args = [args.chapter, "--id", args.id]
@@ -1507,6 +1552,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("idea-form", help="Create a short idea seed form.")
     p.add_argument("--output", default="idea_seed.md")
+    p.add_argument("--id", default=None, help="When used with --commercial, write into state/idea_lab/{id}.")
+    p.add_argument("--commercial", action="store_true", help="Create a commercial advisory idea form.")
     p.add_argument("--force", action="store_true")
     p.set_defaults(func=command_idea_form)
 
@@ -1814,6 +1861,40 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--json", action="store_true")
     p.add_argument("--write", action="store_true")
     p.set_defaults(func=command_fact_cards)
+
+    p = sub.add_parser("market-scan", help="Build advisory market scan evidence for an idea lab.")
+    p.add_argument("--id", required=True)
+    p.set_defaults(func=command_market_scan)
+
+    p = sub.add_parser("market-scan-check", help="Check advisory market scan evidence.")
+    p.add_argument("--id", required=True)
+    p.set_defaults(func=command_market_scan_check)
+
+    p = sub.add_parser("commercial-idea-check", help="Check commercial idea advisory evidence.")
+    p.add_argument("--id", required=True)
+    p.set_defaults(func=command_commercial_idea_check)
+
+    p = sub.add_parser("table-build", help="Build advisory editor tables.")
+    p.set_defaults(func=command_table_build)
+
+    p = sub.add_parser("table-check", help="Check advisory editor table boundaries.")
+    p.set_defaults(func=command_table_check)
+
+    p = sub.add_parser("similarity-risk-check", help="Summarize chapter similarity risk.")
+    p.add_argument("chapter")
+    p.set_defaults(func=command_similarity_risk_check)
+
+    p = sub.add_parser("fact-card-check", help="Summarize chapter fact card acceptance.")
+    p.add_argument("chapter")
+    p.set_defaults(func=command_fact_card_check)
+
+    p = sub.add_parser("polish-start", help="Create an advisory polish candidate without touching official chapter text.")
+    p.add_argument("chapter")
+    p.set_defaults(func=command_polish_start)
+
+    p = sub.add_parser("polish-check", help="Check advisory polish candidate boundaries.")
+    p.add_argument("chapter")
+    p.set_defaults(func=command_polish_check)
 
     p = sub.add_parser("accept-fact-card", help="Append one accepted fact card to the event ledger.")
     p.add_argument("chapter")

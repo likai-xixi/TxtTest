@@ -30,9 +30,25 @@ def run_command(command: list[str], *, audit_depth: int) -> subprocess.Completed
     return subprocess.run(command, cwd=ROOT, text=True, capture_output=True, encoding="utf-8", errors="replace", env=env)
 
 
-def classify(name: str, returncode: int, output: str, state: dict | None = None) -> str:
+def has_explicit_error(output: str) -> bool:
+    for line in output.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("ERROR:") or stripped.startswith("SMOKE FAILED:"):
+            return True
+    return "Traceback (most recent call last)" in output
+
+
+def classify(name: str, returncode: int, output: str, state: dict | None = None, *, mode: str = "project") -> str:
+    if mode == "template":
+        if returncode != 0 or has_explicit_error(output):
+            return "ERROR"
+        return "READY"
     if name == "status" and state is not None:
         return "NOT_READY" if state.get("blocker") else "READY"
+    if "status: WARNING" in output:
+        return "WARNING"
+    if "status: INFO" in output:
+        return "INFO"
     if "status: REHEARSAL_NOT_READY" in output or "status: NOT_READY" in output or "NOT_READY" in output:
         return "NOT_READY"
     if returncode == 0:
@@ -47,13 +63,13 @@ def step_summary(output: str, limit: int = 10) -> list[str]:
     return lines[:limit] + [f"... ({len(lines) - limit} more lines)"]
 
 
-def run_step(name: str, args: list[str], *, audit_depth: int, state: dict | None = None) -> StepResult:
+def run_step(name: str, args: list[str], *, audit_depth: int, state: dict | None = None, mode: str = "project") -> StepResult:
     command = [sys.executable, str(ROOT / "scripts" / "novel.py"), *args]
     if name == "self-test" and audit_depth > 0:
         return StepResult(name, command, 0, "READY", "SELF_TEST_SKIPPED_NESTED", "skipped nested self-test to avoid audit recursion")
     result = run_command(command, audit_depth=audit_depth)
     output = (result.stdout or "") + (result.stderr or "")
-    status = classify(name, result.returncode, output, state)
+    status = classify(name, result.returncode, output, state, mode=mode)
     code = f"{name.upper().replace('-', '_')}_{status}"
     return StepResult(name, command, result.returncode, status, code, output)
 
@@ -65,6 +81,12 @@ def step_defs_for(mode: str, chapter: str, gate: str) -> list[tuple[str, list[st
         ("core-freeze-check", ["core-freeze-check"]),
         ("brief-check", ["brief-check", chapter]),
         ("evidence", ["evidence", chapter]),
+        ("market-scan-check", ["market-scan-check", "--id", "latest"]),
+        ("commercial-idea-check", ["commercial-idea-check", "--id", "latest"]),
+        ("table-check", ["table-check"]),
+        ("similarity-risk-check", ["similarity-risk-check", chapter]),
+        ("fact-card-check", ["fact-card-check", chapter]),
+        ("polish-check", ["polish-check", chapter]),
         ("gate-rehearsal", ["gate-rehearsal", gate]),
         ("self-test", ["self-test"]),
         ("deepseek-preflight", ["deepseek-preflight", "--no-live"]),
@@ -87,6 +109,10 @@ def overall_status(steps: list[StepResult]) -> str:
         return "ERROR"
     if "NOT_READY" in statuses:
         return "NOT_READY"
+    if "WARNING" in statuses:
+        return "WARNING"
+    if "INFO" in statuses:
+        return "INFO"
     return "READY"
 
 
@@ -111,6 +137,14 @@ def render_human_report(state: dict, steps: list[StepResult], chapter: str, gate
         f"- human_action: {state.get('human_action') or state.get('recommended_command') or 'none'}",
         f"- codex_action: {state.get('codex_action') or state.get('next_prompt') or 'none'}",
         f"- risk_flags: {', '.join(state.get('risk_flags', [])) or 'none'}",
+        "",
+        "## Advisory Signals",
+        "",
+        f"- commercial_positioning: {state.get('advisory', {}).get('commercial_positioning', 'unknown')}",
+        f"- market_scan: {state.get('advisory', {}).get('market_scan', 'unknown')}",
+        f"- chapter_structure: {state.get('advisory', {}).get('chapter_structure', 'unknown')}",
+        f"- end_state_change: {state.get('advisory', {}).get('end_state_change', 'unknown')}",
+        f"- polish: {state.get('advisory', {}).get('polish', 'unknown')}",
         "",
         "## Checks",
         "",
@@ -157,6 +191,7 @@ def json_report(state: dict, steps: list[StepResult], chapter: str, gate: str, m
         "gate": gate,
         "current_blocker": state.get("blocker"),
         "next_prompt": state.get("next_prompt") or state.get("recommended_command"),
+        "advisory": state.get("advisory", {}),
         "steps": [
             {
                 "name": step.name,
@@ -191,7 +226,7 @@ def main() -> int:
     gate = args.gate.upper()
     audit_depth = int(os.environ.get("NOVEL_AUDIT_DEPTH", "0") or "0")
     steps = [
-        run_step(name, command_args, audit_depth=audit_depth, state=state if name == "status" else None)
+        run_step(name, command_args, audit_depth=audit_depth, state=state if name == "status" else None, mode=args.mode)
         for name, command_args in step_defs_for(args.mode, chapter, gate)
     ]
 
@@ -205,7 +240,7 @@ def main() -> int:
         print(json.dumps(json_report(state, steps, chapter, gate, args.mode), ensure_ascii=False, indent=2))
     else:
         print(human_report, end="")
-    return 0 if overall_status(steps) == "READY" else 1
+    return 0 if overall_status(steps) in {"READY", "WARNING", "INFO"} else 1
 
 
 if __name__ == "__main__":

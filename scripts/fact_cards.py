@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -9,6 +10,10 @@ from typing import Any
 from _common import ROOT, chapter_parts, now_iso, read_text, write_json, write_text
 from brief_contract import LEDGER_EVENT_TYPES, PROGRESS_CONTRACT_SECTIONS, progress_value
 from element_context import markdown_sections, section_body
+
+
+def sha256(path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def first_quote(text: str) -> str:
@@ -98,6 +103,10 @@ def evaluate(chapter: str) -> dict[str, Any]:
         "chapter": chapter,
         "generated_at": now_iso(),
         "source_chapter": chapter_path.relative_to(ROOT).as_posix(),
+        "source_hashes": {
+            "official_chapter": sha256(chapter_path),
+            "official_brief": sha256(ROOT / "outline" / "chapter_briefs" / f"{chapter}.md"),
+        },
         "cards": cards[:5],
     }
 

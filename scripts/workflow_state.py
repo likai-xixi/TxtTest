@@ -465,6 +465,130 @@ def chapter_paths(chapter: str) -> dict[str, Path]:
     }
 
 
+def section(text: str, heading: str) -> str:
+    marker = f"## {heading}"
+    if marker not in text:
+        return ""
+    tail = text.split(marker, 1)[1]
+    if "\n## " in tail:
+        tail = tail.split("\n## ", 1)[0]
+    return tail.strip()
+
+
+def labeled_value(body: str, key: str) -> str:
+    for raw in body.splitlines():
+        line = raw.strip().lstrip("-*+ ").strip()
+        if not line:
+            continue
+        if ":" in line:
+            label, value = line.split(":", 1)
+        elif "：" in line:
+            label, value = line.split("：", 1)
+        else:
+            continue
+        if label.strip() == key:
+            return value.strip()
+    return ""
+
+
+def _json_or_none(path: Path) -> dict[str, Any] | None:
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(read_text(path))
+    except json.JSONDecodeError:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def chapter_landing_uses_polish(chapter: str) -> bool:
+    landing = _json_or_none(ROOT / "reviews" / chapter / "chapter_landing.json") or {}
+    for item in landing.get("inputs", []) or []:
+        if isinstance(item, dict) and str(item.get("path", "")).startswith("drafts/polish/"):
+            return True
+    return False
+
+
+def thread_has_ledger_entry(chapter: str, thread_id: str) -> bool:
+    if not thread_id:
+        return False
+    ledger = ROOT / "state" / "event_ledger.jsonl"
+    if not ledger.exists():
+        return False
+    for line in ledger.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if event.get("chapter") != chapter:
+            continue
+        if event.get("type") not in {"thread_opened", "thread_advanced", "thread_paid_off"}:
+            continue
+        values = {str(event.get("thread_id", "")), str(event.get("fact", ""))}
+        values |= {str(item) for item in event.get("tags", []) if str(item).strip()}
+        values |= {str(item) for item in event.get("entities", []) if str(item).strip()}
+        if thread_id in values or any(thread_id in value for value in values):
+            return True
+    return False
+
+
+def advisory_snapshot(chapter: str, idea_id: str | None) -> dict[str, str]:
+    lab = idea_lab_root() / idea_id if idea_id else None
+    commercial = "缺"
+    market = "缺"
+    if lab is not None:
+        commercial_data = _json_or_none(lab / "commercial_idea.json")
+        if commercial_data:
+            risk_text = json.dumps(commercial_data, ensure_ascii=False)
+            commercial = "有风险" if "HIGH_RISK" in risk_text or "BLOCKED" in risk_text else "有"
+        market_data = _json_or_none(lab / "market_scan.json")
+        if market_data:
+            risk = str(market_data.get("copyright_risk", "")).upper()
+            market = "高相似风险" if "HIGH" in risk or "BLOCKED" in risk else "有"
+
+    brief = read_text(ROOT / "outline" / "chapter_briefs" / f"{chapter}.md")
+    title = section(brief, "章节标题")
+    intro = section(brief, "章节简介")
+    end_state = section(brief, "章末状态变化")
+    if not brief:
+        structure = "缺"
+    elif any(marker in title + intro for marker in PLACEHOLDERS):
+        structure = "冲突"
+    elif title and intro:
+        intro_len = len("".join(intro.split()))
+        structure = "完整" if 80 <= intro_len <= 180 else "弱"
+    else:
+        structure = "弱"
+
+    if not end_state:
+        end_state_status = "弱"
+    else:
+        thread_id = labeled_value(end_state, "affected_thread")
+        if thread_id and ("P0" in end_state or "P1" in end_state) and not thread_has_ledger_entry(chapter, thread_id):
+            end_state_status = "未落账"
+        elif any(marker in end_state for marker in PLACEHOLDERS):
+            end_state_status = "弱"
+        else:
+            end_state_status = "有"
+
+    if chapter_landing_uses_polish(chapter):
+        polish = "已采用"
+    elif (ROOT / "drafts" / "polish" / f"{chapter}.md").exists():
+        polish = "候选"
+    else:
+        polish = "无"
+
+    return {
+        "commercial_positioning": commercial,
+        "market_scan": market,
+        "chapter_structure": structure,
+        "end_state_change": end_state_status,
+        "polish": polish,
+    }
+
+
 def gate_prompt() -> str | None:
     if shipped_through(125) and gate_decision("e") != "continue":
         return "进入 Gate E，评估是否进入 300 万字模式，并给我 continue / pause / kill / rework 裁决建议。"
@@ -617,6 +741,7 @@ def dashboard(chapter: str | None = None) -> dict[str, Any]:
     if paths["context_quality"].exists():
         evidence_paths.append(rel(paths["context_quality"]))
     idea_id = idea.get("idea_id")
+    advisory = advisory_snapshot(chapter, idea_id)
     if idea_id:
         evidence_paths.extend(
             [
@@ -625,6 +750,12 @@ def dashboard(chapter: str | None = None) -> dict[str, Any]:
                 f"state/idea_lab/{idea_id}/core_setting_freeze.json",
             ]
         )
+        for path in (
+            f"state/idea_lab/{idea_id}/commercial_idea.json",
+            f"state/idea_lab/{idea_id}/market_scan.json",
+        ):
+            if (ROOT / path).exists():
+                evidence_paths.append(path)
 
     return {
         "root": str(ROOT),
@@ -646,6 +777,7 @@ def dashboard(chapter: str | None = None) -> dict[str, Any]:
         "reads": [rel(paths["brief"]), rel(paths["context_pack"])],
         "writes": writes,
         "risk_flags": risk_flags,
+        "advisory": advisory,
         "evidence_paths": evidence_paths,
         "freeze_ready": not freeze_errors,
         "freeze_errors": freeze_errors,

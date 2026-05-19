@@ -71,6 +71,11 @@ REQUIRED_ELEMENT_SECTIONS = (
     ALLOWED_NEW_ELEMENT_SECTIONS,
     PROHIBITED_INSTANT_SOLUTION_SECTIONS,
 )
+TITLE_SECTIONS = ("章节标题", "Chapter Title")
+INTRO_SECTIONS = ("章节简介", "Chapter Intro")
+STRUCTURE_HINT_SECTIONS = ("本章结构提示", "Structure Hint")
+END_STATE_CHANGE_SECTIONS = ("章末状态变化", "End State Change")
+END_STATE_CHANGE_TYPES = {"关系改变", "代价落地", "认知更新", "选择完成", "风险显形", "旧问题变形", "新线索出现", "后果承接"}
 
 
 def check_pacing_sections(parsed: dict[str, str]) -> list[str]:
@@ -323,7 +328,62 @@ def check_brief(path: Path) -> list[str]:
             failures.append(f"unknown ability id in brief: {item}")
     if any(marker in text for marker in PLACEHOLDER_MARKERS):
         failures.append("brief still contains placeholder text")
+    failures.extend(check_catalog_sections(parsed))
     return failures
+
+
+def labeled_value(body: str, key: str) -> str:
+    for raw in body.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        line = line.lstrip("-*+ ").strip()
+        if ":" in line:
+            label, value = line.split(":", 1)
+        elif "：" in line:
+            label, value = line.split("：", 1)
+        else:
+            continue
+        if label.strip() == key:
+            return value.strip()
+    return ""
+
+
+def check_catalog_sections(parsed: dict[str, str]) -> list[str]:
+    failures: list[str] = []
+    intro = section_body(parsed, INTRO_SECTIONS)
+    if intro and has_placeholder(intro):
+        failures.append("章节简介 must not contain TODO or placeholder text")
+    end_state = section_body(parsed, END_STATE_CHANGE_SECTIONS)
+    if end_state and has_placeholder(end_state):
+        failures.append("章末状态变化 must not contain TODO or placeholder text")
+    return failures
+
+
+def brief_warnings(path: Path) -> list[str]:
+    if not path.exists():
+        return []
+    parsed = markdown_sections(read_text(path))
+    warnings: list[str] = []
+    title = section_body(parsed, TITLE_SECTIONS).strip()
+    intro = section_body(parsed, INTRO_SECTIONS).strip()
+    end_state = section_body(parsed, END_STATE_CHANGE_SECTIONS).strip()
+    if not title:
+        warnings.append("章节标题 is missing or empty")
+    compact_intro_len = len("".join(intro.split()))
+    if not intro:
+        warnings.append("章节简介 is missing or empty")
+    elif compact_intro_len < 80 or compact_intro_len > 180:
+        warnings.append("章节简介 should be 80-180 non-space characters")
+    if missing_section(parsed, STRUCTURE_HINT_SECTIONS):
+        warnings.append("本章结构提示 is missing")
+    if not end_state:
+        warnings.append("章末状态变化 is missing")
+    else:
+        change_type = labeled_value(end_state, "type")
+        if change_type and change_type not in END_STATE_CHANGE_TYPES:
+            warnings.append(f"章末状态变化 type is advisory but unknown: {change_type}")
+    return warnings
 
 
 def main() -> int:
@@ -339,6 +399,7 @@ def main() -> int:
 
     path = ROOT / "outline" / "chapter_briefs" / f"{args.chapter}.md"
     failures = check_brief(path)
+    warnings = brief_warnings(path)
     print(f"# Brief Check: {args.chapter}")
     print()
     if failures:
@@ -348,6 +409,12 @@ def main() -> int:
             print(f"- {failure}")
         return 1
     print("status: READY")
+    if warnings:
+        print()
+        print("## Warnings")
+        print()
+        for warning in warnings:
+            print(f"- {warning}")
     return 0
 
 

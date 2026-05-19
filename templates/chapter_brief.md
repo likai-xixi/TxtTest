@@ -1,5 +1,13 @@
 # {chapter} Brief
 
+## 章节标题
+
+TODO：给出工作标题；标题只做总编辅助，不作为硬门禁。
+
+## 章节简介
+
+TODO：80-180 字，说明本章读者可感知的状态变化；不得把未发生剧情写成已发生事实。
+
 ## 本章功能
 
 待定。
@@ -53,6 +61,13 @@ TODO：推进 / 缓冲 / 兑现 / 铺垫 / 转场 / 蓄压 / 爆发，可选 1-2
 
 TODO：说明为什么本章不会空转，也不会为了过检强行加速。
 
+## 本章结构提示
+
+- 起：
+- 承：
+- 转：
+- 合：
+
 ## 本章进展契约
 
 - 进展类型：TODO：setup / reveal / decision / thread_advance / payoff / digest / cost_payment / transition
@@ -93,6 +108,13 @@ TODO：说明为什么本章不会空转，也不会为了过检强行加速。
 ## 章末问题
 
 待定。
+
+## 章末状态变化
+
+- type：TODO：关系改变 / 代价落地 / 认知更新 / 选择完成 / 风险显形 / 旧问题变形 / 新线索出现 / 后果承接
+- affected_thread：TODO：若关联 P0/P1 thread，Ship evidence 必须看到 event ledger 落账
+- reader_question：TODO：读者继续阅读的具体问题
+- next_required_continuity：TODO：下一章必须承接的状态
 
 ## 本章使用设定
 

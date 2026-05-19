@@ -23,6 +23,7 @@ from brief_contract import (
 from context_governance import context_manifest_path, context_quality_path
 from element_context import markdown_sections, missing_section, section_body
 from element_usage import evaluate as evaluate_element_usage
+from fact_cards import evaluate as evaluate_fact_cards
 
 
 PLACEHOLDERS = (
@@ -52,8 +53,10 @@ AUXILIARY_REVIEWS = (
     "web_satisfaction.md",
     "retention_risk.md",
     "originality.md",
+    "similarity_risk.md",
 )
 ALLOWED_AUXILIARY_STATUS = {"CLEAR", "ACCEPTED_BY_HUMAN"}
+END_STATE_CHANGE_SECTIONS = ("章末状态变化", "End State Change")
 
 
 def has_placeholder(path: Path) -> bool:
@@ -430,6 +433,106 @@ def load_ledger_events() -> list[dict]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
+def normalized_cards(report: dict) -> list[dict]:
+    cards = report.get("cards", [])
+    if not isinstance(cards, list):
+        return []
+    normalized = []
+    for item in cards:
+        if not isinstance(item, dict):
+            continue
+        normalized.append(
+            {
+                "id": str(item.get("id", "")),
+                "type": str(item.get("type", "")),
+                "importance": str(item.get("importance", "")),
+                "fact": str(item.get("fact", "")),
+                "evidence_quote": str(item.get("evidence_quote", "")),
+                "consequence": str(item.get("consequence", "")),
+                "tags": [str(tag) for tag in item.get("tags", []) if str(tag).strip()],
+            }
+        )
+    return normalized
+
+
+def validate_fact_cards(chapter: str) -> list[str]:
+    path = ROOT / "reviews" / chapter / "fact_cards.json"
+    if not path.exists():
+        return [f"{chapter}: missing fact card evidence reviews/{chapter}/fact_cards.json"]
+    recorded = read_json(path, {})
+    failures: list[str] = []
+    try:
+        current = evaluate_fact_cards(chapter)
+    except (FileNotFoundError, ValueError) as exc:
+        return [f"{chapter}: fact cards cannot be evaluated: {exc}"]
+
+    if recorded.get("chapter") != chapter:
+        failures.append(f"{chapter}: fact card report chapter mismatch")
+    if recorded.get("source_hashes") != current.get("source_hashes"):
+        failures.append(f"{chapter}: fact card report is stale; regenerate with `python scripts/novel.py fact-cards {chapter} --write`")
+    if normalized_cards(recorded) != normalized_cards(current):
+        failures.append(f"{chapter}: fact card report cards are stale or malformed")
+
+    accepted_card_ids: set[str] = set()
+    card_by_id = {card["id"]: card for card in normalized_cards(current)}
+    for event in load_ledger_events():
+        if event.get("chapter") != chapter or event.get("verified_by") != "human":
+            continue
+        tags = {str(tag) for tag in event.get("tags", []) if str(tag).strip()}
+        for card_id, card in card_by_id.items():
+            if card_id in tags and event.get("type") == card.get("type"):
+                accepted_card_ids.add(card_id)
+    if not accepted_card_ids:
+        failures.append(
+            f"{chapter}: Ship requires at least one accepted fact card in state/event_ledger.jsonl "
+            "(use `python scripts/novel.py accept-fact-card ...`)"
+        )
+    return failures
+
+
+def labeled_value(body: str, key: str) -> str:
+    for raw in body.splitlines():
+        line = raw.strip().lstrip("-*+ ").strip()
+        if not line:
+            continue
+        if ":" in line:
+            label, value = line.split(":", 1)
+        elif "：" in line:
+            label, value = line.split("：", 1)
+        else:
+            continue
+        if label.strip() == key:
+            return value.strip()
+    return ""
+
+
+def validate_end_state_change(chapter: str) -> list[str]:
+    brief_path = ROOT / "outline" / "chapter_briefs" / f"{chapter}.md"
+    sections = markdown_sections(read_text(brief_path))
+    body = section_body(sections, END_STATE_CHANGE_SECTIONS)
+    if not body:
+        return []
+    affected = labeled_value(body, "affected_thread")
+    if not affected or "P0" not in body and "P1" not in body:
+        return []
+    events = [
+        event
+        for event in load_ledger_events()
+        if event.get("chapter") == chapter
+        and event.get("type") in {"thread_opened", "thread_advanced", "thread_paid_off"}
+    ]
+    for event in events:
+        values = {
+            str(event.get("thread_id", "")),
+            str(event.get("fact", "")),
+            *(str(item) for item in event.get("tags", []) if str(item).strip()),
+            *(str(item) for item in event.get("entities", []) if str(item).strip()),
+        }
+        if affected in values or any(affected and affected in value for value in values):
+            return []
+    return [f"{chapter}: 章末状态变化 declares P0/P1 thread {affected!r} but event ledger has no thread ledger entry"]
+
+
 def validate_progress_contract(chapter: str) -> list[str]:
     brief_path = ROOT / "outline" / "chapter_briefs" / f"{chapter}.md"
     sections = markdown_sections(read_text(brief_path))
@@ -497,6 +600,8 @@ def chapter_evidence_failures(chapter: str) -> list[str]:
     failures.extend(validate_element_usage(chapter))
     failures.extend(validate_deepseek_direct_adoption(chapter, selection, landing))
     failures.extend(validate_progress_contract(chapter))
+    failures.extend(validate_fact_cards(chapter))
+    failures.extend(validate_end_state_change(chapter))
 
     required_reviews = [
         "codex_integrated_review.md",

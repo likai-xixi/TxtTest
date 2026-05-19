@@ -37,6 +37,10 @@ python scripts/novel.py workflow-smoke
 python scripts/novel.py audit
 python scripts/novel.py audit --write-report
 python scripts/novel.py ci
+python scripts/novel.py idea-form --commercial --id idea_xxx
+python scripts/novel.py market-scan --id idea_xxx
+python scripts/novel.py table-build
+python scripts/novel.py polish-start v01_c001
 ```
 
 `desk` 是总编台，优先看当前阶段、唯一卡点、推荐口令、风险标记和证据路径。`audit` 是总编全量体检，会完整跑业务门禁并汇总当前卡点；`audit --write-report` 额外写 `state/audit/latest.md` 和时间戳报告，业务 NOT_READY 仍会返回非 0。`ci` 是本地模板 CI，只跑代码和流程回归，不因项目尚未开书而失败。`idea-status` 用于定盘前检查 DeepSeek、三类 agent、agent run 元数据、manifest 与 synthesis 是否齐。`brief-precheck` 是生成 brief 候选前的智能检查；`brief-diagnose` 只解释 `brief-check` 失败原因，不替代硬门禁。`pacing-dashboard` 是节奏和后果债务的人读视图，不新增门禁。`event-suggest` 只输出人类可确认的事件命令草案，不写事件账本。
