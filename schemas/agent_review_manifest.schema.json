@@ -10,7 +10,45 @@
     "inputs": { "type": "array", "items": { "type": "object" } },
     "reviews": {
       "type": "object",
-      "required": ["product_founder", "technical_lead", "qa_release"]
+      "required": ["product_founder", "technical_lead", "qa_release"],
+      "properties": {
+        "product_founder": {
+          "type": "object",
+          "required": ["role", "agent_id", "path", "sha256", "completed_at", "agent_run"],
+          "properties": {
+            "role": { "type": "string" },
+            "agent_id": { "type": "string", "minLength": 1 },
+            "path": { "type": "string" },
+            "sha256": { "type": "string" },
+            "completed_at": { "type": "string" },
+            "agent_run": { "type": "object" }
+          }
+        },
+        "technical_lead": {
+          "type": "object",
+          "required": ["role", "agent_id", "path", "sha256", "completed_at", "agent_run"],
+          "properties": {
+            "role": { "type": "string" },
+            "agent_id": { "type": "string", "minLength": 1 },
+            "path": { "type": "string" },
+            "sha256": { "type": "string" },
+            "completed_at": { "type": "string" },
+            "agent_run": { "type": "object" }
+          }
+        },
+        "qa_release": {
+          "type": "object",
+          "required": ["role", "agent_id", "path", "sha256", "completed_at", "agent_run"],
+          "properties": {
+            "role": { "type": "string" },
+            "agent_id": { "type": "string", "minLength": 1 },
+            "path": { "type": "string" },
+            "sha256": { "type": "string" },
+            "completed_at": { "type": "string" },
+            "agent_run": { "type": "object" }
+          }
+        }
+      }
     }
   }
 }

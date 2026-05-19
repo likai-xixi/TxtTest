@@ -598,6 +598,15 @@ def command_idea_agent_manifest(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_idea_agent_run(args: argparse.Namespace) -> int:
+    ensure_no_open_locks()
+    script_args = ["--id", args.id, "--role", args.role, "--agent-id", args.agent_id, "--output", args.output]
+    if args.completed_at:
+        script_args.extend(["--completed-at", args.completed_at])
+    run_script("record_agent_run.py", *script_args)
+    return 0
+
+
 def command_new_chapter(args: argparse.Namespace) -> int:
     script_args = ["--chapter", args.chapter]
     if args.force:
@@ -1106,6 +1115,22 @@ def command_self_test(_args: argparse.Namespace) -> int:
     return 0
 
 
+def command_ci(_args: argparse.Namespace) -> int:
+    run_script("ci.py")
+    return 0
+
+
+def command_audit(args: argparse.Namespace) -> int:
+    script_args: list[str] = []
+    if args.chapter:
+        script_args.extend(["--chapter", args.chapter])
+    if args.gate:
+        script_args.extend(["--gate", args.gate])
+    if args.json:
+        script_args.append("--json")
+    return run_script("audit.py", *script_args, check=False)
+
+
 def command_stop_record(args: argparse.Namespace) -> int:
     script_args = ["record", "--reason", args.reason]
     if args.chapter:
@@ -1371,6 +1396,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--id", required=True, type=validate_idea_id)
     p.add_argument("--completed-at", default=None)
     p.set_defaults(func=command_idea_agent_manifest)
+
+    p = sub.add_parser("idea-agent-run", help="Record one structured idea-lab agent run.")
+    p.add_argument("--id", required=True, type=validate_idea_id)
+    p.add_argument("--role", required=True, choices=["product_founder", "technical_lead", "qa_release"])
+    p.add_argument("--agent-id", required=True)
+    p.add_argument("--output", required=True)
+    p.add_argument("--completed-at", default=None)
+    p.set_defaults(func=command_idea_agent_run)
 
     p = sub.add_parser("new-chapter", help="Create chapter brief and review workspace.")
     p.add_argument("chapter")
@@ -1647,6 +1680,15 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("workflow-smoke", help="Run a no-live-API workflow smoke in a temporary copy.")
     p.add_argument("--keep-temp", action="store_true")
     p.set_defaults(func=command_workflow_smoke)
+
+    p = sub.add_parser("ci", help="Run local template CI checks.")
+    p.set_defaults(func=command_ci)
+
+    p = sub.add_parser("audit", help="Run a complete editor-readable project audit.")
+    p.add_argument("--chapter", default=None)
+    p.add_argument("--gate", default="A")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=command_audit)
 
     p = sub.add_parser("stop-record", help="Record an unresolved stop-rule lock.")
     p.add_argument("--chapter", default="")

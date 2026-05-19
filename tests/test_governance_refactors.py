@@ -141,6 +141,8 @@ class GovernanceRefactorTests(unittest.TestCase):
             manifest = json.loads((repo / f"{lab}/agent_review_manifest.json").read_text(encoding="utf-8"))
             self.assertEqual(manifest["idea_id"], idea)
             self.assertEqual(set(manifest["reviews"]), {"product_founder", "technical_lead", "qa_release"})
+            self.assertEqual(manifest["reviews"]["product_founder"]["agent_id"], "agent_product_founder")
+            self.assertIn("agent_run", manifest["reviews"]["technical_lead"])
 
 
 if __name__ == "__main__":

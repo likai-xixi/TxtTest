@@ -447,8 +447,49 @@ def write_ready_idea_lab(repo: Path, idea: str) -> str:
     write(repo, f"{lab}/technical_lead_review.md", f"# Technical Lead Review: {idea}\n\nKeep rules small for three chapters.\n")
     write(repo, f"{lab}/qa_release_review.md", f"# QA Release Review: {idea}\n\nGate A needs protagonist agency evidence.\n")
     write(repo, f"{lab}/codex_synthesis.md", IDEA_SYNTHESIS_READY.format(idea=idea))
+    write_agent_runs(repo, idea)
     write_agent_review_manifest(repo, idea)
     return lab
+
+
+def write_agent_runs(repo: Path, idea: str) -> None:
+    lab = f"state/idea_lab/{idea}"
+    input_paths = [
+        f"{lab}/original_idea.md",
+        f"{lab}/deepseek_idea.md",
+    ]
+    runs = {}
+    for role, name in [
+        ("product_founder", "product_founder_review.md"),
+        ("technical_lead", "technical_lead_review.md"),
+        ("qa_release", "qa_release_review.md"),
+    ]:
+        output = f"{lab}/{name}"
+        runs[role] = {
+            "role": role,
+            "agent_id": f"agent_{role}",
+            "input_files": [
+                {"path": path, "sha256": file_sha(repo, path)}
+                for path in input_paths
+            ],
+            "output_file": {"path": output, "sha256": file_sha(repo, output)},
+            "completed_at": "2026-01-01T00:00:00+00:00",
+        }
+    write(
+        repo,
+        f"{lab}/agent_runs.json",
+        json.dumps(
+            {
+                "schema_version": 1,
+                "idea_id": idea,
+                "updated_at": "2026-01-01T00:00:00+00:00",
+                "runs": runs,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+    )
 
 
 def write_agent_review_manifest(repo: Path, idea: str) -> None:
@@ -457,6 +498,7 @@ def write_agent_review_manifest(repo: Path, idea: str) -> None:
         f"{lab}/original_idea.md",
         f"{lab}/deepseek_idea.md",
     ]
+    runs = json.loads((repo / f"{lab}/agent_runs.json").read_text(encoding="utf-8"))["runs"]
     reviews = {}
     for role, name in [
         ("product_founder", "product_founder_review.md"),
@@ -466,9 +508,11 @@ def write_agent_review_manifest(repo: Path, idea: str) -> None:
         path = f"{lab}/{name}"
         reviews[role] = {
             "role": role,
+            "agent_id": runs[role]["agent_id"],
             "path": path,
             "sha256": file_sha(repo, path),
             "completed_at": "2026-01-01T00:00:00+00:00",
+            "agent_run": runs[role],
         }
     manifest = {
         "schema_version": 1,
@@ -542,6 +586,16 @@ def write_core_setting_freeze(repo: Path, idea: str = "idea_core") -> None:
         repo,
         f"{lab}/core_setting_freeze.md",
         "# Core Setting Freeze: idea_core\n\n## 世界观核心规则\n\nA worldview core.\n\n## 主角异常原因\n\nA anomaly cause.\n\n## 主角家属/亲密关系\n\nA family anchor.\n",
+    )
+    write(
+        repo,
+        "bible/rules.md",
+        "# Rules\n\nsource: core_setting_freeze\n\n## 核心异常 / 能力 / 技术是什么？\n\nA anomaly cause.\n\n## 能做什么？\n\nA worldview core.\n\n## 不能做什么？\n\nA hard limits.\n\n## 代价是什么？\n\nA family stakes.\n\n## 限制是什么？\n\nA first three constraints.\n\n## 禁止临时新增什么万能规则？\n\nA forbidden changes.\n",
+    )
+    write(
+        repo,
+        "bible/characters.yaml",
+        'characters:\n  - id: protagonist\n    name: "主角"\n    role: protagonist\n    anomaly_cause: "A anomaly cause."\n  - id: family_anchor\n    name: "主角家属/亲密关系"\n    role: family_or_intimate_anchor\n',
     )
     write(
         repo,
@@ -896,8 +950,11 @@ class WorkflowGuardTests(unittest.TestCase):
                 "idea",
                 "idea-form",
                 "idea-select",
+                "idea-agent-run",
                 "idea-agent-manifest",
                 "self-test",
+                "ci",
+                "audit",
                 "diff-scope",
                 "continuity",
                 "compare",
@@ -916,6 +973,37 @@ class WorkflowGuardTests(unittest.TestCase):
             evidence = run(repo, "scripts/novel.py", "evidence", "v01_c001")
             self.assertNotEqual(evidence.returncode, 0)
             self.assertIn("status: NOT_READY", evidence.stdout)
+
+    def test_audit_reports_not_ready_without_stopping_early(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            env = os.environ.copy()
+            env["DEEPSEEK_API_KEY"] = "test-key"
+            env["NOVEL_AUDIT_DEPTH"] = "1"
+
+            result = run_with_env(repo, ("scripts/novel.py", "audit", "--chapter", "v01_c001"), env)
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("# 总编审查报告", result.stdout)
+            self.assertIn("core-freeze-check: NOT_READY", result.stdout)
+            self.assertIn("brief-check: NOT_READY", result.stdout)
+            self.assertIn("next_prompt:", result.stdout)
+            self.assertIn("deepseek-preflight", result.stdout)
+
+    def test_local_ci_entrypoint_runs_template_checks(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            env = os.environ.copy()
+            env["NOVEL_CI_DEPTH"] = "1"
+
+            result = run_with_env(repo, ("scripts/novel.py", "ci"), env)
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("# compileall", result.stdout)
+            self.assertIn("# check", result.stdout)
+            self.assertIn("# self-test", result.stdout)
+            self.assertIn("# workflow-smoke", result.stdout)
+            self.assertIn("Local CI Summary", result.stdout)
 
     def test_go_blocks_before_core_setting_freeze(self) -> None:
         with copy_repo() as temp:
@@ -1184,12 +1272,79 @@ class WorkflowGuardTests(unittest.TestCase):
             self.assertTrue((repo / "state/idea_lab/selected.json").exists())
             self.assertIn("idea_lab_id: idea_test", (repo / "outline/premise.md").read_text(encoding="utf-8"))
             self.assertIn("开书前核心设定冻结", (repo / "outline/premise.md").read_text(encoding="utf-8"))
+            self.assertIn("source: core_setting_freeze", (repo / "bible/rules.md").read_text(encoding="utf-8"))
+            self.assertIn("A worldview core.", (repo / "bible/rules.md").read_text(encoding="utf-8"))
+            self.assertIn("family_anchor", (repo / "bible/characters.yaml").read_text(encoding="utf-8"))
+            self.assertNotIn("待定", (repo / "bible/rules.md").read_text(encoding="utf-8"))
             self.assertIn("不得直接视为 canon", (repo / "bible/open_questions.md").read_text(encoding="utf-8"))
             self.assertIn("Gate A", (repo / "outline/gate_a_3_chapters.md").read_text(encoding="utf-8"))
             self.assertIn("待定", (repo / "outline/chapter_briefs/v01_c001.md").read_text(encoding="utf-8"))
             self.assertEqual(canon_before, (repo / "bible/canon.md").read_text(encoding="utf-8"))
             self.assertEqual(ledger_before, (repo / "state/event_ledger.jsonl").read_text(encoding="utf-8"))
             self.assertFalse((repo / "chapters/v01/c001.md").exists())
+
+    def test_idea_agent_run_metadata_is_required_for_manifest(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            idea = "idea_agent_runs"
+            lab = write_ready_idea_lab(repo, idea)
+            (repo / f"{lab}/agent_runs.json").unlink()
+            (repo / f"{lab}/agent_review_manifest.json").unlink()
+
+            one_run = run(
+                repo,
+                "scripts/novel.py",
+                "idea-agent-run",
+                "--id",
+                idea,
+                "--role",
+                "product_founder",
+                "--agent-id",
+                "agent_pf_001",
+                "--output",
+                f"{lab}/product_founder_review.md",
+            )
+            self.assertEqual(one_run.returncode, 0, one_run.stdout + one_run.stderr)
+            partial_manifest = run(repo, "scripts/novel.py", "idea-agent-manifest", "--id", idea)
+            self.assertNotEqual(partial_manifest.returncode, 0)
+            self.assertIn("missing role technical_lead", partial_manifest.stderr)
+
+            for role, filename, agent_id in [
+                ("technical_lead", "technical_lead_review.md", "agent_tl_001"),
+                ("qa_release", "qa_release_review.md", "agent_qa_001"),
+            ]:
+                result = run(
+                    repo,
+                    "scripts/novel.py",
+                    "idea-agent-run",
+                    "--id",
+                    idea,
+                    "--role",
+                    role,
+                    "--agent-id",
+                    agent_id,
+                    "--output",
+                    f"{lab}/{filename}",
+                )
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+            manifest_result = run(repo, "scripts/novel.py", "idea-agent-manifest", "--id", idea)
+            self.assertEqual(manifest_result.returncode, 0, manifest_result.stdout + manifest_result.stderr)
+            manifest = json.loads((repo / f"{lab}/agent_review_manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["reviews"]["product_founder"]["agent_id"], "agent_pf_001")
+            self.assertEqual(manifest["reviews"]["qa_release"]["agent_run"]["agent_id"], "agent_qa_001")
+
+    def test_agent_manifest_rejects_changed_agent_output_hash(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            idea = "idea_agent_hash"
+            lab = write_ready_idea_lab(repo, idea)
+            write(repo, f"{lab}/technical_lead_review.md", f"# Technical Lead Review: {idea}\n\nChanged after run.\n")
+
+            result = run(repo, "scripts/novel.py", "idea-agent-manifest", "--id", idea)
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("technical_lead output hash mismatch", result.stderr)
 
     def test_idea_select_rejects_placeholder_core_setting_field(self) -> None:
         with copy_repo() as temp:
@@ -1842,6 +1997,7 @@ print("OK: stub deepseek idea")
         with copy_repo() as temp:
             repo = temp
             chapter_text = "DeepSeek candidate copied exactly.\n"
+            write(repo, "bible/rules.md", "# Rules\n\nsource: test\n\n## 核心异常 / 能力 / 技术是什么？\n\nA anomaly cause.\n")
             write(repo, "state/context_pack/v01_c001.md", "context\n")
             write(repo, "outline/chapter_briefs/v01_c001.md", "brief " + ("A" * 320) + "\n")
             write(repo, "chapters/v01/c001.md", chapter_text)
@@ -1880,6 +2036,7 @@ print("OK: stub deepseek idea")
         with copy_repo() as temp:
             repo = temp
             chapter_text = "DeepSeek candidate copied exactly.\n"
+            write(repo, "bible/rules.md", "# Rules\n\nsource: test\n\n## 核心异常 / 能力 / 技术是什么？\n\nA anomaly cause.\n")
             write(repo, "state/context_pack/v01_c001.md", "context\n")
             write(repo, "outline/chapter_briefs/v01_c001.md", "brief " + ("A" * 320) + "\n")
             write(repo, "chapters/v01/c001.md", chapter_text)
@@ -1915,6 +2072,7 @@ print("OK: stub deepseek idea")
         with copy_repo() as temp:
             repo = temp
             chapter_text = "DeepSeek candidate copied exactly with a concrete protagonist choice.\n"
+            write(repo, "bible/rules.md", "# Rules\n\nsource: test\n\n## 核心异常 / 能力 / 技术是什么？\n\nA anomaly cause.\n")
             write(repo, "state/context_pack/v01_c001.md", "context\n")
             write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF.format(chapter="v01_c001"))
             write(
@@ -2390,6 +2548,40 @@ print("OK: stub deepseek idea")
             self.assertEqual(build.returncode, 0, build.stdout + build.stderr)
             self.assertNotEqual(quality.returncode, 0)
             self.assertIn("allow-truncated", quality.stdout)
+
+    def test_context_quality_blocks_placeholder_in_critical_rules_source(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_core_setting_freeze(repo)
+            write(repo, "bible/rules.md", "# Rules\n\n## 核心异常 / 能力 / 技术是什么？\n\n待定。\n")
+            write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF.format(chapter="v01_c001"))
+            write(repo, "state/context_pack/v01_c001.md", "# Context Pack: v01_c001\n\nCore Setting Freeze\n\n规则：待定\n")
+            write_context_quality(repo, "v01_c001")
+
+            result = run(repo, "scripts/novel.py", "context-quality", "v01_c001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("critical context source contains placeholder text: bible/rules.md", result.stdout)
+            quality = json.loads((repo / "state/derived/context_quality/v01_c001.json").read_text(encoding="utf-8"))
+            self.assertEqual(quality["status"], "NOT_READY")
+
+    def test_context_quality_warns_for_style_placeholder_without_blocking(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_core_setting_freeze(repo)
+            write(repo, "bible/rules.md", "# Rules\n\n## 核心异常 / 能力 / 技术是什么？\n\nA anomaly cause.\n")
+            write(repo, "bible/style_guide.md", "# Style Guide\n\n## 试点期风格目标\n\n待定。\n")
+            write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF.format(chapter="v01_c001"))
+            write(repo, "state/context_pack/v01_c001.md", "# Context Pack: v01_c001\n\nCore Setting Freeze\n\nStyle Guide 待定\n")
+            write_context_quality(repo, "v01_c001")
+
+            result = run(repo, "scripts/novel.py", "context-quality", "v01_c001")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("context source contains placeholder text: bible/style_guide.md", result.stdout)
+            quality = json.loads((repo / "state/derived/context_quality/v01_c001.json").read_text(encoding="utf-8"))
+            self.assertEqual(quality["status"], "READY")
+            self.assertTrue(quality["warnings"])
 
     def test_context_pack_includes_selected_object_and_ability_entries(self) -> None:
         with copy_repo() as temp:

@@ -165,6 +165,53 @@ def validate_manifest_hash(path: Path, expected: object, label: str) -> list[str
     return []
 
 
+def validate_agent_run(idea_id: str, lab: Path, role: str, filename: str, item: dict) -> list[str]:
+    run = item.get("agent_run")
+    if not isinstance(run, dict):
+        return [f"agent_review_manifest.json {role} missing agent_run"]
+    errors: list[str] = []
+    if run.get("role") != role:
+        errors.append(f"agent_review_manifest.json {role} agent_run role mismatch")
+    if run.get("agent_id") != item.get("agent_id"):
+        errors.append(f"agent_review_manifest.json {role} agent_run agent_id mismatch")
+    if not parse_iso_datetime(run.get("completed_at")):
+        errors.append(f"agent_review_manifest.json {role} agent_run missing valid completed_at")
+
+    expected_inputs = {
+        (lab / "original_idea.md").relative_to(ROOT).as_posix(): lab / "original_idea.md",
+        (lab / "deepseek_idea.md").relative_to(ROOT).as_posix(): lab / "deepseek_idea.md",
+    }
+    input_files = run.get("input_files")
+    if not isinstance(input_files, list):
+        errors.append(f"agent_review_manifest.json {role} agent_run input_files must be a list")
+        input_files = []
+    input_by_path = {
+        str(input_item.get("path")): input_item
+        for input_item in input_files
+        if isinstance(input_item, dict)
+    }
+    extra = sorted(set(input_by_path) - set(expected_inputs))
+    if extra:
+        errors.append(f"agent_review_manifest.json {role} agent_run has disallowed inputs: {', '.join(extra)}")
+    for rel_path, path in expected_inputs.items():
+        input_item = input_by_path.get(rel_path)
+        if not input_item:
+            errors.append(f"agent_review_manifest.json {role} agent_run missing input {rel_path}")
+            continue
+        errors.extend(validate_manifest_hash(path, input_item.get("sha256"), f"{role} agent_run input {rel_path}"))
+
+    output = run.get("output_file")
+    expected_output = lab / filename
+    expected_output_rel = expected_output.relative_to(ROOT).as_posix()
+    if not isinstance(output, dict):
+        errors.append(f"agent_review_manifest.json {role} agent_run missing output_file")
+    else:
+        if output.get("path") != expected_output_rel:
+            errors.append(f"agent_review_manifest.json {role} agent_run output_file path must be {expected_output_rel}")
+        errors.extend(validate_manifest_hash(expected_output, output.get("sha256"), f"{role} agent_run output"))
+    return errors
+
+
 def validate_agent_review_manifest(idea_id: str, lab: Path) -> list[str]:
     path = lab / AGENT_REVIEW_MANIFEST
     if not path.exists():
@@ -209,12 +256,15 @@ def validate_agent_review_manifest(idea_id: str, lab: Path) -> list[str]:
             continue
         if item.get("role", role) != role:
             errors.append(f"agent_review_manifest.json role mismatch for {role}")
+        if not str(item.get("agent_id", "")).strip():
+            errors.append(f"agent_review_manifest.json {role} missing agent_id")
         expected_path = (lab / filename).relative_to(ROOT).as_posix()
         if item.get("path") != expected_path:
             errors.append(f"agent_review_manifest.json {role} path must be {expected_path}")
         if not parse_iso_datetime(item.get("completed_at")):
             errors.append(f"agent_review_manifest.json {role} missing valid completed_at")
         errors.extend(validate_manifest_hash(lab / filename, item.get("sha256"), f"{role} review"))
+        errors.extend(validate_agent_run(idea_id, lab, role, filename, item))
     return errors
 
 
@@ -321,6 +371,12 @@ def require_ready_lab(idea_id: str) -> tuple[Path, dict[str, str]]:
 
 def build_premise(idea_id: str, args: argparse.Namespace, contents: dict[str, str]) -> str:
     fields = core_fields(args, contents)
+    source = freeze_source_for_choice(args, contents)
+    hook = field_value(source, "一句话卖点") or f"见 {args.choice} 方向开书实验；由前三章 brief 继续收束。"
+    protagonist = field_value(source, "主角欲望") or "主角具体身份由第一章 brief 固定；欲望边界遵守核心设定冻结。"
+    anomaly = field_value(source, "世界异常") or fields["worldview_core"]
+    conflict = field_value(source, "核心冲突") or "核心冲突由冻结规则、硬边界与主角异常原因共同限定。"
+    validation = field_value(source, "前三章验证点") or fields["first_three_chapter_constraints"]
     return f"""# Premise
 
 idea_lab_id: {idea_id}
@@ -329,27 +385,27 @@ selected_at: {now_iso()}
 
 ## 一句话卖点
 
-待人类确认：根据 `state/idea_lab/{idea_id}/codex_synthesis.md` 中的 {args.choice} 方向整理。
+{hook}
 
 ## 主角
 
-待人类确认。
+{protagonist}
 
 ## 主角想要什么
 
-待人类确认。
+{field_value(source, "主角欲望") or "由第一章 brief 转化为章内可行动、可失败的目标。"}
 
 ## 世界最大异常
 
-待人类确认。
+{anomaly}
 
 ## 核心冲突
 
-待人类确认。
+{conflict}
 
 ## 前三章验证目标
 
-待人类确认。
+{validation}
 
 ## 开书前核心设定冻结
 
@@ -375,6 +431,75 @@ selected_at: {now_iso()}
 ## Codex Synthesis 摘要
 
 {contents["codex_synthesis.md"].strip()}
+"""
+
+
+def build_rules_seed(idea_id: str, args: argparse.Namespace, fields: dict[str, str]) -> str:
+    return f"""# Rules
+
+idea_lab_id: {idea_id}
+selected_direction: {args.choice}
+source: core_setting_freeze
+
+本文件是从开书前核心设定冻结同步的最小可写规则种子，不是 canon。正文出现并由人类确认后，事实才可进入 `bible/canon.md`。
+
+## 核心异常 / 能力 / 技术是什么？
+
+{fields["protagonist_anomaly_cause"]}
+
+## 能做什么？
+
+只能展示与以下世界观核心规则一致的异常、能力、技术或制度压力：{fields["worldview_core"]}
+
+## 不能做什么？
+
+{fields["worldview_hard_limits"]}
+
+## 代价是什么？
+
+{fields["family_stakes"]}
+
+## 限制是什么？
+
+{fields["first_three_chapter_constraints"]}
+
+## 禁止临时新增什么万能规则？
+
+{fields["forbidden_changes"]}
+
+## 仍可开放的问题
+
+{fields["open_questions_allowed"]}
+"""
+
+
+def yaml_quote(value: str) -> str:
+    return json.dumps(value, ensure_ascii=False)
+
+
+def build_characters_seed(idea_id: str, args: argparse.Namespace, fields: dict[str, str]) -> str:
+    return f"""characters:
+  - id: protagonist
+    name: {yaml_quote("主角")}
+    role: protagonist
+    idea_lab_id: {yaml_quote(idea_id)}
+    selected_direction: {yaml_quote(args.choice)}
+    anomaly_cause: {yaml_quote(fields["protagonist_anomaly_cause"])}
+    current_state: {yaml_quote("前三章试点期由章节 brief 和正文证据逐步确认。")}
+    relationships:
+      - family_anchor
+    forbidden_changes:
+      - {yaml_quote(fields["forbidden_changes"])}
+      - {yaml_quote("AI 不得自动决定主角命运；必须由人类总编裁决。")}
+  - id: family_anchor
+    name: {yaml_quote("主角家属/亲密关系")}
+    role: family_or_intimate_anchor
+    idea_lab_id: {yaml_quote(idea_id)}
+    relationship_to_protagonist: {yaml_quote(fields["protagonist_family"])}
+    story_function_and_risk: {yaml_quote(fields["family_stakes"])}
+    current_state: {yaml_quote("作为前三章试点的情感与风险锚点；具体出场由 brief 授权。")}
+    forbidden_changes:
+      - {yaml_quote("不得在正文证据和人类裁决前决定其最终命运。")}
 """
 
 
@@ -687,7 +812,10 @@ def main() -> int:
         )
         + "\n"
     )
+    fields = freeze["fields"]
     premise = build_premise(args.id, args, contents)
+    rules_seed = build_rules_seed(args.id, args, fields)
+    characters_seed = build_characters_seed(args.id, args, fields)
     open_questions = build_open_questions(args.id, args, contents)
     gate_a = build_gate_a(args.id, args)
     c001_brief = build_c001_brief(args.id, args)
@@ -698,6 +826,8 @@ def main() -> int:
     write_text(lab / FREEZE_MD, freeze_md)
     write_text(ROOT / "state" / "idea_lab" / "selected.json", selected_pointer)
     write_text(ROOT / "outline" / "premise.md", premise)
+    write_text(ROOT / "bible" / "rules.md", rules_seed)
+    write_text(ROOT / "bible" / "characters.yaml", characters_seed)
     write_text(ROOT / "bible" / "open_questions.md", open_questions)
     write_text(ROOT / "outline" / "gate_a_3_chapters.md", gate_a)
     write_text(ROOT / "outline" / "chapter_briefs" / "v01_c001.md", c001_brief)

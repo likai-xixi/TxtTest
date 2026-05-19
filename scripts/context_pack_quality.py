@@ -8,6 +8,7 @@ from typing import Any
 
 from _common import ROOT, chapter_number, read_json, read_text, write_json
 from context_governance import context_manifest_path, context_quality_path, sha256
+from core_setting_freeze import freeze_markdown_path
 
 
 REQUIRED_SECTIONS = {
@@ -18,6 +19,52 @@ REQUIRED_SECTIONS = {
     "authorized_elements_full",
     "rules_and_boundaries",
 }
+PLACEHOLDER_MARKERS = ("待定", "待填", "待生成", "TODO", "TBD", "寰呭畾", "寰呭～", "寰呯敓")
+CRITICAL_CONTEXT_SOURCE_SUFFIXES = ("bible/rules.md",)
+WARNING_CONTEXT_SOURCE_SUFFIXES = ("bible/style_guide.md", "bible/canon.md")
+
+
+def has_placeholder(text: str) -> bool:
+    return any(marker in text for marker in PLACEHOLDER_MARKERS)
+
+
+def source_placeholder_findings(chapter: str) -> tuple[list[str], list[str]]:
+    blockers: list[str] = []
+    warnings: list[str] = []
+    freeze_path = freeze_markdown_path()
+    sources = [
+        ROOT / "bible" / "rules.md",
+        ROOT / "bible" / "style_guide.md",
+        ROOT / "bible" / "canon.md",
+        ROOT / "outline" / "chapter_briefs" / f"{chapter}.md",
+    ]
+    if freeze_path is not None:
+        sources.append(freeze_path)
+    for path in sources:
+        if not path.exists():
+            continue
+        rel = path.relative_to(ROOT).as_posix()
+        text = read_text(path)
+        if not has_placeholder(text):
+            continue
+        if rel.endswith(CRITICAL_CONTEXT_SOURCE_SUFFIXES) or rel == f"outline/chapter_briefs/{chapter}.md" or path == freeze_path:
+            blockers.append(f"critical context source contains placeholder text: {rel}")
+        elif rel.endswith(WARNING_CONTEXT_SOURCE_SUFFIXES):
+            warnings.append(f"context source contains placeholder text: {rel}")
+        else:
+            warnings.append(f"context source contains placeholder text: {rel}")
+    return blockers, warnings
+
+
+def conflict_findings(pack_text: str) -> tuple[list[str], list[str]]:
+    if "Core Setting Freeze" not in pack_text and "status: LOCKED" not in pack_text:
+        return [], []
+    rule_conflict_terms = ("核心异常 / 能力 / 技术是什么？\n\n待定", "规则：待定", "能力限制：待定", "TODO：写")
+    if any(term in pack_text for term in rule_conflict_terms):
+        return ["context pack mixes locked core freeze with pending rule/ability placeholders"], []
+    if has_placeholder(pack_text):
+        return [], ["context pack still contains placeholder text in non-critical source material"]
+    return [], []
 
 
 def load_events() -> list[dict[str, Any]]:
@@ -146,6 +193,12 @@ def evaluate_context_pack(chapter: str) -> dict[str, Any]:
         input_hashes = []
     blockers.extend(stale_input_failures(input_hashes))
     blockers.extend(source_trace_failures(manifest))
+    source_blockers, source_warnings = source_placeholder_findings(chapter)
+    blockers.extend(source_blockers)
+    warnings.extend(source_warnings)
+    conflict_blockers, conflict_warnings = conflict_findings(pack_text)
+    blockers.extend(conflict_blockers)
+    warnings.extend(conflict_warnings)
 
     events = load_events()
     included_event_ids = manifest_event_ids(manifest) | {event["event_id"] for event in events if event["event_id"] in pack_text}

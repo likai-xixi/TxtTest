@@ -12,9 +12,11 @@ python scripts/novel.py flow
 python scripts/novel.py status
 python scripts/novel.py check
 python scripts/novel.py self-test
+python scripts/novel.py audit
+python scripts/novel.py ci
 ```
 
-底层脚本保留给排查和测试；正式写入候选选择、落章、审查、裁决、Gate、事件和提交时使用 `scripts/novel.py`。
+底层脚本保留给排查和测试；正式写入候选选择、落章、审查、裁决、Gate、事件和提交时使用 `scripts/novel.py`。`audit` 是总编体检，会报告业务 NOT_READY；`ci` 是本地模板 CI，只检查代码与流程回归。
 
 ## 复制后开工
 
@@ -55,6 +57,15 @@ python scripts/novel.py idea --text "赛博民俗悬疑，主角是不信鬼的�
 这个命令必须真实调用 DeepSeek；没有 `DEEPSEEK_API_KEY` 会直接停止。DeepSeek 完成后，Codex app 必须启用 `product_founder`、`technical_lead`、`qa_release` 三类 agent，并把审查写入 `state/idea_lab/{idea_id}/`。三类审查完成后先记录 provenance：
 
 ```bash
+python scripts/novel.py idea-agent-manifest --id idea_xxx
+```
+
+三类 agent 审查必须先用结构化运行记录落证据，再生成 manifest：
+
+```bash
+python scripts/novel.py idea-agent-run --id idea_xxx --role product_founder --agent-id agent_pf_001 --output state/idea_lab/idea_xxx/product_founder_review.md
+python scripts/novel.py idea-agent-run --id idea_xxx --role technical_lead --agent-id agent_tl_001 --output state/idea_lab/idea_xxx/technical_lead_review.md
+python scripts/novel.py idea-agent-run --id idea_xxx --role qa_release --agent-id agent_qa_001 --output state/idea_lab/idea_xxx/qa_release_review.md
 python scripts/novel.py idea-agent-manifest --id idea_xxx
 ```
 

@@ -32,9 +32,11 @@ python scripts/novel.py candidate-compare v01_c001 --brief
 python scripts/novel.py gate-rehearsal A
 python scripts/novel.py stale-check v01_c001
 python scripts/novel.py workflow-smoke
+python scripts/novel.py audit
+python scripts/novel.py ci
 ```
 
-`desk` 是总编台，优先看当前唯一卡点、推荐口令和下一步读写范围。`idea-status` 用于定盘前检查 DeepSeek、三类 agent 审查、manifest 与 synthesis 是否齐。`brief-diagnose` 只解释 `brief-check` 失败原因，不替代硬门禁。`event-suggest` 只输出人类可确认的事件命令草案，不写事件账本。
+`desk` 是总编台，优先看当前唯一卡点、推荐口令和下一步读写范围。`audit` 是总编全量体检，会完整跑业务门禁并汇总当前卡点；`ci` 是本地模板 CI，只跑代码和流程回归，不因项目尚未开书而失败。`idea-status` 用于定盘前检查 DeepSeek、三类 agent 审查、manifest 与 synthesis 是否齐。`brief-diagnose` 只解释 `brief-check` 失败原因，不替代硬门禁。`event-suggest` 只输出人类可确认的事件命令草案，不写事件账本。
 
 ## 开书前定盘
 
@@ -53,6 +55,15 @@ python scripts/novel.py workflow-smoke
 
 ```bash
 python scripts/novel.py core-freeze-check
+```
+
+三类 agent 审查完成后，先逐条记录结构化运行证据，再生成 manifest：
+
+```bash
+python scripts/novel.py idea-agent-run --id idea_xxx --role product_founder --agent-id agent_pf_001 --output state/idea_lab/idea_xxx/product_founder_review.md
+python scripts/novel.py idea-agent-run --id idea_xxx --role technical_lead --agent-id agent_tl_001 --output state/idea_lab/idea_xxx/technical_lead_review.md
+python scripts/novel.py idea-agent-run --id idea_xxx --role qa_release --agent-id agent_qa_001 --output state/idea_lab/idea_xxx/qa_release_review.md
+python scripts/novel.py idea-agent-manifest --id idea_xxx
 ```
 
 ## 开章
