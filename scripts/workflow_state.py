@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import subprocess
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -130,6 +131,146 @@ def _safe_json(path: Path) -> tuple[dict[str, Any] | None, str | None]:
     return data, None
 
 
+def _valid_iso(value: object) -> bool:
+    if not isinstance(value, str) or not value.strip():
+        return False
+    try:
+        datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    return True
+
+
+def _hash_current(item: object) -> tuple[bool, str]:
+    if not isinstance(item, dict):
+        return False, "missing path/sha256"
+    rel_path = str(item.get("path") or "")
+    expected = str(item.get("sha256") or "")
+    if not rel_path or not expected:
+        return False, "missing path/sha256"
+    path = ROOT / rel_path
+    if not path.exists():
+        return False, f"missing file: {rel_path}"
+    if sha256(path) != expected:
+        return False, f"hash mismatch: {rel_path}"
+    return True, ""
+
+
+def agent_run_matrix(idea_id: str | None, lab: Path) -> dict[str, Any]:
+    path = lab / "agent_runs.json"
+    report: dict[str, Any] = {
+        "path": rel(path),
+        "exists": path.exists(),
+        "status": "MISSING",
+        "errors": [],
+        "roles": {},
+    }
+    manifest_path = lab / "agent_review_manifest.json"
+    manifest, manifest_error = _safe_json(manifest_path) if manifest_path.exists() else ({}, None)
+    manifest_reviews = manifest.get("reviews", {}) if isinstance(manifest, dict) else {}
+    if manifest_error:
+        report["errors"].append(manifest_error)
+        manifest_reviews = {}
+
+    data: dict[str, Any] = {}
+    if path.exists():
+        data, error = _safe_json(path)
+        if error:
+            report["errors"].append(error)
+            data = {}
+    runs = data.get("runs", {}) if isinstance(data, dict) else {}
+    if path.exists() and not isinstance(runs, dict):
+        report["errors"].append("agent_runs.json missing runs mapping")
+        runs = {}
+    if path.exists() and data.get("schema_version") != 1:
+        report["errors"].append("agent_runs.json schema_version must be 1")
+    if path.exists() and idea_id and data.get("idea_id") != idea_id:
+        report["errors"].append("agent_runs.json idea_id mismatch")
+
+    expected_inputs = [(lab / "original_idea.md").relative_to(ROOT).as_posix(), (lab / "deepseek_idea.md").relative_to(ROOT).as_posix()]
+    for role, filename in AGENT_ROLES.items():
+        run = runs.get(role)
+        item: dict[str, Any] = {
+            "role": role,
+            "review_file": rel(lab / filename),
+            "has_run": isinstance(run, dict),
+            "agent_id": None,
+            "completed_at": None,
+            "input_hashes_current": False,
+            "output_hash_current": False,
+            "manifest_covered": False,
+            "status": "MISSING_RUN",
+            "errors": [],
+        }
+        if not isinstance(run, dict):
+            item["errors"].append(f"missing agent run for {role}")
+            report["roles"][role] = item
+            continue
+
+        item["agent_id"] = str(run.get("agent_id") or "")
+        item["completed_at"] = run.get("completed_at")
+        if run.get("role") != role:
+            item["errors"].append("role mismatch")
+        if not item["agent_id"]:
+            item["errors"].append("missing agent_id")
+        if not _valid_iso(item["completed_at"]):
+            item["errors"].append("missing valid completed_at")
+
+        input_files = run.get("input_files")
+        if not isinstance(input_files, list):
+            item["errors"].append("input_files must be a list")
+            input_files = []
+        input_by_path = {str(entry.get("path")): entry for entry in input_files if isinstance(entry, dict)}
+        input_ok = True
+        for expected in expected_inputs:
+            ok, error = _hash_current(input_by_path.get(expected))
+            input_ok = input_ok and ok
+            if error:
+                item["errors"].append(f"input {expected}: {error}")
+        extras = sorted(set(input_by_path) - set(expected_inputs))
+        if extras:
+            item["errors"].append(f"unexpected inputs: {', '.join(extras)}")
+            input_ok = False
+        item["input_hashes_current"] = input_ok
+
+        output = run.get("output_file")
+        expected_output = (lab / filename).relative_to(ROOT).as_posix()
+        if isinstance(output, dict) and output.get("path") != expected_output:
+            item["errors"].append(f"output path must be {expected_output}")
+        output_ok, output_error = _hash_current(output)
+        item["output_hash_current"] = output_ok
+        if output_error:
+            item["errors"].append(f"output: {output_error}")
+
+        review = manifest_reviews.get(role) if isinstance(manifest_reviews, dict) else None
+        item["manifest_covered"] = (
+            isinstance(review, dict)
+            and review.get("agent_id") == item["agent_id"]
+            and isinstance(review.get("agent_run"), dict)
+            and review["agent_run"].get("output_file") == output
+        )
+        if item["errors"]:
+            item["status"] = "STALE_OR_INVALID"
+        elif manifest_path.exists() and item["manifest_covered"]:
+            item["status"] = "MANIFESTED"
+        elif manifest_path.exists():
+            item["status"] = "MANIFEST_MISMATCH"
+        else:
+            item["status"] = "RECORDED"
+        report["roles"][role] = item
+
+    role_statuses = [item["status"] for item in report["roles"].values()]
+    if any(status in {"MISSING_RUN", "STALE_OR_INVALID", "MANIFEST_MISMATCH"} for status in role_statuses) or report["errors"]:
+        report["status"] = "NOT_READY"
+    elif role_statuses and all(status == "MANIFESTED" for status in role_statuses):
+        report["status"] = "MANIFESTED"
+    elif role_statuses and all(status == "RECORDED" for status in role_statuses):
+        report["status"] = "RECORDED"
+    else:
+        report["status"] = "MISSING"
+    return report
+
+
 def analyze_idea_lab(idea_id: str | None = None) -> dict[str, Any]:
     idea_id = idea_id or latest_idea_id()
     if not idea_id:
@@ -143,7 +284,7 @@ def analyze_idea_lab(idea_id: str | None = None) -> dict[str, Any]:
         }
 
     lab = idea_lab_root() / idea_id
-    files = {name: file_report(lab / name) for name in REQUIRED_INPUTS}
+    files = {name: file_report(lab / name) for name in [*REQUIRED_INPUTS, "agent_runs.json"]}
     blockers: list[str] = []
     warnings: list[str] = []
 
@@ -178,6 +319,14 @@ def analyze_idea_lab(idea_id: str | None = None) -> dict[str, Any]:
         blockers.extend(validate_agent_review_manifest(idea_id, lab))
     elif all((lab / name).exists() and read_text(lab / name).strip() for name in ("original_idea.md", "deepseek_idea.md", *AGENT_REVIEW_FILES)):
         blockers.append("missing idea-lab input: state/idea_lab/{idea_id}/agent_review_manifest.json".format(idea_id=idea_id))
+
+    runs = agent_run_matrix(idea_id, lab)
+    if all((lab / name).exists() and read_text(lab / name).strip() for name in ("original_idea.md", "deepseek_idea.md", *AGENT_REVIEW_FILES)):
+        for error in runs.get("errors", []):
+            blockers.append(f"agent run metadata: {error}")
+        for role, item in runs.get("roles", {}).items():
+            for error in item.get("errors", []):
+                blockers.append(f"agent run metadata {role}: {error}")
 
     if all((lab / name).exists() for name in ("original_idea.md", "deepseek_idea.md", *AGENT_REVIEW_FILES, "codex_synthesis.md")):
         blockers.extend(validate_output_freshness(lab))
@@ -221,6 +370,7 @@ def analyze_idea_lab(idea_id: str | None = None) -> dict[str, Any]:
         "warnings": warnings,
         "next_action": next_action,
         "files": files,
+        "agent_runs": runs,
         "selection_exists": selection_exists,
         "freeze_exists": freeze_exists,
     }
@@ -271,6 +421,18 @@ def gate_prompt() -> str | None:
         return "进入 Gate B，检查主角欲望、主要阻力、管理成本、连续问题和每 3 章爽点复盘。"
     if shipped_through(3) and gate_decision("a") != "continue":
         return "进入 Gate A 检查，汇总前三章证据，并给我是否继续到第 4 章的裁决建议。"
+    return None
+
+
+def blocking_gate() -> str | None:
+    if shipped_through(125) and gate_decision("e") != "continue":
+        return "E"
+    if shipped_through(25) and gate_decision("c") != "continue":
+        return "C"
+    if shipped_through(10) and gate_decision("b") != "continue":
+        return "B"
+    if shipped_through(3) and gate_decision("a") != "continue":
+        return "A"
     return None
 
 
@@ -326,23 +488,34 @@ def dashboard(chapter: str | None = None) -> dict[str, Any]:
     paths = chapter_paths(chapter)
     locks = unresolved_locks()
     prompt = next_prompt(chapter)
+    gate = blocking_gate()
     if locks:
+        phase_id = "stop_lock"
         blocker = "存在 stop lock，写入动作被暂停"
         why = "; ".join(f"{item.get('id')}: {item.get('reason')}" for item in locks)
         command = "先处理 `stop-list` / `stop-resolve`。"
     elif freeze_errors:
+        phase_id = "opening_experiment"
         blocker = "缺核心设定冻结"
         why = "开正文前必须完成 DeepSeek + 三类 agent 开书实验并锁定 core_setting_freeze。"
         command = "想法：..."
+    elif gate:
+        phase_id = "gate_review"
+        blocker = f"Gate {gate} 等待总编裁决"
+        why = "已到阶段门槛，需要先检查证据并记录人类 gate 决策。"
+        command = prompt
     elif not paths["brief"].exists() or has_placeholders(paths["brief"]):
+        phase_id = "brief_candidates"
         blocker = f"{chapter} brief 未正式可用"
         why = "正式 brief 缺失或仍有占位，必须先走 brief 候选选择与 landing。"
         command = "写下一章"
     elif not paths["context_pack"].exists():
+        phase_id = "context_pack"
         blocker = f"{chapter} context pack 未生成"
         why = "正式写作只能读当章 context pack 和正式 brief。"
         command = f"开章 {chapter}"
     else:
+        phase_id = "draft_or_close"
         blocker = f"{chapter} 可继续推进"
         why = "已具备下一步所需基础材料，按候选/收章流程继续。"
         command = prompt
@@ -356,17 +529,53 @@ def dashboard(chapter: str | None = None) -> dict[str, Any]:
         else:
             writes = [f"drafts/codex/{chapter}.md", f"drafts/deepseek/{chapter}.md", f"reviews/{chapter}/"]
 
+    risk_flags: list[str] = []
+    if locks:
+        risk_flags.append("stop_lock_open")
+    if freeze_errors:
+        risk_flags.append("core_freeze_missing")
+    if has_placeholders(ROOT / "outline" / "premise.md"):
+        risk_flags.append("premise_placeholders")
+    if has_placeholders(ROOT / "outline" / "chapter_briefs" / "v01_c001.md"):
+        risk_flags.append("c001_brief_placeholders")
+    stale = stale_overview(chapter)
+    if stale.get("status") not in {None, "CLEAR"}:
+        risk_flags.append(f"stale_{str(stale.get('status')).lower()}")
+    if gate:
+        risk_flags.append(f"gate_{gate.lower()}_pending")
+
+    evidence_paths = [rel(paths["brief"])]
+    if paths["context_pack"].exists():
+        evidence_paths.append(rel(paths["context_pack"]))
+    if paths["context_quality"].exists():
+        evidence_paths.append(rel(paths["context_quality"]))
+    idea_id = idea.get("idea_id")
+    if idea_id:
+        evidence_paths.extend(
+            [
+                f"state/idea_lab/{idea_id}/agent_runs.json",
+                f"state/idea_lab/{idea_id}/agent_review_manifest.json",
+                f"state/idea_lab/{idea_id}/core_setting_freeze.json",
+            ]
+        )
+
     return {
         "root": str(ROOT),
         "git": git_status(),
         "deepseek_api_key": "set" if os.environ.get("DEEPSEEK_API_KEY") else "missing",
         "chapter": chapter,
+        "phase_id": phase_id,
         "blocker": blocker,
+        "blocking_gate": gate,
         "why": why,
+        "human_action": command,
+        "codex_action": prompt,
         "recommended_command": command,
         "next_prompt": prompt,
         "reads": [rel(paths["brief"]), rel(paths["context_pack"])],
         "writes": writes,
+        "risk_flags": risk_flags,
+        "evidence_paths": evidence_paths,
         "freeze_ready": not freeze_errors,
         "freeze_errors": freeze_errors,
         "idea": idea,
@@ -380,7 +589,7 @@ def dashboard(chapter: str | None = None) -> dict[str, Any]:
             "G": gate_decision("g") or "not recorded",
             "H": gate_decision("h") or "not recorded",
         },
-        "stale": stale_overview(chapter),
+        "stale": stale,
         "premise_placeholders": has_placeholders(ROOT / "outline" / "premise.md"),
         "c001_brief_placeholders": has_placeholders(ROOT / "outline" / "chapter_briefs" / "v01_c001.md"),
         "event_ledger_exists": (ROOT / "state" / "event_ledger.jsonl").exists(),

@@ -28,6 +28,15 @@ def main() -> int:
 
     print("# 总编台")
     print()
+    print("## 总编提示")
+    print(f"- 当前阶段: {state.get('phase_id')}")
+    print(f"- 下一条口令: {state.get('human_action')}")
+    print(f"- Codex 动作: {state.get('codex_action')}")
+    if state.get("risk_flags"):
+        print(f"- 风险标记: {', '.join(state['risk_flags'])}")
+    else:
+        print("- 风险标记: none")
+    print()
     print("## Project Status")
     print(f"- root: {state['root']}")
     print(f"- git: {state['git']}")
@@ -47,6 +56,9 @@ def main() -> int:
     print()
     print("## 下一步可能写入")
     bullet_list(state["writes"])
+    print()
+    print("## 证据路径")
+    bullet_list(state.get("evidence_paths", []))
     print()
     print("## DeepSeek")
     print(f"- DEEPSEEK_API_KEY: {state['deepseek_api_key']}")

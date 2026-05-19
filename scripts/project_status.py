@@ -27,6 +27,13 @@ def main() -> int:
     print(f"git: {state['git']}")
     print(f"DEEPSEEK_API_KEY: {state['deepseek_api_key']}")
     print()
+    print("## Editor Hint")
+    print(f"- phase: {state.get('phase_id')}")
+    print(f"- current blocker: {state.get('blocker')}")
+    print(f"- why: {state.get('why')}")
+    print(f"- next command: {state.get('human_action')}")
+    print(f"- risk flags: {', '.join(state.get('risk_flags', [])) or 'none'}")
+    print()
     print("## Setup")
     print(f"- core setting freeze: {'ready' if state['freeze_ready'] else 'missing'}")
     print(f"- premise placeholders: {'yes' if state['premise_placeholders'] else 'no'}")
@@ -58,6 +65,10 @@ def main() -> int:
             print("Say `想法：...` / `开书实验`, or run `python scripts/novel.py idea --text \"...\"`; chapters cannot open until core settings are frozen.")
     else:
         print(state["recommended_command"])
+    print()
+    print("## Evidence paths")
+    for path in state.get("evidence_paths", []):
+        print(f"- {path}")
     return 0
 
 

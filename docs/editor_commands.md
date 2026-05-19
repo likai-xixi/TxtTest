@@ -22,9 +22,11 @@ python scripts/novel.py desk
 python scripts/novel.py idea-status --id idea_xxx
 python scripts/novel.py deepseek-preflight
 python scripts/novel.py workflow-map --format mermaid
+python scripts/novel.py brief-precheck v01_c001
 python scripts/novel.py brief-diagnose v01_c001
 python scripts/novel.py health-report
 python scripts/novel.py event-suggest v01_c001
+python scripts/novel.py pacing-dashboard v01_c001 --write
 python scripts/novel.py desk --json
 python scripts/novel.py status --json
 python scripts/novel.py context-diff v01_c001
@@ -33,10 +35,11 @@ python scripts/novel.py gate-rehearsal A
 python scripts/novel.py stale-check v01_c001
 python scripts/novel.py workflow-smoke
 python scripts/novel.py audit
+python scripts/novel.py audit --write-report
 python scripts/novel.py ci
 ```
 
-`desk` 是总编台，优先看当前唯一卡点、推荐口令和下一步读写范围。`audit` 是总编全量体检，会完整跑业务门禁并汇总当前卡点；`ci` 是本地模板 CI，只跑代码和流程回归，不因项目尚未开书而失败。`idea-status` 用于定盘前检查 DeepSeek、三类 agent 审查、manifest 与 synthesis 是否齐。`brief-diagnose` 只解释 `brief-check` 失败原因，不替代硬门禁。`event-suggest` 只输出人类可确认的事件命令草案，不写事件账本。
+`desk` 是总编台，优先看当前阶段、唯一卡点、推荐口令、风险标记和证据路径。`audit` 是总编全量体检，会完整跑业务门禁并汇总当前卡点；`audit --write-report` 额外写 `state/audit/latest.md` 和时间戳报告，业务 NOT_READY 仍会返回非 0。`ci` 是本地模板 CI，只跑代码和流程回归，不因项目尚未开书而失败。`idea-status` 用于定盘前检查 DeepSeek、三类 agent、agent run 元数据、manifest 与 synthesis 是否齐。`brief-precheck` 是生成 brief 候选前的智能检查；`brief-diagnose` 只解释 `brief-check` 失败原因，不替代硬门禁。`pacing-dashboard` 是节奏和后果债务的人读视图，不新增门禁。`event-suggest` 只输出人类可确认的事件命令草案，不写事件账本。
 
 ## 开书前定盘
 
@@ -91,6 +94,7 @@ python scripts/novel.py idea-agent-manifest --id idea_xxx
 命令行等价入口：
 
 ```bash
+python scripts/novel.py brief-precheck v01_c001
 python scripts/novel.py brief-candidates v01_c001
 python scripts/novel.py deepseek-brief v01_c001
 python scripts/novel.py select-brief v01_c001 --choice Codex --reason "..."
@@ -117,7 +121,7 @@ python scripts/novel.py start v01_c001
 - `本章允许新增元素`：按 L0/L1/L2/L3/L4 标明哪些新元素可出现。
 - `本章禁止临场解决`：禁止靠未授权新道具、新能力或新规则解决本章核心问题。
 
-`brief-check` 做单章硬检查；`pacing-check` 会硬拦连续小事、高推进无消化和缺少进展契约的窗口，可用 `--write` 归档节奏证据。收章时用 `chapter_anchor` 事件确认章末锚点，并用 brief 中的 `最低落账事件` 约束 `state/event_ledger.jsonl`；下一章 brief pack 和 context pack 会自动带入章末锚点与后果承接债务。
+`brief-precheck` 在生成候选 brief 前检查核心冻结、上一章锚点、Gate、stop lock、后果债务和关键源占位；`brief-check` 做正式 brief 的单章硬检查；`pacing-check` 会硬拦连续小事、高推进无消化和缺少进展契约的窗口，可用 `--write` 归档节奏证据。`pacing-dashboard` 汇总最近 5 章节奏和 active/overdue/resolved 后果债务，给总编复盘用，不替代 `pacing-check`。收章时用 `chapter_anchor` 事件确认章末锚点，并用 brief 中的 `最低落账事件` 约束 `state/event_ledger.jsonl`；下一章 brief pack 和 context pack 会自动带入章末锚点与后果承接债务。
 
 DeepSeek 和 Codex 可以创造新鲜细节，但重要新元素必须有授权、伏笔或后续归档。
 

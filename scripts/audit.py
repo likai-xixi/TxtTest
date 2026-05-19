@@ -6,8 +6,10 @@ import os
 import subprocess
 import sys
 from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
 
-from _common import ROOT
+from _common import ROOT, write_text
 from workflow_state import dashboard
 
 
@@ -62,24 +64,57 @@ def overall_status(steps: list[StepResult]) -> str:
     return "READY"
 
 
-def print_human_report(state: dict, steps: list[StepResult], chapter: str, gate: str) -> None:
+def render_human_report(state: dict, steps: list[StepResult], chapter: str, gate: str) -> str:
     overall = overall_status(steps)
-    print("# 总编审查报告")
-    print()
-    print(f"overall: {overall}")
-    print(f"chapter: {chapter}")
-    print(f"gate: {gate}")
-    print(f"current_blocker: {state.get('blocker') or 'none'}")
-    print(f"next_prompt: {state.get('next_prompt') or state.get('recommended_command') or 'none'}")
-    print()
-    print("## 检查结果")
-    print()
+    lines = [
+        "# 总编审查报告",
+        "",
+        f"overall: {overall}",
+        f"chapter: {chapter}",
+        f"gate: {gate}",
+        f"current_blocker: {state.get('blocker') or 'none'}",
+        f"next_prompt: {state.get('next_prompt') or state.get('recommended_command') or 'none'}",
+        "",
+        "## 总编提示",
+        "",
+        f"- 当前阶段: {state.get('phase_id') or 'unknown'}",
+        f"- 下一条口令: {state.get('human_action') or state.get('recommended_command') or 'none'}",
+        f"- 风险标记: {', '.join(state.get('risk_flags', [])) or 'none'}",
+        "",
+        "## 检查结果",
+        "",
+    ]
     for step in steps:
-        print(f"### {step.name}: {step.status}")
-        print(f"returncode: {step.returncode}")
+        lines.append(f"### {step.name}: {step.status}")
+        lines.append(f"returncode: {step.returncode}")
         for line in step_summary(step.output):
-            print(f"- {line}")
-        print()
+            lines.append(f"- {line}")
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def print_human_report(state: dict, steps: list[StepResult], chapter: str, gate: str) -> None:
+    print(render_human_report(state, steps, chapter, gate), end="")
+
+
+def resolve_report_path(value: str) -> Path:
+    path = Path(value)
+    if not path.is_absolute():
+        path = ROOT / path
+    return path
+
+
+def write_human_report(value: str, report: str) -> list[Path]:
+    target = resolve_report_path(value)
+    write_text(target, report)
+    written = [target]
+    default_path = ROOT / "state" / "audit" / "latest.md"
+    if target.resolve() == default_path.resolve():
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp_path = ROOT / "state" / "audit" / f"audit_{timestamp}.md"
+        write_text(timestamp_path, report)
+        written.append(timestamp_path)
+    return written
 
 
 def json_report(state: dict, steps: list[StepResult], chapter: str, gate: str) -> dict:
@@ -107,6 +142,13 @@ def main() -> int:
     parser.add_argument("--chapter", default=None)
     parser.add_argument("--gate", default="A")
     parser.add_argument("--json", action="store_true")
+    parser.add_argument(
+        "--write-report",
+        nargs="?",
+        const="state/audit/latest.md",
+        default=None,
+        help="Write the human-readable Markdown report. Without a path, writes state/audit/latest.md and a timestamped copy.",
+    )
     args = parser.parse_args()
 
     state = dashboard()
@@ -129,10 +171,16 @@ def main() -> int:
         for name, command_args in step_defs
     ]
 
+    human_report = render_human_report(state, steps, chapter, gate)
+    if args.write_report:
+        written = write_human_report(args.write_report, human_report)
+        for path in written:
+            print(f"wrote_report: {path.relative_to(ROOT).as_posix()}", file=sys.stderr)
+
     if args.json:
         print(json.dumps(json_report(state, steps, chapter, gate), ensure_ascii=False, indent=2))
     else:
-        print_human_report(state, steps, chapter, gate)
+        print(human_report, end="")
     return 0 if overall_status(steps) == "READY" else 1
 
 

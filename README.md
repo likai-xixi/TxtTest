@@ -13,10 +13,11 @@ python scripts/novel.py status
 python scripts/novel.py check
 python scripts/novel.py self-test
 python scripts/novel.py audit
+python scripts/novel.py audit --write-report
 python scripts/novel.py ci
 ```
 
-底层脚本保留给排查和测试；正式写入候选选择、落章、审查、裁决、Gate、事件和提交时使用 `scripts/novel.py`。`audit` 是总编体检，会报告业务 NOT_READY；`ci` 是本地模板 CI，只检查代码与流程回归。
+底层脚本保留给排查和测试；正式写入候选选择、落章、审查、裁决、Gate、事件和提交时使用 `scripts/novel.py`。`desk/status` 会给出当前阶段、卡点、下一条总编口令、风险标记和证据路径。`audit` 是总编体检，会报告业务 NOT_READY；`audit --write-report` 会额外生成 `state/audit/latest.md` 和时间戳报告；`ci` 是本地模板 CI，只检查代码与流程回归。
 
 ## 复制后开工
 
@@ -95,6 +96,7 @@ python scripts/novel.py idea-form
 
 ```bash
 python scripts/novel.py write
+python scripts/novel.py brief-precheck v01_c001
 python scripts/novel.py brief-candidates v01_c001
 python scripts/novel.py deepseek-brief v01_c001
 python scripts/novel.py select-brief v01_c001 --choice Codex --reason "..."
@@ -158,7 +160,7 @@ python scripts/novel.py desk
 - `本章允许新增元素`：L0 场景细节、L1 一次性线索、L2 伏笔、L3 长期机制、L4 核心设定分别说明。
 - `本章禁止临场解决`：禁止靠未授权新道具、新能力或新规则解决本章核心问题。
 
-`python scripts/novel.py brief-check {chapter}` 是单章硬门禁；`python scripts/novel.py pacing-check {chapter} --write` 是跨章硬门禁加预警：连续 3 章都是 `C0/C1` 会 BLOCK，高推进或 payoff 后没有在消化窗口内承接也会 BLOCK。节奏证据写入 `state/derived/pacing/` 供 Gate A/B 和总编裁决参考。
+`python scripts/novel.py brief-precheck {chapter}` 是生成候选 brief 前的智能预检，会检查核心冻结、上一章锚点、Gate、stop lock、关键源占位和后果承接债务；`python scripts/novel.py brief-check {chapter}` 是正式 brief 的单章硬门禁；`python scripts/novel.py pacing-check {chapter} --write` 是跨章硬门禁加预警：连续 3 章都是 `C0/C1` 会 BLOCK，高推进或 payoff 后没有在消化窗口内承接也会 BLOCK。`python scripts/novel.py pacing-dashboard {chapter} --write` 会生成节奏与 aftermath 人读报告，不替代硬门禁。
 
 `build_derived_state` 会从 `chapter_anchor` 人类确认事件生成 `state/derived/chapter_anchors/{chapter}.json`，也会从正式 brief 生成 `state/derived/pacing/progress_index.json` 和 `state/derived/pacing/aftermath_obligations.json`。下一章 brief pack 和 context pack 会读取上一章章末锚点与后果承接债务。`chapter_evidence` 会检查 brief 承诺的 `最低落账事件` 是否真的写入 `state/event_ledger.jsonl`。`build_context_pack` 会按 ID 拉完整道具/技能条目；未列入 ID 或新增授权的元素，只能做细节、线索或伏笔，不能临场破局。
 
@@ -166,6 +168,7 @@ python scripts/novel.py desk
 
 ```bash
 python scripts/novel.py new-chapter v01_c001
+python scripts/novel.py brief-precheck v01_c001
 python scripts/novel.py brief-candidates v01_c001
 python scripts/novel.py deepseek-brief v01_c001
 python scripts/novel.py select-brief v01_c001 --choice "Mixed" --reason "..."

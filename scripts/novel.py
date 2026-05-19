@@ -646,6 +646,7 @@ def command_brief_candidates(args: argparse.Namespace) -> int:
     brief = ROOT / "outline" / "chapter_briefs" / f"{args.chapter}.md"
     if not brief.exists():
         run_script("new_chapter.py", "--chapter", args.chapter)
+    run_script("brief_precheck.py", args.chapter)
     run_script("build_derived_state.py")
     run_script("build_brief_pack.py", "--chapter", args.chapter)
     if args.deepseek or args.deepseek_dry_run:
@@ -659,6 +660,13 @@ def command_brief_candidates(args: argparse.Namespace) -> int:
     print(f"then: select with `python scripts/novel.py select-brief {args.chapter} --choice ... --reason ...`")
     print(f"then: land official brief with `python scripts/novel.py land-brief {args.chapter} --source ... --attestation ...`")
     return 0
+
+
+def command_brief_precheck(args: argparse.Namespace) -> int:
+    script_args = [args.chapter]
+    if args.json:
+        script_args.append("--json")
+    return run_script("brief_precheck.py", *script_args, check=False)
 
 
 def command_deepseek_brief(args: argparse.Namespace) -> int:
@@ -1038,6 +1046,19 @@ def command_pacing_check(args: argparse.Namespace) -> int:
     return run_script("pacing_check.py", *script_args, check=False)
 
 
+def command_pacing_dashboard(args: argparse.Namespace) -> int:
+    script_args: list[str] = []
+    if args.chapter:
+        script_args.append(args.chapter)
+    if args.window:
+        script_args.extend(["--window", str(args.window)])
+    if args.write:
+        script_args.append("--write")
+    if args.json:
+        script_args.append("--json")
+    return run_script("pacing_dashboard.py", *script_args, check=False)
+
+
 def command_event_suggest(args: argparse.Namespace) -> int:
     return run_script("event_suggest.py", args.chapter, check=False)
 
@@ -1126,6 +1147,10 @@ def command_audit(args: argparse.Namespace) -> int:
         script_args.extend(["--chapter", args.chapter])
     if args.gate:
         script_args.extend(["--gate", args.gate])
+    if args.write_report is not None:
+        script_args.append("--write-report")
+        if args.write_report:
+            script_args.append(args.write_report)
     if args.json:
         script_args.append("--json")
     return run_script("audit.py", *script_args, check=False)
@@ -1430,6 +1455,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--model", default=model_for("deepseek_brief"))
     p.set_defaults(func=command_brief_candidates)
 
+    p = sub.add_parser("brief-precheck", help="Run smart prechecks before building chapter brief candidates.")
+    p.add_argument("chapter")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=command_brief_precheck)
+
     p = sub.add_parser("deepseek-brief", help="Generate a DeepSeek candidate chapter brief.")
     p.add_argument("chapter")
     p.add_argument("--model", default=model_for("deepseek_brief"))
@@ -1633,6 +1663,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--write", action="store_true", help="Write JSON evidence to state/derived/pacing/.")
     p.set_defaults(func=command_pacing_check)
 
+    p = sub.add_parser("pacing-dashboard", help="Show pacing and aftermath obligations without changing gates.")
+    p.add_argument("chapter", nargs="?")
+    p.add_argument("--window", type=int, default=5)
+    p.add_argument("--write", action="store_true")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=command_pacing_dashboard)
+
     p = sub.add_parser("event-suggest", help="Suggest event ledger entries without writing them.")
     p.add_argument("chapter")
     p.set_defaults(func=command_event_suggest)
@@ -1688,6 +1725,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--chapter", default=None)
     p.add_argument("--gate", default="A")
     p.add_argument("--json", action="store_true")
+    p.add_argument("--write-report", nargs="?", const="", default=None)
     p.set_defaults(func=command_audit)
 
     p = sub.add_parser("stop-record", help="Record an unresolved stop-rule lock.")

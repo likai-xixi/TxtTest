@@ -941,6 +941,7 @@ class WorkflowGuardTests(unittest.TestCase):
                 "draft",
                 "write",
                 "brief-candidates",
+                "brief-precheck",
                 "deepseek-brief",
                 "select-brief",
                 "land-brief",
@@ -964,6 +965,7 @@ class WorkflowGuardTests(unittest.TestCase):
                 "gate-rehearsal",
                 "stale-check",
                 "workflow-smoke",
+                "pacing-dashboard",
             ):
                 self.assertIn(command, help_result.stdout)
 
@@ -989,6 +991,30 @@ class WorkflowGuardTests(unittest.TestCase):
             self.assertIn("brief-check: NOT_READY", result.stdout)
             self.assertIn("next_prompt:", result.stdout)
             self.assertIn("deepseek-preflight", result.stdout)
+
+    def test_audit_write_report_preserves_not_ready_exit_code(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            shutil.rmtree(repo / "state/audit", ignore_errors=True)
+            env = os.environ.copy()
+            env["DEEPSEEK_API_KEY"] = "test-key"
+            env["NOVEL_AUDIT_DEPTH"] = "1"
+
+            plain = run_with_env(repo, ("scripts/novel.py", "audit", "--chapter", "v01_c001"), env)
+            self.assertNotEqual(plain.returncode, 0)
+            self.assertFalse((repo / "state/audit/latest.md").exists())
+
+            result = run_with_env(repo, ("scripts/novel.py", "audit", "--chapter", "v01_c001", "--write-report"), env)
+
+            self.assertNotEqual(result.returncode, 0)
+            latest = repo / "state/audit/latest.md"
+            self.assertTrue(latest.exists())
+            report = latest.read_text(encoding="utf-8")
+            self.assertIn("# 总编审查报告", report)
+            self.assertIn("overall: NOT_READY", report)
+            self.assertIn("core-freeze-check: NOT_READY", report)
+            timestamped = list((repo / "state/audit").glob("audit_*.md"))
+            self.assertTrue(timestamped)
 
     def test_local_ci_entrypoint_runs_template_checks(self) -> None:
         with copy_repo() as temp:
@@ -1099,9 +1125,13 @@ class WorkflowGuardTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertTrue((repo / "state/context_pack/v01_c001.md").exists())
             self.assertTrue((repo / "state/context_pack/v01_c001.manifest.json").exists())
+            self.assertTrue((repo / "state/derived/context_quality/v01_c001.md").exists())
             quality = json.loads((repo / "state/derived/context_quality/v01_c001.json").read_text(encoding="utf-8"))
             self.assertEqual(quality["status"], "READY")
             self.assertEqual(quality["budget_chars"], 6000)
+            quality_md = (repo / "state/derived/context_quality/v01_c001.md").read_text(encoding="utf-8")
+            self.assertIn("# Context Quality Report: v01_c001", quality_md)
+            self.assertIn("status: READY", quality_md)
 
     def test_write_routes_placeholder_brief_to_brief_candidates(self) -> None:
         with copy_repo() as temp:
@@ -3181,11 +3211,47 @@ print("OK: stub deepseek idea")
             self.assertEqual(ready.returncode, 0, ready.stdout + ready.stderr)
             self.assertIn("READY_TO_SELECT", ready.stdout)
             self.assertIn("can_select: true", ready.stdout)
+            self.assertIn("## Agent Runs", ready.stdout)
+            self.assertIn("product_founder", ready.stdout)
+            self.assertIn("agent_product_founder", ready.stdout)
 
             write_core_setting_freeze(repo, "idea_locked")
             locked = run(repo, "scripts/novel.py", "idea-status", "--id", "idea_locked")
             self.assertEqual(locked.returncode, 0, locked.stdout + locked.stderr)
             self.assertIn("LOCKED", locked.stdout)
+
+    def test_brief_precheck_blocks_missing_anchor_after_freeze(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_core_setting_freeze(repo)
+            write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF.format(chapter="v01_c001"))
+            write_minimal_derived_governance(repo, "v01_c002")
+
+            result = run(repo, "scripts/novel.py", "brief-precheck", "v01_c002")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("status: BLOCKED", result.stdout)
+            self.assertIn("missing previous chapter anchor", result.stdout)
+            self.assertIn("Next Action", result.stdout)
+
+    def test_pacing_dashboard_writes_markdown_only_with_flag(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF.format(chapter="v01_c001"))
+            out = repo / "state/derived/pacing/dashboard.md"
+            if out.exists():
+                out.unlink()
+
+            no_write = run(repo, "scripts/novel.py", "pacing-dashboard", "v01_c001")
+            self.assertEqual(no_write.returncode, 0, no_write.stdout + no_write.stderr)
+            self.assertFalse(out.exists())
+
+            result = run(repo, "scripts/novel.py", "pacing-dashboard", "v01_c001", "--write")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertTrue(out.exists())
+            text = out.read_text(encoding="utf-8")
+            self.assertIn("# Pacing / Aftermath Dashboard: v01_c001", text)
+            self.assertIn("## Recent Pacing", text)
 
     def test_health_report_defaults_to_first_chapter(self) -> None:
         with copy_repo() as temp:
@@ -3283,6 +3349,21 @@ print("OK: stub deepseek idea")
             self.assertIn("SCHEMA:", result.stderr)
             self.assertIn("selected_at", result.stderr)
 
+    def test_template_check_validates_agent_runs_schema(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            idea = "idea_bad_agent_runs"
+            lab = write_ready_idea_lab(repo, idea)
+            data = json.loads((repo / f"{lab}/agent_runs.json").read_text(encoding="utf-8"))
+            data["runs"]["product_founder"].pop("agent_id")
+            write(repo, f"{lab}/agent_runs.json", json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+
+            result = run(repo, "scripts/novel.py", "check")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("agent_runs.json", result.stderr)
+            self.assertIn("agent_id", result.stderr)
+
     def test_desk_and_status_json_share_dashboard_shape(self) -> None:
         with copy_repo() as temp:
             repo = temp
@@ -3294,6 +3375,12 @@ print("OK: stub deepseek idea")
             for result in (desk, status):
                 data = json.loads(result.stdout)
                 self.assertIn("blocker", data)
+                self.assertIn("phase_id", data)
+                self.assertIn("human_action", data)
+                self.assertIn("codex_action", data)
+                self.assertIn("risk_flags", data)
+                self.assertIn("evidence_paths", data)
+                self.assertIn("blocking_gate", data)
                 self.assertIn("why", data)
                 self.assertIn("recommended_command", data)
                 self.assertIn("reads", data)

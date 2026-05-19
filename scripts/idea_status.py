@@ -17,6 +17,24 @@ def print_text(report: dict) -> None:
         state = "ok" if item["exists"] and item["nonempty"] and not item["has_placeholders"] else "not_ready"
         print(f"- {name}: {state} ({item['path']})")
     print()
+    print("## Agent Runs")
+    runs = report.get("agent_runs", {})
+    print(f"- metadata: {runs.get('status', 'UNKNOWN')} ({runs.get('path', 'none')})")
+    for role, item in runs.get("roles", {}).items():
+        agent_id = item.get("agent_id") or "missing"
+        manifest = "yes" if item.get("manifest_covered") else "no"
+        inputs = "current" if item.get("input_hashes_current") else "not_current"
+        output = "current" if item.get("output_hash_current") else "not_current"
+        print(
+            f"- {role}: {item.get('status')} agent_id={agent_id} "
+            f"inputs={inputs} output={output} manifest={manifest}"
+        )
+        for error in item.get("errors", [])[:3]:
+            print(f"  - {error}")
+    if runs.get("errors"):
+        for error in runs["errors"][:5]:
+            print(f"- error: {error}")
+    print()
     print("## Blockers")
     if report.get("blockers"):
         for blocker in report["blockers"]:

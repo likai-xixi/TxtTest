@@ -53,11 +53,14 @@ python scripts/novel.py idea-select --id idea_xxx --choice A
 python scripts/novel.py core-freeze-check
 python scripts/novel.py setting --text "..."
 python scripts/novel.py write
+python scripts/novel.py brief-precheck v01_c001
 python scripts/novel.py draft v01_c001
 python scripts/novel.py desk
+python scripts/novel.py audit --write-report
 python scripts/novel.py flow
 python scripts/novel.py check
 python scripts/novel.py status
+python scripts/novel.py pacing-dashboard v01_c001 --write
 python scripts/novel.py self-test
 ```
 
@@ -66,24 +69,25 @@ python scripts/novel.py self-test
 每章 brief 必须声明：`上章章末锚点`、`本章开场落点`、`场景承接说明`、`主线牵引档位`、`外部压力档位`、`本章继承变化`、`本章节奏用途`、`节奏说明`、`本章进展契约`、`本章代价与后果契约`、`本章解决边界`、`本章可用道具 IDs`、`本章可用技能 IDs`、`本章允许新增元素`、`本章禁止临场解决`。`brief_check` 硬查字段完整、场景承接、档位合法、进展契约、代价后果和解决边界；`pacing_check` 硬查跨章连续低推进、连续小事、高推进后无消化，并保留过热预警。`build_derived_state` 必须生成 `state/derived/pacing/progress_index.json` 和 `state/derived/pacing/aftermath_obligations.json`；`build_context_pack` 只能按这些 ID 拉取完整道具/技能条目，并带入上一章人类确认的章末锚点和当前后果承接债务；未授权的新道具、新能力或新规则不得成为本章破局钥匙。Ship evidence 必须核验 brief 承诺的 `最低落账事件` 已进入 `state/event_ledger.jsonl`。
 
 ```text
-1. python scripts/novel.py brief-candidates {chapter}
-2. Codex 生成 `drafts/codex/{chapter}_brief.md`
-3. python scripts/novel.py deepseek-brief {chapter}
-4. Codex 汇总 brief 候选优劣；人类选择 / 混合 / 修改
-5. python scripts/novel.py select-brief {chapter} --choice ...
-6. Codex 落正式 brief；python scripts/novel.py land-brief {chapter} --source ...
-7. python scripts/novel.py start {chapter}
-8. Codex / DeepSeek 生成正文候选稿
-9. python scripts/novel.py select-candidate {chapter} --choice ...
-10. Codex 落正式正文到 chapters/；若人类选择 DeepSeek，允许正式正文与被选 DeepSeek 候选完全一致。
-11. python scripts/novel.py land {chapter} --selected-direction ...
-12. python scripts/novel.py codex-review-start {chapter}
-13. Codex 写独立审查，不读取 DeepSeek review
-14. python scripts/novel.py review {chapter} --deepseek
-15. python scripts/novel.py evidence {chapter}
-16. 人类判定：Ship / Revise once / Rewrite brief / Kill chapter / Pause project
-17. python scripts/novel.py event ...（Ship 前至少记录一个 `chapter_anchor` 章末锚点事件，供下一章承接）
-18. python scripts/novel.py close {chapter} --decision Ship
+1. python scripts/novel.py brief-precheck {chapter}
+2. python scripts/novel.py brief-candidates {chapter}
+3. Codex 生成 `drafts/codex/{chapter}_brief.md`
+4. python scripts/novel.py deepseek-brief {chapter}
+5. Codex 汇总 brief 候选优劣；人类选择 / 混合 / 修改
+6. python scripts/novel.py select-brief {chapter} --choice ...
+7. Codex 落正式 brief；python scripts/novel.py land-brief {chapter} --source ...
+8. python scripts/novel.py start {chapter}
+9. Codex / DeepSeek 生成正文候选稿
+10. python scripts/novel.py select-candidate {chapter} --choice ...
+11. Codex 落正式正文到 chapters/；若人类选择 DeepSeek，允许正式正文与被选 DeepSeek 候选完全一致。
+12. python scripts/novel.py land {chapter} --selected-direction ...
+13. python scripts/novel.py codex-review-start {chapter}
+14. Codex 写独立审查，不读取 DeepSeek review
+15. python scripts/novel.py review {chapter} --deepseek
+16. python scripts/novel.py evidence {chapter}
+17. 人类判定：Ship / Revise once / Rewrite brief / Kill chapter / Pause project
+18. python scripts/novel.py event ...（Ship 前至少记录一个 `chapter_anchor` 章末锚点事件，供下一章承接）
+19. python scripts/novel.py close {chapter} --decision Ship
 ```
 
 Ship close 必须具备：结构化候选选择、官方正文落章 provenance、Codex/DeepSeek 审查、review manifest、model_disagreement、无 P0/P1 continuity、辅助审查；若直采 DeepSeek，必须证明人类已选择 DeepSeek 且 landing 记录为 `deepseek_direct_adoption`。
@@ -109,7 +113,7 @@ Gate 命令只检查证据和记录人类裁决，永不自动通过 Gate。
 
 - `context_pack` 是单章驾驶舱，不是全书资料包。
 - 全书事实只进 `state/event_ledger.jsonl`；可重建状态进 `state/derived/`；本章写作只读 `state/context_pack/{chapter}.md` 和正式 brief。
-- `python scripts/novel.py start {chapter}` 必须依次生成 derived state、context pack、`state/context_pack/{chapter}.manifest.json` 和 `state/derived/context_quality/{chapter}.json`。
+- `python scripts/novel.py start {chapter}` 必须依次生成 derived state、context pack、`state/context_pack/{chapter}.manifest.json`、`state/derived/context_quality/{chapter}.json` 和同名 Markdown 人读报告。
 - `context_quality` 必须 READY 后才可进入 DeepSeek 正文生成或正式落章；`--allow-truncated` 产物不得进入正式写作。
 - 正式收章时应记录 `chapter_anchor` 人类确认事件；`build_derived_state` 会生成 `state/derived/chapter_anchors/{chapter}.json`，供下一章 brief pack、context pack 和 continuity 检查使用。
 - 正式 brief 的进展契约会生成 `state/derived/pacing/progress_index.json`；高推进、兑现或解决伏笔产生的后果债务会进入 `state/derived/pacing/aftermath_obligations.json`，供下一章 brief、context pack、pacing check 和 Ship evidence 使用。

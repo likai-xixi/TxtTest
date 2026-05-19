@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AgentRuns",
+  "type": "object",
+  "required": ["schema_version", "idea_id", "runs"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "idea_id": { "type": "string", "minLength": 1 },
+    "updated_at": { "type": "string", "minLength": 1 },
+    "runs": {
+      "type": "object",
+      "required": ["product_founder", "technical_lead", "qa_release"],
+      "properties": {
+        "product_founder": { "type": "object", "required": ["role", "agent_id", "input_files", "output_file", "completed_at"], "properties": { "role": { "const": "product_founder" }, "agent_id": { "type": "string", "minLength": 1 }, "input_files": { "type": "array", "items": { "type": "object", "required": ["path", "sha256"], "properties": { "path": { "type": "string", "minLength": 1 }, "sha256": { "type": "string", "minLength": 1 } } } }, "output_file": { "type": "object", "required": ["path", "sha256"], "properties": { "path": { "type": "string", "minLength": 1 }, "sha256": { "type": "string", "minLength": 1 } } }, "completed_at": { "type": "string", "minLength": 1 } } },
+        "technical_lead": { "type": "object", "required": ["role", "agent_id", "input_files", "output_file", "completed_at"], "properties": { "role": { "const": "technical_lead" }, "agent_id": { "type": "string", "minLength": 1 }, "input_files": { "type": "array", "items": { "type": "object", "required": ["path", "sha256"], "properties": { "path": { "type": "string", "minLength": 1 }, "sha256": { "type": "string", "minLength": 1 } } } }, "output_file": { "type": "object", "required": ["path", "sha256"], "properties": { "path": { "type": "string", "minLength": 1 }, "sha256": { "type": "string", "minLength": 1 } } }, "completed_at": { "type": "string", "minLength": 1 } } },
+        "qa_release": { "type": "object", "required": ["role", "agent_id", "input_files", "output_file", "completed_at"], "properties": { "role": { "const": "qa_release" }, "agent_id": { "type": "string", "minLength": 1 }, "input_files": { "type": "array", "items": { "type": "object", "required": ["path", "sha256"], "properties": { "path": { "type": "string", "minLength": 1 }, "sha256": { "type": "string", "minLength": 1 } } } }, "output_file": { "type": "object", "required": ["path", "sha256"], "properties": { "path": { "type": "string", "minLength": 1 }, "sha256": { "type": "string", "minLength": 1 } } }, "completed_at": { "type": "string", "minLength": 1 } } }
+      }
+    }
+  }
+}

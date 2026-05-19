@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from _common import ROOT, chapter_number, read_json, read_text, write_json
+from _common import ROOT, chapter_number, read_json, read_text, write_json, write_text
 from context_governance import context_manifest_path, context_quality_path, sha256
 from core_setting_freeze import freeze_markdown_path
 
@@ -263,9 +263,67 @@ def evaluate_context_pack(chapter: str) -> dict[str, Any]:
     return report
 
 
+def render_markdown_report(report: dict[str, Any]) -> str:
+    chapter = report.get("chapter", "unknown")
+    lines = [
+        f"# Context Quality Report: {chapter}",
+        "",
+        f"status: {report.get('status', 'UNKNOWN')}",
+        f"pack: {report.get('pack_path', 'missing')}",
+        f"manifest: {report.get('manifest_path', 'missing')}",
+        "",
+        "## Verdict",
+        "",
+    ]
+    if report.get("status") == "READY":
+        lines.append("- 可以继续：context pack 通过机器门禁。")
+    else:
+        lines.append("- 不能继续：context pack 仍有阻断项，不能进入正式写作。")
+    lines.extend(
+        [
+            "",
+            "## Blockers",
+            "",
+        ]
+    )
+    blockers = report.get("blockers") or []
+    lines.extend(f"- {item}" for item in blockers) if blockers else lines.append("- none")
+    lines.extend(["", "## Warnings", ""])
+    warnings = report.get("warnings") or []
+    lines.extend(f"- {item}" for item in warnings) if warnings else lines.append("- none")
+    lines.extend(
+        [
+            "",
+            "## Budget / Trace",
+            "",
+            f"- pack_chars: {report.get('pack_chars', 'unknown')}",
+            f"- budget_chars: {report.get('budget_chars', 'unknown')}",
+            f"- truncation_count: {report.get('truncation_count', 'unknown')}",
+            f"- required_fact_coverage: {report.get('required_fact_coverage', 'unknown')}",
+            f"- active_thread_coverage: {report.get('active_thread_coverage', 'unknown')}",
+            f"- source_traceability: {report.get('source_traceability', {}).get('ok', 'unknown')}",
+            "",
+            "## Authorized IDs",
+            "",
+            "- object_ids: " + (", ".join(str(item) for item in report.get("object_ids", [])) or "none"),
+            "- ability_ids: " + (", ".join(str(item) for item in report.get("ability_ids", [])) or "none"),
+            "",
+            "## Input Hashes",
+            "",
+        ]
+    )
+    hashes = report.get("input_hashes", {})
+    if isinstance(hashes, dict) and hashes:
+        lines.extend(f"- {path}: {value}" for path, value in sorted(hashes.items()))
+    else:
+        lines.append("- none")
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def write_quality_report(chapter: str) -> dict[str, Any]:
     report = evaluate_context_pack(chapter)
     write_json(context_quality_path(chapter), report)
+    write_text(context_quality_path(chapter).with_suffix(".md"), render_markdown_report(report))
     return report
 
 
@@ -275,6 +333,7 @@ def main() -> int:
     args = parser.parse_args()
 
     report = write_quality_report(args.chapter)
+    markdown_path = context_quality_path(args.chapter).with_suffix(".md")
     print(f"# Context Pack Quality: {args.chapter}")
     print()
     print(f"status: {report['status']}")
@@ -290,6 +349,8 @@ def main() -> int:
         print()
         for warning in report["warnings"]:
             print(f"- {warning}")
+    print()
+    print(f"report: {markdown_path.relative_to(ROOT).as_posix()}")
     return 0 if report["status"] == "READY" else 1
 
 
