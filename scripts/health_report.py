@@ -39,18 +39,34 @@ def gate_risks(max_chapter: int) -> list[str]:
     return risks
 
 
+def infer_last_chapter() -> str:
+    ledger = ROOT / "state" / "event_ledger.jsonl"
+    highest = 1
+    if ledger.exists():
+        for line in ledger.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            try:
+                chapter = str(json.loads(line).get("chapter", ""))
+                highest = max(highest, chapter_number(chapter))
+            except (json.JSONDecodeError, ValueError):
+                continue
+    return f"v01_c{highest:03d}"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Print a long-form health report without mutating project state.")
-    parser.add_argument("--to", required=True, help="Last chapter id, e.g. v01_c010.")
+    parser.add_argument("--to", default=None, help="Last chapter id, e.g. v01_c010. Defaults to the highest ledger chapter or v01_c001.")
     args = parser.parse_args()
 
-    max_chapter = chapter_number(args.to)
+    target = args.to or infer_last_chapter()
+    max_chapter = chapter_number(target)
     events = load_events(max_chapter)
     counts = Counter(event["type"] for event in events)
     open_threads = sum(counts[item] for item in ("thread_opened", "thread_advanced"))
     paid_threads = counts["thread_paid_off"]
 
-    print(f"# Health Report: through {args.to}")
+    print(f"# Health Report: through {target}")
     print()
     print(f"events: {len(events)}")
     print(f"character_decisions: {counts['character_decision']}")

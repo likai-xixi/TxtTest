@@ -21,6 +21,51 @@ def add_suggestion(items: list[tuple[str, str, str, str]], kind: str, fact: str,
     items.append((kind, fact, quote, consequence))
 
 
+def quote_arg(value: str) -> str:
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def command_for(chapter: str, kind: str, fact: str, quote: str, consequence: str) -> str:
+    parts = [
+        "python",
+        "scripts/novel.py",
+        "event",
+        chapter,
+        "--type",
+        kind,
+        "--fact",
+        quote_arg(fact),
+        "--evidence-quote",
+        quote_arg(quote or "TODO：粘贴正文原文证据"),
+        "--consequence",
+        quote_arg(consequence),
+    ]
+    if kind == "chapter_anchor":
+        parts.extend(
+            [
+                "--importance",
+                "P1",
+                "--tag",
+                "chapter_anchor",
+                "--anchor-end-time",
+                quote_arg("TODO：人类确认章末时间"),
+                "--anchor-end-location",
+                quote_arg("TODO：人类确认章末地点"),
+                "--anchor-present-character",
+                quote_arg("TODO：在场人物ID"),
+                "--anchor-protagonist-state",
+                quote_arg("TODO：主角章末状态"),
+                "--anchor-carried-item",
+                quote_arg("TODO：携带物或证据；没有则写 none"),
+                "--anchor-unfinished-action",
+                quote_arg("TODO：未完成动作"),
+                "--anchor-next-required-continuity",
+                quote_arg("TODO：下一章必须承接的连续性"),
+            ]
+        )
+    return " ".join(parts)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Suggest human-confirmable event ledger entries without writing them.")
     parser.add_argument("chapter")
@@ -92,7 +137,7 @@ def main() -> int:
 
     print(f"# Event Suggestions: {args.chapter}")
     print()
-    print("以下只是建议，不会写入 state/event_ledger.jsonl。人类确认后再运行 `python scripts/novel.py event ...`。")
+    print("以下只是建议和命令草案，不会写入 state/event_ledger.jsonl。人类确认并替换 TODO 后再执行。")
     print()
     for index, (kind, fact, evidence_quote, consequence) in enumerate(suggestions, 1):
         print(f"## Suggestion {index}")
@@ -101,6 +146,10 @@ def main() -> int:
         print(f"- fact: {fact}")
         print(f"- evidence_quote: {evidence_quote}")
         print(f"- consequence: {consequence}")
+        print()
+        print("```bash")
+        print(command_for(args.chapter, kind, fact, evidence_quote, consequence))
+        print("```")
         print()
     return 0
 

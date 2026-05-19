@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Landing",
+  "type": "object",
+  "required": ["chapter", "recorded_at", "attestation"],
+  "properties": {
+    "chapter": { "type": "string" },
+    "recorded_at": { "type": "string" },
+    "selected_direction": { "type": "string" },
+    "source": { "type": "string" },
+    "official_source": { "type": "string" },
+    "landed_by": { "type": "string" },
+    "integrated_by": { "type": "string" },
+    "integration_mode": { "type": "string" },
+    "attestation": { "type": "string" },
+    "inputs": { "type": "array" },
+    "official_chapter": { "type": "object" },
+    "official_brief": { "type": "object" },
+    "deepseek_direct_adoption": { "type": "boolean" },
+    "codex_integrated": { "type": "boolean" },
+    "copied_from_candidate": { "type": ["object", "null"] },
+    "direct_candidate_match": { "type": ["object", "null"] },
+    "direct_deepseek_candidate": { "type": ["object", "null"] },
+    "notes": { "type": "string" }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ContextQuality",
+  "type": "object",
+  "required": ["chapter", "status", "blockers", "warnings"],
+  "properties": {
+    "chapter": { "type": "string" },
+    "status": { "enum": ["READY", "NOT_READY"] },
+    "blockers": { "type": "array", "items": { "type": "string" } },
+    "warnings": { "type": "array", "items": { "type": "string" } }
+  }
+}

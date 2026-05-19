@@ -572,6 +572,10 @@ Codex 汇总必须写入：
 
 def command_idea_select(args: argparse.Namespace) -> int:
     ensure_no_open_locks()
+    if args.preview:
+        from preview_plan import print_plan
+
+        return print_plan("idea-select", args)
     script_args = ["--id", args.id, "--choice", args.choice]
     if args.reason:
         script_args.extend(["--reason", args.reason])
@@ -579,8 +583,10 @@ def command_idea_select(args: argparse.Namespace) -> int:
         script_args.extend(["--mixed-strategy", args.mixed_strategy])
     if args.notes:
         script_args.extend(["--notes", args.notes])
-    run_script("record_idea_selection.py", *script_args)
-    return 0
+    result = run_script_text("record_idea_selection.py", *script_args)
+    if result != 0:
+        print(f"hint: run `python scripts/novel.py idea-status --id {args.id}` for a grouped readiness report.", file=sys.stderr)
+    return result
 
 
 def command_idea_agent_manifest(args: argparse.Namespace) -> int:
@@ -674,6 +680,10 @@ def command_select_brief(args: argparse.Namespace) -> int:
 
 def command_land_brief(args: argparse.Namespace) -> int:
     ensure_no_open_locks()
+    if args.preview:
+        from preview_plan import print_plan
+
+        return print_plan("land-brief", args)
     script_args = ["--chapter", args.chapter, "--source", args.source, "--attestation", args.attestation]
     if args.from_candidate:
         script_args.extend(["--from-candidate", args.from_candidate])
@@ -747,6 +757,10 @@ def command_land(args: argparse.Namespace) -> int:
     if not selected_direction:
         print("ERROR: land requires --selected-direction (or legacy --source).", file=sys.stderr)
         return 1
+    if args.preview:
+        from preview_plan import print_plan
+
+        return print_plan("land", args)
     script_args = [
         "--chapter",
         args.chapter,
@@ -781,6 +795,10 @@ def command_decision(args: argparse.Namespace) -> int:
 
 def command_event(args: argparse.Namespace) -> int:
     ensure_no_open_locks()
+    if args.preview:
+        from preview_plan import print_plan
+
+        return print_plan("event", args)
     script_args = [
         "--chapter",
         args.chapter,
@@ -826,6 +844,10 @@ def command_event(args: argparse.Namespace) -> int:
 def command_close(args: argparse.Namespace) -> int:
     ensure_no_open_locks()
     chapter_parts(args.chapter)
+    if args.preview:
+        from preview_plan import print_plan
+
+        return print_plan("close", args)
     run_script("validate_event_ledger.py")
     if args.decision == "Ship":
         run_script("validate_chapter.py", "--chapter", args.chapter)
@@ -976,8 +998,24 @@ def command_next_prompt(args: argparse.Namespace) -> int:
     return run_script("next_prompt.py", *script_args, check=False)
 
 
+def command_idea_status(args: argparse.Namespace) -> int:
+    script_args: list[str] = []
+    if args.id:
+        script_args.extend(["--id", args.id])
+    if args.json:
+        script_args.append("--json")
+    return run_script("idea_status.py", *script_args, check=False)
+
+
 def command_brief_check(args: argparse.Namespace) -> int:
     return run_script("brief_check.py", "--chapter", args.chapter, check=False)
+
+
+def command_brief_diagnose(args: argparse.Namespace) -> int:
+    script_args = [args.chapter]
+    if args.json:
+        script_args.append("--json")
+    return run_script("brief_diagnose.py", *script_args, check=False)
 
 
 def command_pacing_check(args: argparse.Namespace) -> int:
@@ -1000,7 +1038,67 @@ def command_canon_propose(args: argparse.Namespace) -> int:
 
 
 def command_health_report(args: argparse.Namespace) -> int:
-    return run_script("health_report.py", "--to", args.to, check=False)
+    script_args: list[str] = []
+    if args.to:
+        script_args.extend(["--to", args.to])
+    return run_script("health_report.py", *script_args, check=False)
+
+
+def command_deepseek_preflight(args: argparse.Namespace) -> int:
+    script_args: list[str] = []
+    if args.no_live:
+        script_args.append("--no-live")
+    if args.model:
+        script_args.extend(["--model", args.model])
+    if args.timeout:
+        script_args.extend(["--timeout", str(args.timeout)])
+    return run_script("deepseek_preflight.py", *script_args, check=False)
+
+
+def command_workflow_map(args: argparse.Namespace) -> int:
+    script_args = ["--format", args.format]
+    if args.gates_only:
+        script_args.append("--gates-only")
+    return run_script("workflow_map.py", *script_args, check=False)
+
+
+def command_context_diff(args: argparse.Namespace) -> int:
+    script_args = [args.chapter]
+    if args.json:
+        script_args.append("--json")
+    return run_script("context_diff.py", *script_args, check=False)
+
+
+def command_candidate_compare(args: argparse.Namespace) -> int:
+    script_args = [args.chapter]
+    if args.brief:
+        script_args.append("--brief")
+    if args.json:
+        script_args.append("--json")
+    return run_script("candidate_compare.py", *script_args, check=False)
+
+
+def command_gate_rehearsal(args: argparse.Namespace) -> int:
+    script_args = [args.gate]
+    if args.json:
+        script_args.append("--json")
+    return run_script("gate_rehearsal.py", *script_args, check=False)
+
+
+def command_stale_check(args: argparse.Namespace) -> int:
+    script_args: list[str] = []
+    if args.chapter:
+        script_args.append(args.chapter)
+    if args.json:
+        script_args.append("--json")
+    return run_script("stale_check.py", *script_args, check=False)
+
+
+def command_workflow_smoke(args: argparse.Namespace) -> int:
+    script_args: list[str] = []
+    if args.keep_temp:
+        script_args.append("--keep-temp")
+    return run_script("workflow_smoke.py", *script_args, check=False)
 
 
 def command_self_test(_args: argparse.Namespace) -> int:
@@ -1092,28 +1190,19 @@ def command_commit(args: argparse.Namespace) -> int:
 
 
 def command_status(_args: argparse.Namespace) -> int:
-    run_script("project_status.py")
-    return 0
+    script_args: list[str] = []
+    if getattr(_args, "json", False):
+        script_args.append("--json")
+    return run_script("project_status.py", *script_args, check=False)
 
 
 def command_desk(args: argparse.Namespace) -> int:
-    print("# 总编工作台")
-    print()
-    print("日常只记四个口令：")
-    print("- 继续：让 Codex 判断下一步。")
-    print("- 加设定：...：先暂存到 open questions，不直接进 canon。")
-    print("- 写下一章：准备 brief / context pack / 候选稿。")
-    print("- 收章 v01_c001：跑选择、落章、审查和证据检查。")
-    print()
-    sys.stdout.flush()
-    status_code = run_script_text("project_status.py")
-    print()
-    sys.stdout.flush()
-    prompt_args: list[str] = []
+    script_args: list[str] = []
     if args.chapter:
-        prompt_args.extend(["--chapter", args.chapter])
-    prompt_code = run_script_text("next_prompt.py", *prompt_args)
-    return status_code or prompt_code
+        script_args.extend(["--chapter", args.chapter])
+    if args.json:
+        script_args.append("--json")
+    return run_script_text("editor_desk.py", *script_args)
 
 
 def command_check(_args: argparse.Namespace) -> int:
@@ -1275,6 +1364,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--reason", default="")
     p.add_argument("--mixed-strategy", default="")
     p.add_argument("--notes", default="")
+    p.add_argument("--preview", action="store_true", help="Print planned writes and prerequisite checks without mutating files.")
     p.set_defaults(func=command_idea_select)
 
     p = sub.add_parser("idea-agent-manifest", help="Record idea-lab multi-agent review provenance.")
@@ -1329,6 +1419,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--from-candidate", choices=["Codex", "DeepSeek"], default=None)
     p.add_argument("--attestation", required=True)
     p.add_argument("--notes", default="")
+    p.add_argument("--preview", action="store_true", help="Print planned writes and prerequisite checks without mutating files.")
     p.set_defaults(func=command_land_brief)
 
     p = sub.add_parser("select-candidate", help="Record the human-selected candidate direction.")
@@ -1348,6 +1439,7 @@ def build_parser() -> argparse.ArgumentParser:
     direction_group.add_argument("--source", choices=["Codex", "DeepSeek", "Mixed"], help="Legacy alias for --selected-direction.")
     p.add_argument("--attestation", required=True)
     p.add_argument("--notes", default="")
+    p.add_argument("--preview", action="store_true", help="Print planned writes and prerequisite checks without mutating files.")
     p.set_defaults(func=command_land)
 
     p = sub.add_parser("review", help="Run chapter validation, continuity, review comparison, and optional DeepSeek review.")
@@ -1394,6 +1486,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--anchor-unfinished-action", default="")
     p.add_argument("--anchor-next-required-continuity", default="")
     p.add_argument("--no-rebuild", dest="rebuild", action="store_false")
+    p.add_argument("--preview", action="store_true", help="Print planned writes and prerequisite checks without mutating files.")
     p.set_defaults(func=command_event, rebuild=True)
 
     p = sub.add_parser("close", help="Record decision, validate ledger, rebuild derived state, and optionally commit.")
@@ -1406,6 +1499,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--failure-condition", default="")
     p.add_argument("--notes", default="")
     p.add_argument("--commit-message", default=None)
+    p.add_argument("--preview", action="store_true", help="Print planned writes and prerequisite checks without mutating files.")
     p.set_defaults(func=command_close)
 
     p = sub.add_parser("derive", help="Validate ledger and rebuild derived state.")
@@ -1486,9 +1580,19 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--chapter", default=None)
     p.set_defaults(func=command_next_prompt)
 
+    p = sub.add_parser("idea-status", help="Diagnose idea-lab readiness before idea-select.")
+    p.add_argument("--id", default=None)
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=command_idea_status)
+
     p = sub.add_parser("brief-check", help="Check a chapter brief for anti-drift requirements.")
     p.add_argument("chapter")
     p.set_defaults(func=command_brief_check)
+
+    p = sub.add_parser("brief-diagnose", help="Explain brief-check failures in editor-friendly groups.")
+    p.add_argument("chapter")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=command_brief_diagnose)
 
     p = sub.add_parser("pacing-check", help="Check cross-chapter mainline and external-pressure pacing.")
     p.add_argument("chapter", nargs="?")
@@ -1505,8 +1609,44 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=command_canon_propose)
 
     p = sub.add_parser("health-report", help="Print a long-form health report without mutating state.")
-    p.add_argument("--to", required=True)
+    p.add_argument("--to", default=None)
     p.set_defaults(func=command_health_report)
+
+    p = sub.add_parser("deepseek-preflight", help="Check DeepSeek configuration and live API connectivity.")
+    p.add_argument("--no-live", action="store_true")
+    p.add_argument("--model", default=None)
+    p.add_argument("--timeout", type=int, default=30)
+    p.set_defaults(func=command_deepseek_preflight)
+
+    p = sub.add_parser("workflow-map", help="Show the workflow dependency map.")
+    p.add_argument("--format", choices=["text", "mermaid"], default="text")
+    p.add_argument("--gates-only", action="store_true")
+    p.set_defaults(func=command_workflow_map)
+
+    p = sub.add_parser("context-diff", help="Compare context manifest input hashes with current sources without rebuilding.")
+    p.add_argument("chapter")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=command_context_diff)
+
+    p = sub.add_parser("candidate-compare", help="Compare Codex and DeepSeek brief or chapter candidates without recording selection.")
+    p.add_argument("chapter")
+    p.add_argument("--brief", action="store_true")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=command_candidate_compare)
+
+    p = sub.add_parser("gate-rehearsal", help="Preview gate readiness gaps without recording a gate decision.")
+    p.add_argument("gate", choices=sorted(GATES))
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=command_gate_rehearsal)
+
+    p = sub.add_parser("stale-check", help="Detect stale derived, context, review, and landing inputs without rebuilding.")
+    p.add_argument("chapter", nargs="?")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=command_stale_check)
+
+    p = sub.add_parser("workflow-smoke", help="Run a no-live-API workflow smoke in a temporary copy.")
+    p.add_argument("--keep-temp", action="store_true")
+    p.set_defaults(func=command_workflow_smoke)
 
     p = sub.add_parser("stop-record", help="Record an unresolved stop-rule lock.")
     p.add_argument("--chapter", default="")
@@ -1538,10 +1678,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=command_commit)
 
     p = sub.add_parser("status", help="Show project status and next likely action.")
+    p.add_argument("--json", action="store_true")
     p.set_defaults(func=command_status)
 
     p = sub.add_parser("desk", help="Show the editor dashboard, daily shortcuts, status, and next Codex prompt.")
     p.add_argument("--chapter", default=None)
+    p.add_argument("--json", action="store_true")
     p.set_defaults(func=command_desk)
 
     p = sub.add_parser("check", help="Run template integrity check.")
@@ -1557,6 +1699,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     parser = build_parser()
     args = parser.parse_args()
     return args.func(args)

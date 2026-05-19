@@ -43,6 +43,13 @@ models:
       - external_runs/deepseek/{chapter}/review.prompt.md
       - external_runs/deepseek/{chapter}/review.raw.json
 
+  deepseek_preflight:
+    provider: deepseek
+    model: deepseek-v4-pro
+    mode: connectivity_preflight
+    api_model_can_modify_files: false
+    local_wrapper_writes: []
+
 environment:
   required:
     - DEEPSEEK_API_KEY

@@ -485,7 +485,20 @@ def write_agent_review_manifest(repo: Path, idea: str) -> None:
 
 def write_core_setting_freeze(repo: Path, idea: str = "idea_core") -> None:
     lab = write_ready_idea_lab(repo, idea)
-    write(repo, f"{lab}/selection.json", json.dumps({"idea_id": idea, "choice": "A", "verified_by": "human"}, ensure_ascii=False) + "\n")
+    write(
+        repo,
+        f"{lab}/selection.json",
+        json.dumps(
+            {
+                "idea_id": idea,
+                "choice": "A",
+                "selected_at": "2000-01-01T00:00:00+00:00",
+                "verified_by": "human",
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+    )
     fields = {
         "worldview_core": "A worldview core.",
         "worldview_hard_limits": "A hard limits.",
@@ -552,6 +565,7 @@ def write_brief_landing(repo: Path, chapter: str = "v01_c001", source: str = "Ma
     selection = {
         "chapter": chapter,
         "choice": source,
+        "selected_at": "2000-01-01T00:00:00+00:00",
         "reason": "human selected official brief",
         "selected_candidates": [],
     }
@@ -643,6 +657,7 @@ def write_complete_chapter_evidence(repo: Path, chapter: str, number: int) -> No
     selection = {
         "chapter": chapter,
         "choice": "Codex",
+        "selected_at": "2000-01-01T00:00:00+00:00",
         "reason": "synthetic ready evidence",
         "selected_candidates": [{"path": draft_rel, "sha256": file_sha(repo, draft_rel)}],
     }
@@ -887,6 +902,11 @@ class WorkflowGuardTests(unittest.TestCase):
                 "continuity",
                 "compare",
                 "evidence",
+                "context-diff",
+                "candidate-compare",
+                "gate-rehearsal",
+                "stale-check",
+                "workflow-smoke",
             ):
                 self.assertIn(command, help_result.stdout)
 
@@ -2934,6 +2954,372 @@ print("OK: stub deepseek idea")
             self.assertIn("object_change", suggest.stdout)
             self.assertEqual(ledger_before, (repo / "state/event_ledger.jsonl").read_text(encoding="utf-8"))
             self.assertEqual(canon_before, (repo / "bible/canon.md").read_text(encoding="utf-8"))
+
+    def test_desk_reports_single_current_blocker_and_command(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            result = run(repo, "scripts/novel.py", "desk")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("## 当前卡点", result.stdout)
+            self.assertIn("缺核心设定冻结", result.stdout)
+            self.assertIn("## 推荐口令", result.stdout)
+            self.assertIn("想法：...", result.stdout)
+
+    def test_idea_status_reports_lab_readiness_states(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write(repo, "state/idea_lab/idea_missing_deepseek/original_idea.md", "# Original Idea: idea_missing_deepseek\n\nIdea.\n")
+            missing = run(repo, "scripts/novel.py", "idea-status", "--id", "idea_missing_deepseek")
+            self.assertNotEqual(missing.returncode, 0)
+            self.assertIn("WAITING_DEEPSEEK", missing.stdout)
+
+            lab = "state/idea_lab/idea_missing_manifest"
+            write(repo, f"{lab}/original_idea.md", "# Original Idea: idea_missing_manifest\n\nIdea.\n")
+            write(repo, f"{lab}/deepseek_idea.md", "# DeepSeek Idea Directions: idea_missing_manifest\n\nDirections.\n")
+            write(repo, f"{lab}/product_founder_review.md", "# Product Founder Review: idea_missing_manifest\n\nOK.\n")
+            write(repo, f"{lab}/technical_lead_review.md", "# Technical Lead Review: idea_missing_manifest\n\nOK.\n")
+            write(repo, f"{lab}/qa_release_review.md", "# QA Release Review: idea_missing_manifest\n\nOK.\n")
+            manifest = run(repo, "scripts/novel.py", "idea-status", "--id", "idea_missing_manifest")
+            self.assertNotEqual(manifest.returncode, 0)
+            self.assertIn("WAITING_AGENT_MANIFEST", manifest.stdout)
+
+            write_ready_idea_lab(repo, "idea_ready")
+            ready = run(repo, "scripts/novel.py", "idea-status", "--id", "idea_ready")
+            self.assertEqual(ready.returncode, 0, ready.stdout + ready.stderr)
+            self.assertIn("READY_TO_SELECT", ready.stdout)
+            self.assertIn("can_select: true", ready.stdout)
+
+            write_core_setting_freeze(repo, "idea_locked")
+            locked = run(repo, "scripts/novel.py", "idea-status", "--id", "idea_locked")
+            self.assertEqual(locked.returncode, 0, locked.stdout + locked.stderr)
+            self.assertIn("LOCKED", locked.stdout)
+
+    def test_health_report_defaults_to_first_chapter(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            result = run(repo, "scripts/novel.py", "health-report")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("# Health Report: through v01_c001", result.stdout)
+
+    def test_deepseek_preflight_no_live_checks_local_config(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            env = os.environ.copy()
+            env["DEEPSEEK_API_KEY"] = "test-key"
+            result = run_with_env(repo, ("scripts/novel.py", "deepseek-preflight", "--no-live"), env)
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("status: READY_LOCAL", result.stdout)
+            self.assertIn("live_request: skipped", result.stdout)
+
+    def test_workflow_map_mermaid_and_brief_diagnose_outputs(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            workflow = run(repo, "scripts/novel.py", "workflow-map", "--format", "mermaid")
+            diagnose = run(repo, "scripts/novel.py", "brief-diagnose", "v01_c001")
+
+            self.assertEqual(workflow.returncode, 0, workflow.stdout + workflow.stderr)
+            self.assertIn("flowchart TD", workflow.stdout)
+            self.assertIn("Gate A", workflow.stdout)
+            self.assertNotEqual(diagnose.returncode, 0)
+            self.assertIn("status: NOT_READY", diagnose.stdout)
+            self.assertIn("## placeholders", diagnose.stdout)
+
+    def test_schema_files_are_checked_by_template_check(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            schema = repo / "schemas/core_setting_freeze.schema.json"
+            self.assertTrue(schema.exists())
+            schema.write_text("{bad json", encoding="utf-8")
+            result = run(repo, "scripts/novel.py", "check")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("schemas/core_setting_freeze.schema.json", result.stderr)
+
+    def test_event_suggest_outputs_event_command_drafts_without_writing(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            chapter = "v01_c001"
+            write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF.format(chapter=chapter))
+            write(repo, "chapters/v01/c001.md", "主角握住义眼，发现规则只能解释一半线索。\n")
+            ledger_before = (repo / "state/event_ledger.jsonl").read_text(encoding="utf-8")
+            result = run(repo, "scripts/novel.py", "event-suggest", chapter)
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("python scripts/novel.py event v01_c001", result.stdout)
+            self.assertIn("--anchor-end-time", result.stdout)
+            self.assertEqual(ledger_before, (repo / "state/event_ledger.jsonl").read_text(encoding="utf-8"))
+
+    def test_schema_validator_accepts_and_rejects_event_fixtures(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            valid = {
+                "event_id": "v01_c001_e001",
+                "chapter": "v01_c001",
+                "type": "character_decision",
+                "fact": "fact",
+                "evidence_quote": "quote",
+                "consequence": "consequence",
+                "verified_by": "human",
+            }
+            write(repo, "tmp_event.json", json.dumps(valid) + "\n")
+            ok = run(repo, "scripts/schema_validate.py", "--schema", "schemas/event_ledger.schema.json", "--json", "tmp_event.json")
+            self.assertEqual(ok.returncode, 0, ok.stdout + ok.stderr)
+
+            invalid = dict(valid)
+            invalid["event_id"] = "bad"
+            invalid["verified_by"] = "codex"
+            invalid["extra"] = True
+            write(repo, "tmp_event.json", json.dumps(invalid) + "\n")
+            bad = run(repo, "scripts/schema_validate.py", "--schema", "schemas/event_ledger.schema.json", "--json", "tmp_event.json")
+            self.assertNotEqual(bad.returncode, 0)
+            self.assertIn("SCHEMA:", bad.stderr)
+            self.assertIn("pattern", bad.stderr)
+            self.assertIn("const", bad.stderr)
+            self.assertIn("additional property", bad.stderr)
+
+    def test_template_check_validates_existing_json_artifacts_against_schema(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write(repo, "state/selections/v01_c001.json", json.dumps({"choice": "Codex"}) + "\n")
+
+            result = run(repo, "scripts/novel.py", "check")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("SCHEMA:", result.stderr)
+            self.assertIn("selected_at", result.stderr)
+
+    def test_desk_and_status_json_share_dashboard_shape(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            desk = run(repo, "scripts/novel.py", "desk", "--json")
+            status = run(repo, "scripts/novel.py", "status", "--json")
+
+            self.assertEqual(desk.returncode, 0, desk.stdout + desk.stderr)
+            self.assertEqual(status.returncode, 0, status.stdout + status.stderr)
+            for result in (desk, status):
+                data = json.loads(result.stdout)
+                self.assertIn("blocker", data)
+                self.assertIn("why", data)
+                self.assertIn("recommended_command", data)
+                self.assertIn("reads", data)
+                self.assertIn("writes", data)
+                self.assertIn("idea", data)
+                self.assertIn("gates", data)
+                self.assertIn("locks", data)
+                self.assertIn("stale", data)
+
+    def test_preview_commands_print_plans_without_writing_files(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            idea = "idea_preview"
+            write_ready_idea_lab(repo, idea)
+            write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF.format(chapter="v01_c001"))
+            write(
+                repo,
+                "state/selections/v01_c001_brief.json",
+                json.dumps({"chapter": "v01_c001", "choice": "Manual", "selected_at": "2000-01-01T00:00:00+00:00"}) + "\n",
+            )
+            write(repo, "state/context_pack/v01_c001.md", "context for preview\n")
+            write_context_quality(repo, "v01_c001")
+            write(repo, "chapters/v01/c001.md", "chapter for preview\n")
+            before_ledger = (repo / "state/event_ledger.jsonl").read_text(encoding="utf-8")
+            watched_paths = [
+                f"state/idea_lab/{idea}/selection.json",
+                "reviews/v01_c001/brief_landing.json",
+                "reviews/v01_c001/chapter_landing.json",
+                "reviews/v01_c001/decision.md",
+                "state/event_ledger.jsonl",
+            ]
+            before = {
+                path: (repo / path).read_text(encoding="utf-8") if (repo / path).exists() else None
+                for path in watched_paths
+            }
+
+            commands = [
+                (
+                    "idea-select",
+                    (
+                        "scripts/novel.py",
+                        "idea-select",
+                        "--id",
+                        idea,
+                        "--choice",
+                        "A",
+                        "--preview",
+                    ),
+                    f"state/idea_lab/{idea}/selection.json",
+                ),
+                (
+                    "land-brief",
+                    (
+                        "scripts/novel.py",
+                        "land-brief",
+                        "v01_c001",
+                        "--source",
+                        "Manual",
+                        "--attestation",
+                        "preview only",
+                        "--preview",
+                    ),
+                    "reviews/v01_c001/brief_landing.json",
+                ),
+                (
+                    "land",
+                    (
+                        "scripts/novel.py",
+                        "land",
+                        "v01_c001",
+                        "--selected-direction",
+                        "Codex",
+                        "--attestation",
+                        "preview only",
+                        "--preview",
+                    ),
+                    "reviews/v01_c001/chapter_landing.json",
+                ),
+                (
+                    "close",
+                    (
+                        "scripts/novel.py",
+                        "close",
+                        "v01_c001",
+                        "--decision",
+                        "Pause project",
+                        "--preview",
+                    ),
+                    "reviews/v01_c001/decision.md",
+                ),
+                (
+                    "event",
+                    (
+                        "scripts/novel.py",
+                        "event",
+                        "v01_c001",
+                        "--type",
+                        "chapter_anchor",
+                        "--fact",
+                        "anchor fact",
+                        "--evidence-quote",
+                        "quote",
+                        "--consequence",
+                        "consequence",
+                        "--anchor-end-time",
+                        "night",
+                        "--anchor-end-location",
+                        "office",
+                        "--anchor-present-character",
+                        "protagonist",
+                        "--anchor-protagonist-state",
+                        "alert",
+                        "--anchor-carried-item",
+                        "evidence",
+                        "--anchor-unfinished-action",
+                        "decide next move",
+                        "--anchor-next-required-continuity",
+                        "continue from office",
+                        "--preview",
+                    ),
+                    "state/event_ledger.jsonl",
+                ),
+            ]
+            for name, args, path in commands:
+                result = run(repo, *args)
+                self.assertEqual(result.returncode, 0, name + result.stdout + result.stderr)
+                plan = json.loads(result.stdout)
+                self.assertEqual(plan["mode"], "preview")
+                self.assertFalse(plan["mutates_files"])
+                self.assertTrue(plan["planned_writes"])
+                current = (repo / path).read_text(encoding="utf-8") if (repo / path).exists() else None
+                self.assertEqual(before[path], current, f"{name} mutated {path}")
+            self.assertEqual(before_ledger, (repo / "state/event_ledger.jsonl").read_text(encoding="utf-8"))
+
+    def test_context_diff_detects_changed_manifest_input_without_rebuilding(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            chapter = "v01_c001"
+            write(repo, f"outline/chapter_briefs/{chapter}.md", "brief one\n")
+            write(repo, f"state/context_pack/{chapter}.md", "context\n")
+            manifest = {
+                "chapter": chapter,
+                "input_hashes": [
+                    {"path": f"outline/chapter_briefs/{chapter}.md", "sha256": file_sha(repo, f"outline/chapter_briefs/{chapter}.md")}
+                ],
+                "context_pack": {"path": f"state/context_pack/{chapter}.md", "sha256": file_sha(repo, f"state/context_pack/{chapter}.md")},
+            }
+            write(repo, f"state/context_pack/{chapter}.manifest.json", json.dumps(manifest) + "\n")
+            write(repo, f"outline/chapter_briefs/{chapter}.md", "brief two\n")
+
+            result = run(repo, "scripts/novel.py", "context-diff", chapter, "--json")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            data = json.loads(result.stdout)
+            self.assertEqual(data["status"], "STALE")
+            self.assertIn(f"outline/chapter_briefs/{chapter}.md", data["stale_inputs"])
+
+    def test_candidate_compare_reports_brief_and_chapter_recommendations(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            chapter = "v01_c001"
+            write(repo, f"drafts/codex/{chapter}_brief.md", "主角主动决定调查，推进线索，代价后果落账。\n")
+            write(repo, f"drafts/deepseek/{chapter}_brief.md", "仿佛某种命运突然给予新能力直接解决。\n")
+            brief = run(repo, "scripts/novel.py", "candidate-compare", chapter, "--brief", "--json")
+            self.assertEqual(brief.returncode, 0, brief.stdout + brief.stderr)
+            brief_data = json.loads(brief.stdout)
+            self.assertEqual(brief_data["mode"], "brief")
+            self.assertEqual(brief_data["recommended_choice"], "Codex")
+
+            write(repo, f"drafts/codex/{chapter}.md", "主角选择承担代价，发现新线索，推进主线。\n")
+            chapter_result = run(repo, "scripts/novel.py", "candidate-compare", chapter, "--json")
+            self.assertEqual(chapter_result.returncode, 0, chapter_result.stdout + chapter_result.stderr)
+            chapter_data = json.loads(chapter_result.stdout)
+            self.assertEqual(chapter_data["mode"], "chapter")
+            self.assertIn(chapter_data["recommended_choice"], {"Codex", "DeepSeek", "No usable candidate"})
+
+    def test_gate_rehearsal_reports_gate_a_gaps_before_three_ships(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            result = run(repo, "scripts/novel.py", "gate-rehearsal", "A")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("REHEARSAL_NOT_READY", result.stdout)
+            self.assertIn("shipped_chapters: 0/3", result.stdout)
+            self.assertIn("reader responses", result.stdout)
+
+    def test_stale_check_detects_context_quality_and_review_manifest_hash_changes(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            chapter = "v01_c001"
+            write(repo, f"state/context_pack/{chapter}.md", "context one\n")
+            write_context_quality(repo, chapter)
+            manifest = {
+                "codex": {
+                    "inputs": [
+                        {"path": f"state/context_pack/{chapter}.md", "sha256": file_sha(repo, f"state/context_pack/{chapter}.md")}
+                    ]
+                }
+            }
+            write(repo, f"reviews/{chapter}/review_manifest.json", json.dumps(manifest) + "\n")
+            write(repo, f"state/context_pack/{chapter}.md", "context two\n")
+
+            result = run(repo, "scripts/novel.py", "stale-check", chapter)
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("status: STALE", result.stdout)
+            self.assertIn("context quality context_pack_sha256 is stale", result.stdout)
+            self.assertIn("recorded source input hash changed", result.stdout)
+
+    def test_workflow_smoke_uses_temp_copy_only(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            ledger_before = (repo / "state/event_ledger.jsonl").read_text(encoding="utf-8")
+            result = run(repo, "scripts/novel.py", "workflow-smoke")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("SMOKE OK: workflow sandbox completed", result.stdout)
+            self.assertEqual(ledger_before, (repo / "state/event_ledger.jsonl").read_text(encoding="utf-8"))
 
     def test_second_revise_once_is_blocked(self) -> None:
         with copy_repo() as temp:

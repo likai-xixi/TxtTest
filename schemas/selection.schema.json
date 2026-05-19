@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Selection",
+  "type": "object",
+  "required": ["choice", "selected_at"],
+  "properties": {
+    "chapter": { "type": "string" },
+    "idea_id": { "type": "string" },
+    "choice": { "type": "string" },
+    "selected_at": { "type": "string" },
+    "verified_by": { "const": "human" },
+    "candidates": { "type": "array" },
+    "selected_candidates": { "type": "array" },
+    "reason": { "type": "string" },
+    "adopt": { "type": "string" },
+    "reject": { "type": "string" },
+    "mixed_strategy": { "type": "string" },
+    "notes": { "type": "string" },
+    "human_decision_required": { "type": "boolean" }
+  }
+}

@@ -1,0 +1,396 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import subprocess
+from pathlib import Path
+from typing import Any
+
+from _common import ROOT, chapter_number, chapter_parts, gate_decision, read_text, unresolved_locks
+from core_setting_freeze import validate_freeze
+from record_idea_selection import (
+    AGENT_ROLES,
+    REQUIRED_INPUTS,
+    validate_agent_review_manifest,
+    validate_codex_synthesis,
+    validate_output_freshness,
+)
+
+
+PLACEHOLDERS = ("待定", "待填", "待评", "待生成", "待人类裁决", "寰呭畾", "寰呭～", "寰呰瘎", "TODO")
+AGENT_REVIEW_FILES = tuple(AGENT_ROLES.values())
+IDEA_READY_FILES = tuple(REQUIRED_INPUTS)
+
+
+def rel(path: Path) -> str:
+    try:
+        return path.relative_to(ROOT).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def git_status() -> str:
+    result = subprocess.run(["git", "status", "--short", "--branch"], cwd=ROOT, text=True, capture_output=True)
+    if result.returncode != 0:
+        return "not a git repository"
+    return result.stdout.strip() or "clean"
+
+
+def has_placeholders(path: Path | str) -> bool:
+    path = ROOT / path if isinstance(path, str) else path
+    return any(marker in read_text(path) for marker in PLACEHOLDERS)
+
+
+def file_report(path: Path) -> dict[str, Any]:
+    exists = path.exists()
+    text = read_text(path) if exists and path.is_file() else ""
+    return {
+        "path": rel(path),
+        "exists": exists,
+        "nonempty": bool(text.strip()),
+        "has_placeholders": any(marker in text for marker in PLACEHOLDERS),
+        "sha256": sha256(path) if exists and path.is_file() else None,
+    }
+
+
+def idea_lab_root() -> Path:
+    return ROOT / "state" / "idea_lab"
+
+
+def idea_lab_ids() -> list[str]:
+    root = idea_lab_root()
+    if not root.exists():
+        return []
+    labs: list[tuple[float, str]] = []
+    for lab in root.iterdir():
+        if not lab.is_dir():
+            continue
+        files = [item for item in lab.iterdir() if item.is_file()]
+        latest = max((item.stat().st_mtime for item in files), default=lab.stat().st_mtime)
+        labs.append((latest, lab.name))
+    return [name for _mtime, name in sorted(labs, reverse=True)]
+
+
+def selected_idea_id() -> str | None:
+    path = ROOT / "state" / "idea_lab" / "selected.json"
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(read_text(path))
+    except json.JSONDecodeError:
+        return None
+    value = data.get("idea_id")
+    return str(value) if value else None
+
+
+def latest_idea_id() -> str | None:
+    selected = selected_idea_id()
+    if selected:
+        return selected
+    labs = idea_lab_ids()
+    return labs[0] if labs else None
+
+
+def ready_idea_labs() -> list[str]:
+    ready: list[tuple[float, str]] = []
+    for idea_id in idea_lab_ids():
+        lab = idea_lab_root() / idea_id
+        required = [lab / name for name in IDEA_READY_FILES]
+        if all(path.exists() and read_text(path).strip() for path in required):
+            ready.append((max(path.stat().st_mtime for path in required), idea_id))
+    return [name for _mtime, name in sorted(ready, reverse=True)]
+
+
+def labs_needing_agent_manifest() -> list[str]:
+    labs: list[tuple[float, str]] = []
+    for idea_id in idea_lab_ids():
+        lab = idea_lab_root() / idea_id
+        if (lab / "agent_review_manifest.json").exists():
+            continue
+        required = [lab / "original_idea.md", lab / "deepseek_idea.md", *[lab / name for name in AGENT_REVIEW_FILES]]
+        if all(path.exists() and read_text(path).strip() for path in required):
+            labs.append((max(path.stat().st_mtime for path in required), idea_id))
+    return [name for _mtime, name in sorted(labs, reverse=True)]
+
+
+def _safe_json(path: Path) -> tuple[dict[str, Any] | None, str | None]:
+    if not path.exists():
+        return None, f"missing {rel(path)}"
+    try:
+        data = json.loads(read_text(path))
+    except json.JSONDecodeError as exc:
+        return None, f"{rel(path)} invalid JSON: {exc}"
+    if not isinstance(data, dict):
+        return None, f"{rel(path)} must be a JSON object"
+    return data, None
+
+
+def analyze_idea_lab(idea_id: str | None = None) -> dict[str, Any]:
+    idea_id = idea_id or latest_idea_id()
+    if not idea_id:
+        return {
+            "idea_id": None,
+            "status": "NO_LAB",
+            "can_select": False,
+            "blockers": ["no idea lab found"],
+            "next_action": "Say `想法：...` / `开书实验`.",
+            "files": {},
+        }
+
+    lab = idea_lab_root() / idea_id
+    files = {name: file_report(lab / name) for name in REQUIRED_INPUTS}
+    blockers: list[str] = []
+    warnings: list[str] = []
+
+    if not lab.exists():
+        return {
+            "idea_id": idea_id,
+            "status": "MISSING",
+            "can_select": False,
+            "blockers": [f"missing idea lab: {rel(lab)}"],
+            "next_action": "Create the idea lab again with `python scripts/novel.py idea --text ...`.",
+            "files": files,
+        }
+
+    missing = [name for name, item in files.items() if not item["exists"]]
+    empty = [name for name, item in files.items() if item["exists"] and not item["nonempty"]]
+    placeholder = [
+        name
+        for name, item in files.items()
+        if name != "original_idea.md" and item["exists"] and item["has_placeholders"]
+    ]
+    if missing:
+        blockers.extend(f"missing idea-lab input: {name}" for name in missing)
+    if empty:
+        blockers.extend(f"empty idea-lab input: {name}" for name in empty)
+    if placeholder:
+        blockers.extend(f"idea-lab input still has placeholders: {name}" for name in placeholder)
+
+    if (lab / "codex_synthesis.md").exists():
+        blockers.extend(validate_codex_synthesis(read_text(lab / "codex_synthesis.md")))
+
+    if (lab / "agent_review_manifest.json").exists():
+        blockers.extend(validate_agent_review_manifest(idea_id, lab))
+    elif all((lab / name).exists() and read_text(lab / name).strip() for name in ("original_idea.md", "deepseek_idea.md", *AGENT_REVIEW_FILES)):
+        blockers.append("missing idea-lab input: state/idea_lab/{idea_id}/agent_review_manifest.json".format(idea_id=idea_id))
+
+    if all((lab / name).exists() for name in ("original_idea.md", "deepseek_idea.md", *AGENT_REVIEW_FILES, "codex_synthesis.md")):
+        blockers.extend(validate_output_freshness(lab))
+
+    selection_exists = (lab / "selection.json").exists()
+    freeze_exists = (lab / "core_setting_freeze.json").exists()
+    freeze_errors = validate_freeze(idea_id) if freeze_exists else []
+    if freeze_errors:
+        warnings.extend(freeze_errors)
+
+    if freeze_exists and not freeze_errors:
+        status = "LOCKED"
+        next_action = "Core setting freeze is ready; proceed with `写下一章` / brief candidates."
+    elif selection_exists:
+        status = "SELECTED_NOT_LOCKED"
+        next_action = f"Run `python scripts/novel.py core-freeze-check --idea-id {idea_id}` and inspect freeze evidence."
+    elif not (lab / "deepseek_idea.md").exists():
+        status = "WAITING_DEEPSEEK"
+        next_action = f"Run `python scripts/novel.py idea --id {idea_id} --force --text ...` or restore DeepSeek output."
+    elif not all((lab / name).exists() and read_text(lab / name).strip() for name in AGENT_REVIEW_FILES):
+        status = "WAITING_AGENT_REVIEWS"
+        next_action = "Complete product_founder, technical_lead, and qa_release review files."
+    elif not (lab / "agent_review_manifest.json").exists():
+        status = "WAITING_AGENT_MANIFEST"
+        next_action = f"Run `python scripts/novel.py idea-agent-manifest --id {idea_id}`."
+    elif not (lab / "codex_synthesis.md").exists():
+        status = "WAITING_SYNTHESIS"
+        next_action = "Write codex_synthesis.md with Direction A/B/C and all required fields."
+    elif blockers:
+        status = "BLOCKED"
+        next_action = f"Fix blockers, then rerun `python scripts/novel.py idea-status --id {idea_id}`."
+    else:
+        status = "READY_TO_SELECT"
+        next_action = f"Run `python scripts/novel.py idea-select --id {idea_id} --choice A` after human choice."
+
+    return {
+        "idea_id": idea_id,
+        "status": status,
+        "can_select": status == "READY_TO_SELECT",
+        "blockers": blockers,
+        "warnings": warnings,
+        "next_action": next_action,
+        "files": files,
+        "selection_exists": selection_exists,
+        "freeze_exists": freeze_exists,
+    }
+
+
+def decision_for(chapter: str) -> str | None:
+    text = read_text(ROOT / "reviews" / chapter / "decision.md")
+    for line in text.splitlines():
+        if line.startswith("decision:"):
+            return line.split(":", 1)[1].strip()
+    return None
+
+
+def shipped_through(number: int) -> bool:
+    return all(decision_for(f"v01_c{idx:03d}") == "Ship" for idx in range(1, number + 1))
+
+
+def first_unshipped(limit: int = 126) -> str:
+    for idx in range(1, limit + 1):
+        chapter = f"v01_c{idx:03d}"
+        if decision_for(chapter) != "Ship":
+            return chapter
+    return "v01_c127"
+
+
+def chapter_paths(chapter: str) -> dict[str, Path]:
+    volume, chapter_file = chapter_parts(chapter)
+    return {
+        "brief": ROOT / "outline" / "chapter_briefs" / f"{chapter}.md",
+        "brief_landing": ROOT / "reviews" / chapter / "brief_landing.json",
+        "brief_pack": ROOT / "state" / "context_pack" / f"{chapter}_brief.md",
+        "context_pack": ROOT / "state" / "context_pack" / f"{chapter}.md",
+        "context_quality": ROOT / "state" / "derived" / "context_quality" / f"{chapter}.json",
+        "codex_draft": ROOT / "drafts" / "codex" / f"{chapter}.md",
+        "deepseek_draft": ROOT / "drafts" / "deepseek" / f"{chapter}.md",
+        "selection": ROOT / "state" / "selections" / f"{chapter}.json",
+        "official": ROOT / "chapters" / volume / chapter_file,
+        "decision": ROOT / "reviews" / chapter / "decision.md",
+    }
+
+
+def gate_prompt() -> str | None:
+    if shipped_through(125) and gate_decision("e") != "continue":
+        return "进入 Gate E，评估是否进入 300 万字模式，并给我 continue / pause / kill / rework 裁决建议。"
+    if shipped_through(25) and gate_decision("c") != "continue":
+        return "进入 Gate C，生成 gate_c_assessment，评估阶段高潮、不可逆变化、伏笔负债、设定膨胀和卷内结构。"
+    if shipped_through(10) and gate_decision("b") != "continue":
+        return "进入 Gate B，检查主角欲望、主要阻力、管理成本、连续问题和每 3 章爽点复盘。"
+    if shipped_through(3) and gate_decision("a") != "continue":
+        return "进入 Gate A 检查，汇总前三章证据，并给我是否继续到第 4 章的裁决建议。"
+    return None
+
+
+def prompt_for_chapter(chapter: str) -> str:
+    paths = chapter_paths(chapter)
+    if not paths["brief"].exists() or has_placeholders(paths["brief"]):
+        return (
+            f"写下一章：先为 {chapter} 生成 brief 候选。Codex 写 drafts/codex/{chapter}_brief.md，"
+            f"DeepSeek 写 drafts/deepseek/{chapter}_brief.md；然后汇总优劣，让我选择 / 混合 / 修改后再落正式 brief。"
+        )
+    if not paths["brief_landing"].exists():
+        return "正式 brief 已有内容，但还缺 brief landing provenance。请汇总 brief 候选，让我裁决后运行 select-brief 和 land-brief。"
+    if not paths["context_pack"].exists():
+        return f"确认 brief，开章 {chapter}。"
+    if not paths["codex_draft"].exists() or not read_text(paths["codex_draft"]).strip():
+        return f"生成 Codex 候选稿，并调用 DeepSeek 生成 {chapter} 外部候选。"
+    if not paths["selection"].exists():
+        return f"比较 {chapter} 的 Codex/DeepSeek 候选，给我推荐选择和理由。"
+    if not paths["official"].exists() or not read_text(paths["official"]).strip():
+        return f"按已选候选方向，落正式正文 {chapter}；若人类已选 DeepSeek，可直采用其候选稿，但仍需由 Codex 记录 landing provenance。"
+    if decision_for(chapter) != "Ship":
+        return f"收章 {chapter}。"
+    next_number = chapter_number(chapter) + 1
+    return f"写下一章，并给我 v01_c{next_number:03d} 的 brief 候选。"
+
+
+def next_prompt(chapter: str | None = None) -> str:
+    gate = gate_prompt()
+    if gate:
+        return gate
+    idea = analyze_idea_lab()
+    freeze_errors = validate_freeze()
+    if freeze_errors and idea["status"] == "WAITING_AGENT_MANIFEST":
+        return f"记录开书实验 {idea['idea_id']} 的三类 agent provenance：运行 idea-agent-manifest，然后确认 Codex synthesis 并定盘。"
+    if freeze_errors and idea["status"] == "READY_TO_SELECT" and idea.get("idea_id"):
+        return (
+            f"总结开书实验 {idea['idea_id']} 的 A/B/C/Mixed 方向，选择一个方向并锁定开书前核心设定："
+            "世界观核心规则、主角异常原因、主角家属/亲密关系、前三章约束和不可违背红线。"
+        )
+    if freeze_errors and idea["status"] == "BLOCKED" and idea.get("idea_id"):
+        return f"修复开书实验 {idea['idea_id']} 的 readiness 阻塞；先运行 `python scripts/novel.py idea-status --id {idea['idea_id']}`。"
+    if freeze_errors:
+        return "开书前先走开书实验：用 DeepSeek 和 product_founder/technical_lead/qa_release 三类 agent 固定世界观、主角异常原因和主角家属关系。"
+    if has_placeholders(ROOT / "outline" / "premise.md"):
+        return "我想开一本新书。先判断应该走开书实验还是启动问卷，并给我下一步提示词。"
+    return prompt_for_chapter(chapter or first_unshipped())
+
+
+def dashboard(chapter: str | None = None) -> dict[str, Any]:
+    chapter = chapter or first_unshipped()
+    freeze_errors = validate_freeze()
+    idea = analyze_idea_lab()
+    paths = chapter_paths(chapter)
+    locks = unresolved_locks()
+    prompt = next_prompt(chapter)
+    if locks:
+        blocker = "存在 stop lock，写入动作被暂停"
+        why = "; ".join(f"{item.get('id')}: {item.get('reason')}" for item in locks)
+        command = "先处理 `stop-list` / `stop-resolve`。"
+    elif freeze_errors:
+        blocker = "缺核心设定冻结"
+        why = "开正文前必须完成 DeepSeek + 三类 agent 开书实验并锁定 core_setting_freeze。"
+        command = "想法：..."
+    elif not paths["brief"].exists() or has_placeholders(paths["brief"]):
+        blocker = f"{chapter} brief 未正式可用"
+        why = "正式 brief 缺失或仍有占位，必须先走 brief 候选选择与 landing。"
+        command = "写下一章"
+    elif not paths["context_pack"].exists():
+        blocker = f"{chapter} context pack 未生成"
+        why = "正式写作只能读当章 context pack 和正式 brief。"
+        command = f"开章 {chapter}"
+    else:
+        blocker = f"{chapter} 可继续推进"
+        why = "已具备下一步所需基础材料，按候选/收章流程继续。"
+        command = prompt
+
+    writes = ["state/idea_lab/", "external_runs/deepseek/"] if freeze_errors else []
+    if not freeze_errors:
+        if not paths["brief"].exists() or has_placeholders(paths["brief"]):
+            writes = [f"drafts/codex/{chapter}_brief.md", f"drafts/deepseek/{chapter}_brief.md", f"reviews/{chapter}/brief_candidate_selection.md"]
+        elif not paths["context_pack"].exists():
+            writes = [f"state/context_pack/{chapter}.md", f"state/derived/context_quality/{chapter}.json"]
+        else:
+            writes = [f"drafts/codex/{chapter}.md", f"drafts/deepseek/{chapter}.md", f"reviews/{chapter}/"]
+
+    return {
+        "root": str(ROOT),
+        "git": git_status(),
+        "deepseek_api_key": "set" if os.environ.get("DEEPSEEK_API_KEY") else "missing",
+        "chapter": chapter,
+        "blocker": blocker,
+        "why": why,
+        "recommended_command": command,
+        "next_prompt": prompt,
+        "reads": [rel(paths["brief"]), rel(paths["context_pack"])],
+        "writes": writes,
+        "freeze_ready": not freeze_errors,
+        "freeze_errors": freeze_errors,
+        "idea": idea,
+        "locks": locks,
+        "gates": {
+            "A": gate_decision("a") or "not recorded",
+            "B": gate_decision("b") or "not recorded",
+            "C": gate_decision("c") or "not recorded",
+            "E": gate_decision("e") or "not recorded",
+            "F": gate_decision("f") or "not recorded",
+            "G": gate_decision("g") or "not recorded",
+            "H": gate_decision("h") or "not recorded",
+        },
+        "stale": stale_overview(chapter),
+        "premise_placeholders": has_placeholders(ROOT / "outline" / "premise.md"),
+        "c001_brief_placeholders": has_placeholders(ROOT / "outline" / "chapter_briefs" / "v01_c001.md"),
+        "event_ledger_exists": (ROOT / "state" / "event_ledger.jsonl").exists(),
+    }
+
+
+def stale_overview(chapter: str | None = None) -> dict[str, Any]:
+    try:
+        from stale_check import stale_summary
+
+        return stale_summary(chapter)
+    except Exception as exc:
+        return {"status": "UNKNOWN", "error": str(exc)}

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CoreSettingFreeze",
+  "type": "object",
+  "required": ["idea_id", "status", "locked_at", "selected_direction", "human_approved", "verified_by", "fields", "evidence"],
+  "properties": {
+    "idea_id": { "type": "string" },
+    "status": { "const": "LOCKED" },
+    "locked_at": { "type": "string" },
+    "selected_direction": { "enum": ["A", "B", "C", "Mixed"] },
+    "human_approved": { "const": true },
+    "verified_by": { "const": "human" },
+    "fields": { "type": "object" },
+    "evidence": { "type": "object" },
+    "writes_canon": { "const": false },
+    "writes_chapters": { "const": false },
+    "writes_event_ledger": { "const": false }
+  }
+}

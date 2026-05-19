@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AgentReviewManifest",
+  "type": "object",
+  "required": ["schema_version", "idea_id", "recorded_at", "inputs", "reviews"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "idea_id": { "type": "string" },
+    "recorded_at": { "type": "string" },
+    "inputs": { "type": "array", "items": { "type": "object" } },
+    "reviews": {
+      "type": "object",
+      "required": ["product_founder", "technical_lead", "qa_release"]
+    }
+  }
+}

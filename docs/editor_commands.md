@@ -15,6 +15,27 @@
 查状态
 ```
 
+## 诊断工具
+
+```bash
+python scripts/novel.py desk
+python scripts/novel.py idea-status --id idea_xxx
+python scripts/novel.py deepseek-preflight
+python scripts/novel.py workflow-map --format mermaid
+python scripts/novel.py brief-diagnose v01_c001
+python scripts/novel.py health-report
+python scripts/novel.py event-suggest v01_c001
+python scripts/novel.py desk --json
+python scripts/novel.py status --json
+python scripts/novel.py context-diff v01_c001
+python scripts/novel.py candidate-compare v01_c001 --brief
+python scripts/novel.py gate-rehearsal A
+python scripts/novel.py stale-check v01_c001
+python scripts/novel.py workflow-smoke
+```
+
+`desk` 是总编台，优先看当前唯一卡点、推荐口令和下一步读写范围。`idea-status` 用于定盘前检查 DeepSeek、三类 agent 审查、manifest 与 synthesis 是否齐。`brief-diagnose` 只解释 `brief-check` 失败原因，不替代硬门禁。`event-suggest` 只输出人类可确认的事件命令草案，不写事件账本。
+
 ## 开书前定盘
 
 开正文前必须先完成 DeepSeek + `product_founder` + `technical_lead` + `qa_release` 的开书实验，运行 `idea-agent-manifest` 记录三类审查 provenance，并生成 `core_setting_freeze`。冻结内容至少包括：

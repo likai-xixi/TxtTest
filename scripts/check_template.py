@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import ast
+import json
 import sys
 from pathlib import Path
 
 from _common import ROOT
+from schema_validate import validate_json_file, validate_jsonl_file, validate_schema_document
 from validate_event_ledger import validate as validate_ledger
+from workflow_errors import format_issue
 
 try:
     import yaml
@@ -52,6 +55,11 @@ REQUIRED_PATHS = [
     "schemas/event_ledger.schema.json",
     "schemas/character.schema.json",
     "schemas/thread.schema.json",
+    "schemas/core_setting_freeze.schema.json",
+    "schemas/agent_review_manifest.schema.json",
+    "schemas/context_quality.schema.json",
+    "schemas/selection.schema.json",
+    "schemas/landing.schema.json",
     "templates/questionnaire_answers.md",
     "templates/idea_seed.md",
     "templates/chapter_brief.md",
@@ -93,6 +101,20 @@ REQUIRED_PATHS = [
     "scripts/append_event.py",
     "scripts/record_decision.py",
     "scripts/project_status.py",
+    "scripts/workflow_state.py",
+    "scripts/editor_desk.py",
+    "scripts/idea_status.py",
+    "scripts/deepseek_preflight.py",
+    "scripts/workflow_map.py",
+    "scripts/brief_diagnose.py",
+    "scripts/workflow_errors.py",
+    "scripts/schema_validate.py",
+    "scripts/preview_plan.py",
+    "scripts/context_diff.py",
+    "scripts/candidate_compare.py",
+    "scripts/gate_rehearsal.py",
+    "scripts/stale_check.py",
+    "scripts/workflow_smoke.py",
     "scripts/diff_scope_check.py",
     "scripts/continuity_check.py",
     "scripts/run_deepseek_generate.py",
@@ -119,6 +141,27 @@ REQUIRED_PATHS = [
     "scripts/self_test.py",
     "tests/test_workflow_guards.py",
     "tests/test_governance_refactors.py",
+]
+
+SCHEMA_PATHS = [
+    "schemas/event_ledger.schema.json",
+    "schemas/character.schema.json",
+    "schemas/thread.schema.json",
+    "schemas/core_setting_freeze.schema.json",
+    "schemas/agent_review_manifest.schema.json",
+    "schemas/context_quality.schema.json",
+    "schemas/selection.schema.json",
+    "schemas/landing.schema.json",
+]
+
+RUNTIME_SCHEMA_GLOBS = [
+    ("state/idea_lab/*/core_setting_freeze.json", "schemas/core_setting_freeze.schema.json"),
+    ("state/idea_lab/*/agent_review_manifest.json", "schemas/agent_review_manifest.schema.json"),
+    ("state/idea_lab/*/selection.json", "schemas/selection.schema.json"),
+    ("state/derived/context_quality/*.json", "schemas/context_quality.schema.json"),
+    ("state/selections/*.json", "schemas/selection.schema.json"),
+    ("reviews/*/brief_landing.json", "schemas/landing.schema.json"),
+    ("reviews/*/chapter_landing.json", "schemas/landing.schema.json"),
 ]
 
 
@@ -182,6 +225,37 @@ def check_roles_yaml() -> list[str]:
     return errors
 
 
+def check_json_files(paths: list[str]) -> list[str]:
+    errors: list[str] = []
+    for path_text in paths:
+        path = ROOT / path_text
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            errors.append(format_issue("SCHEMA", f"invalid JSON: {exc}", path_text))
+            continue
+        if not isinstance(data, dict):
+            errors.append(format_issue("SCHEMA", "top-level value must be an object", path_text))
+            continue
+        for error in validate_schema_document(data):
+            errors.append(format_issue("SCHEMA", error, path_text))
+    return errors
+
+
+def check_runtime_json_against_schemas() -> list[str]:
+    errors: list[str] = []
+    for pattern, schema_text in RUNTIME_SCHEMA_GLOBS:
+        schema = ROOT / schema_text
+        for path in sorted(ROOT.glob(pattern)):
+            for item in validate_json_file(path, schema):
+                errors.append(format_issue(item["category"], item["message"], item.get("path")))
+    ledger = ROOT / "state" / "event_ledger.jsonl"
+    if ledger.exists():
+        for item in validate_jsonl_file(ledger, ROOT / "schemas" / "event_ledger.schema.json"):
+            errors.append(format_issue(item["category"], item["message"], item.get("path")))
+    return errors
+
+
 def check_yaml_root(path_text: str, expected_key: str) -> list[str]:
     path = ROOT / path_text
     if yaml is None:
@@ -206,6 +280,8 @@ def main() -> int:
     errors.extend(check_scripts())
     errors.extend(check_source_log())
     errors.extend(check_roles_yaml())
+    errors.extend(check_json_files(SCHEMA_PATHS))
+    errors.extend(check_runtime_json_against_schemas())
     errors.extend(check_yaml_root("bible/objects.yaml", "objects"))
     errors.extend(check_yaml_root("bible/abilities.yaml", "abilities"))
     errors.extend(f"event ledger: {error}" for error in validate_ledger(ROOT / "state" / "event_ledger.jsonl"))
