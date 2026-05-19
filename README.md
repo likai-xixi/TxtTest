@@ -1,5 +1,18 @@
 # Novel 300w Template
 
+## 3-minute copied-template guide
+
+```bash
+python scripts/novel.py start-here
+python scripts/novel.py opening-preflight --json
+python scripts/novel.py opening-preflight --live
+python scripts/novel.py idea --text "your seed idea"
+python scripts/novel.py opening-status --id idea_xxx
+python scripts/novel.py freeze-preview --id idea_xxx --choice A
+```
+
+`check` / `ci` mean the template is structurally healthy. `audit --mode project` means the story workflow is ready or blocked. A copied template is expected to pass `check` while still being `STORY_NOT_READY` until the opening experiment and core freeze are complete.
+
 这是一个长篇小说试点模板仓库。目标不是自动替人类决定故事，而是把“人类总编 + Codex 工程总控 + DeepSeek 外部候选/审查”落成可复制、可校验、可追踪的工程系统。
 
 ## 一个入口
@@ -64,9 +77,9 @@ python scripts/novel.py idea-agent-manifest --id idea_xxx
 三类 agent 审查必须先用结构化运行记录落证据，再生成 manifest：
 
 ```bash
-python scripts/novel.py idea-agent-run --id idea_xxx --role product_founder --agent-id agent_pf_001 --output state/idea_lab/idea_xxx/product_founder_review.md
-python scripts/novel.py idea-agent-run --id idea_xxx --role technical_lead --agent-id agent_tl_001 --output state/idea_lab/idea_xxx/technical_lead_review.md
-python scripts/novel.py idea-agent-run --id idea_xxx --role qa_release --agent-id agent_qa_001 --output state/idea_lab/idea_xxx/qa_release_review.md
+python scripts/novel.py idea-agent-run --id idea_xxx --role product_founder --agent-id agent_pf_001 --runner-id codex_pf_001 --transcript state/idea_lab/idea_xxx/product_founder_transcript.md --isolation-attestation "Read only original_idea.md and deepseek_idea.md." --output state/idea_lab/idea_xxx/product_founder_review.md
+python scripts/novel.py idea-agent-run --id idea_xxx --role technical_lead --agent-id agent_tl_001 --runner-id codex_tl_001 --transcript state/idea_lab/idea_xxx/technical_lead_transcript.md --isolation-attestation "Read only original_idea.md and deepseek_idea.md." --output state/idea_lab/idea_xxx/technical_lead_review.md
+python scripts/novel.py idea-agent-run --id idea_xxx --role qa_release --agent-id agent_qa_001 --runner-id codex_qa_001 --transcript state/idea_lab/idea_xxx/qa_release_transcript.md --isolation-attestation "Read only original_idea.md and deepseek_idea.md." --output state/idea_lab/idea_xxx/qa_release_review.md
 python scripts/novel.py idea-agent-manifest --id idea_xxx
 ```
 

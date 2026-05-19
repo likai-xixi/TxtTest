@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ContextManifest",
+  "type": "object",
+  "required": ["schema_version", "chapter", "budget_chars", "hard_max_chars", "allow_truncated", "pack_chars", "sections", "input_hashes", "context_pack"],
+  "properties": {
+    "schema_version": { "const": 2 },
+    "chapter": { "type": "string", "pattern": "^v[0-9]{2}_c[0-9]{3}$" },
+    "generated_at": { "type": "string" },
+    "budget_chars": { "type": "integer" },
+    "hard_max_chars": { "type": "integer" },
+    "allow_truncated": { "type": "boolean" },
+    "pack_truncated": { "type": "boolean" },
+    "pack_chars": { "type": "integer" },
+    "object_ids": { "type": "array", "items": { "type": "string" } },
+    "ability_ids": { "type": "array", "items": { "type": "string" } },
+    "sections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "sources"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "title": { "type": "string" },
+          "priority": { "type": "integer" },
+          "budget_chars": { "type": "integer" },
+          "body_chars": { "type": "integer" },
+          "original_body_chars": { "type": "integer" },
+          "truncated": { "type": "boolean" },
+          "included_reason": { "type": "string" },
+          "sources": { "type": "array", "items": { "type": "object" } },
+          "event_ids": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "section_char_rank": { "type": "array", "items": { "type": "object" } },
+    "input_hashes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "sha256"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "sha256": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "context_pack": {
+      "type": "object",
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "minLength": 1 },
+        "chars": { "type": "integer" }
+      }
+    },
+    "snapshot": { "type": "string" }
+  }
+}

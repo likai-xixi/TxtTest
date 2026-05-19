@@ -63,9 +63,9 @@ python scripts/novel.py core-freeze-check
 三类 agent 审查完成后，先逐条记录结构化运行证据，再生成 manifest：
 
 ```bash
-python scripts/novel.py idea-agent-run --id idea_xxx --role product_founder --agent-id agent_pf_001 --output state/idea_lab/idea_xxx/product_founder_review.md
-python scripts/novel.py idea-agent-run --id idea_xxx --role technical_lead --agent-id agent_tl_001 --output state/idea_lab/idea_xxx/technical_lead_review.md
-python scripts/novel.py idea-agent-run --id idea_xxx --role qa_release --agent-id agent_qa_001 --output state/idea_lab/idea_xxx/qa_release_review.md
+python scripts/novel.py idea-agent-run --id idea_xxx --role product_founder --agent-id agent_pf_001 --runner-id codex_pf_001 --transcript state/idea_lab/idea_xxx/product_founder_transcript.md --isolation-attestation "Read only original_idea.md and deepseek_idea.md." --output state/idea_lab/idea_xxx/product_founder_review.md
+python scripts/novel.py idea-agent-run --id idea_xxx --role technical_lead --agent-id agent_tl_001 --runner-id codex_tl_001 --transcript state/idea_lab/idea_xxx/technical_lead_transcript.md --isolation-attestation "Read only original_idea.md and deepseek_idea.md." --output state/idea_lab/idea_xxx/technical_lead_review.md
+python scripts/novel.py idea-agent-run --id idea_xxx --role qa_release --agent-id agent_qa_001 --runner-id codex_qa_001 --transcript state/idea_lab/idea_xxx/qa_release_transcript.md --isolation-attestation "Read only original_idea.md and deepseek_idea.md." --output state/idea_lab/idea_xxx/qa_release_review.md
 python scripts/novel.py idea-agent-manifest --id idea_xxx
 ```
 

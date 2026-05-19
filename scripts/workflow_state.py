@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import subprocess
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -40,6 +41,23 @@ def git_status() -> str:
     if result.returncode != 0:
         return "not a git repository"
     return result.stdout.strip() or "clean"
+
+
+def template_readiness() -> dict[str, Any]:
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "check_template.py")],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    detail = ((result.stdout or "") + (result.stderr or "")).strip()
+    return {
+        "status": "TEMPLATE_READY" if result.returncode == 0 else "TEMPLATE_NOT_READY",
+        "returncode": result.returncode,
+        "detail": detail,
+    }
 
 
 def has_placeholders(path: Path | str) -> bool:
@@ -156,6 +174,11 @@ def _hash_current(item: object) -> tuple[bool, str]:
     return True, ""
 
 
+def _stable_hash(value: object) -> str:
+    payload = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
 def agent_run_matrix(idea_id: str | None, lab: Path) -> dict[str, Any]:
     path = lab / "agent_runs.json"
     report: dict[str, Any] = {
@@ -196,6 +219,10 @@ def agent_run_matrix(idea_id: str | None, lab: Path) -> dict[str, Any]:
             "has_run": isinstance(run, dict),
             "agent_id": None,
             "completed_at": None,
+            "runner_type": None,
+            "runner_id": None,
+            "transcript_hash_current": False,
+            "isolation_attestation": False,
             "input_hashes_current": False,
             "output_hash_current": False,
             "manifest_covered": False,
@@ -209,10 +236,19 @@ def agent_run_matrix(idea_id: str | None, lab: Path) -> dict[str, Any]:
 
         item["agent_id"] = str(run.get("agent_id") or "")
         item["completed_at"] = run.get("completed_at")
+        item["runner_type"] = run.get("runner_type")
+        item["runner_id"] = run.get("runner_id")
+        item["isolation_attestation"] = bool(str(run.get("isolation_attestation") or "").strip())
         if run.get("role") != role:
             item["errors"].append("role mismatch")
         if not item["agent_id"]:
             item["errors"].append("missing agent_id")
+        if item["runner_type"] not in {"codex_subagent", "external_agent"}:
+            item["errors"].append("missing valid runner_type")
+        if not str(item["runner_id"] or "").strip():
+            item["errors"].append("missing runner_id")
+        if not item["isolation_attestation"]:
+            item["errors"].append("missing isolation_attestation")
         if not _valid_iso(item["completed_at"]):
             item["errors"].append("missing valid completed_at")
 
@@ -233,6 +269,15 @@ def agent_run_matrix(idea_id: str | None, lab: Path) -> dict[str, Any]:
             input_ok = False
         item["input_hashes_current"] = input_ok
 
+        allowed_inputs = run.get("allowed_inputs")
+        if not isinstance(allowed_inputs, list):
+            item["errors"].append("allowed_inputs must be a list")
+            allowed_inputs = []
+        elif allowed_inputs != input_files:
+            item["errors"].append("allowed_inputs must match input_files")
+        if run.get("allowed_inputs_sha256") != _stable_hash(allowed_inputs):
+            item["errors"].append("allowed_inputs_sha256 mismatch")
+
         output = run.get("output_file")
         expected_output = (lab / filename).relative_to(ROOT).as_posix()
         if isinstance(output, dict) and output.get("path") != expected_output:
@@ -241,6 +286,14 @@ def agent_run_matrix(idea_id: str | None, lab: Path) -> dict[str, Any]:
         item["output_hash_current"] = output_ok
         if output_error:
             item["errors"].append(f"output: {output_error}")
+
+        transcript_ok, transcript_error = _hash_current(run.get("transcript_file"))
+        item["transcript_hash_current"] = transcript_ok
+        if transcript_error:
+            item["errors"].append(f"transcript: {transcript_error}")
+        elif isinstance(run.get("transcript_file"), dict) and run["transcript_file"].get("sha256") != run.get("transcript_sha256"):
+            item["errors"].append("transcript_sha256 mismatch")
+            item["transcript_hash_current"] = False
 
         review = manifest_reviews.get(role) if isinstance(manifest_reviews, dict) else None
         item["manifest_covered"] = (
@@ -520,6 +573,20 @@ def dashboard(chapter: str | None = None) -> dict[str, Any]:
         why = "已具备下一步所需基础材料，按候选/收章流程继续。"
         command = prompt
 
+    env_blockers: list[str] = []
+    if not os.environ.get("DEEPSEEK_API_KEY"):
+        env_blockers.append("DEEPSEEK_API_KEY is missing")
+    template = template_readiness()
+    story_ready = phase_id == "draft_or_close" and not locks and not freeze_errors and not gate
+    readiness = {
+        "env_status": "ENV_READY" if not env_blockers else "ENV_NOT_READY",
+        "template_status": template["status"],
+        "story_status": "STORY_READY" if story_ready else "STORY_NOT_READY",
+        "env_blockers": env_blockers,
+        "template_check_returncode": template["returncode"],
+        "template_check_detail": template["detail"],
+    }
+
     writes = ["state/idea_lab/", "external_runs/deepseek/"] if freeze_errors else []
     if not freeze_errors:
         if not paths["brief"].exists() or has_placeholders(paths["brief"]):
@@ -563,6 +630,10 @@ def dashboard(chapter: str | None = None) -> dict[str, Any]:
         "root": str(ROOT),
         "git": git_status(),
         "deepseek_api_key": "set" if os.environ.get("DEEPSEEK_API_KEY") else "missing",
+        "env_status": readiness["env_status"],
+        "template_status": readiness["template_status"],
+        "story_status": readiness["story_status"],
+        "readiness": readiness,
         "chapter": chapter,
         "phase_id": phase_id,
         "blocker": blocker,

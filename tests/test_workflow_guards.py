@@ -69,8 +69,8 @@ def write_context_quality(repo: Path, chapter: str) -> None:
     manifest = {
         "schema_version": 2,
         "chapter": chapter,
-        "budget_chars": 6000,
-        "hard_max_chars": 24000,
+        "budget_chars": 12000,
+        "hard_max_chars": 48000,
         "allow_truncated": False,
         "pack_truncated": False,
         "pack_chars": len((repo / context_rel).read_text(encoding="utf-8")),
@@ -96,7 +96,7 @@ def write_context_quality(repo: Path, chapter: str) -> None:
         "manifest_path": manifest_rel,
         "context_pack_sha256": file_sha(repo, context_rel),
         "manifest_sha256": file_sha(repo, manifest_rel),
-        "budget_chars": 6000,
+        "budget_chars": 12000,
         "pack_chars": manifest["pack_chars"],
         "required_fact_coverage": 1.0,
         "unsupported_key_fact_count": 0,
@@ -111,6 +111,27 @@ def write_context_quality(repo: Path, chapter: str) -> None:
         "warnings": [],
     }
     write(repo, quality_rel, json.dumps(quality, ensure_ascii=False, indent=2) + "\n")
+
+
+def write_element_usage_report(repo: Path, chapter: str) -> None:
+    volume = chapter[:3]
+    chapter_file = f"c{int(chapter[-3:]):03d}.md"
+    report = {
+        "schema_version": 1,
+        "chapter": chapter,
+        "generated_at": "2000-01-01T00:00:00+00:00",
+        "status": "READY",
+        "official_chapter": {"path": f"chapters/{volume}/{chapter_file}"},
+        "authorized_object_ids": [],
+        "authorized_ability_ids": [],
+        "used_object_ids": [],
+        "used_ability_ids": [],
+        "l34_markers": [],
+        "blockers": [],
+        "warnings": [],
+    }
+    write(repo, f"reviews/{chapter}/element_usage.json", json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+    write(repo, f"reviews/{chapter}/element_usage.md", f"# Element Usage: {chapter}\n\nstatus: READY\n")
 
 
 def write_minimal_derived_governance(repo: Path, chapter: str) -> None:
@@ -465,14 +486,27 @@ def write_agent_runs(repo: Path, idea: str) -> None:
         ("qa_release", "qa_release_review.md"),
     ]:
         output = f"{lab}/{name}"
+        transcript = f"{lab}/{role}_transcript.md"
+        write(repo, transcript, f"# Transcript: {role}\n\nRead original_idea.md and deepseek_idea.md only.\n")
+        input_files = [
+            {"path": path, "sha256": file_sha(repo, path)}
+            for path in input_paths
+        ]
+        allowed_inputs_sha = hashlib.sha256(
+            json.dumps(input_files, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
         runs[role] = {
             "role": role,
             "agent_id": f"agent_{role}",
-            "input_files": [
-                {"path": path, "sha256": file_sha(repo, path)}
-                for path in input_paths
-            ],
+            "runner_type": "codex_subagent",
+            "runner_id": f"runner_{role}",
+            "input_files": input_files,
+            "allowed_inputs": input_files,
+            "allowed_inputs_sha256": allowed_inputs_sha,
             "output_file": {"path": output, "sha256": file_sha(repo, output)},
+            "transcript_file": {"path": transcript, "sha256": file_sha(repo, transcript)},
+            "transcript_sha256": file_sha(repo, transcript),
+            "isolation_attestation": "Only original_idea.md and deepseek_idea.md were read.",
             "completed_at": "2026-01-01T00:00:00+00:00",
         }
     write(
@@ -763,6 +797,7 @@ def write_complete_chapter_evidence(repo: Path, chapter: str, number: int) -> No
     write(repo, f"reviews/{chapter}/continuity.md", "# Continuity\n\nstatus: CLEAR\np0_count: 0\np1_count: 0\n")
     write(repo, f"reviews/{chapter}/decision.md", "# Decision\n\ndecision: Ship\n")
     write_auxiliary_reviews(repo, chapter)
+    write_element_usage_report(repo, chapter)
 
 
 def write_human_events(repo: Path, count: int) -> None:
@@ -966,6 +1001,15 @@ class WorkflowGuardTests(unittest.TestCase):
                 "stale-check",
                 "workflow-smoke",
                 "pacing-dashboard",
+                "start-here",
+                "opening-preflight",
+                "opening-status",
+                "freeze-preview",
+                "fact-cards",
+                "accept-fact-card",
+                "element-usage",
+                "long-health",
+                "longrun-smoke",
             ):
                 self.assertIn(command, help_result.stdout)
 
@@ -986,11 +1030,12 @@ class WorkflowGuardTests(unittest.TestCase):
             result = run_with_env(repo, ("scripts/novel.py", "audit", "--chapter", "v01_c001"), env)
 
             self.assertNotEqual(result.returncode, 0)
-            self.assertIn("# 总编审查报告", result.stdout)
+            self.assertIn("# Editor Audit Report", result.stdout)
             self.assertIn("core-freeze-check: NOT_READY", result.stdout)
             self.assertIn("brief-check: NOT_READY", result.stdout)
             self.assertIn("next_prompt:", result.stdout)
             self.assertIn("deepseek-preflight", result.stdout)
+            self.assertIn("code: CORE_FREEZE_CHECK_NOT_READY", result.stdout)
 
     def test_audit_write_report_preserves_not_ready_exit_code(self) -> None:
         with copy_repo() as temp:
@@ -1010,11 +1055,58 @@ class WorkflowGuardTests(unittest.TestCase):
             latest = repo / "state/audit/latest.md"
             self.assertTrue(latest.exists())
             report = latest.read_text(encoding="utf-8")
-            self.assertIn("# 总编审查报告", report)
+            self.assertIn("# Editor Audit Report", report)
             self.assertIn("overall: NOT_READY", report)
             self.assertIn("core-freeze-check: NOT_READY", report)
             timestamped = list((repo / "state/audit").glob("audit_*.md"))
             self.assertTrue(timestamped)
+
+    def test_start_here_and_opening_preflight_report_three_layers(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            env = os.environ.copy()
+            env["DEEPSEEK_API_KEY"] = "test-key"
+
+            start = run_with_env(repo, ("scripts/novel.py", "start-here", "--json"), env)
+            preflight = run_with_env(repo, ("scripts/novel.py", "opening-preflight", "--json"), env)
+
+            self.assertEqual(start.returncode, 0, start.stdout + start.stderr)
+            start_data = json.loads(start.stdout)
+            self.assertEqual(start_data["env_status"], "ENV_READY")
+            self.assertEqual(start_data["template_status"], "TEMPLATE_READY")
+            self.assertEqual(start_data["story_status"], "STORY_NOT_READY")
+            self.assertEqual(preflight.returncode, 0, preflight.stdout + preflight.stderr)
+            preflight_data = json.loads(preflight.stdout)
+            self.assertEqual(preflight_data["status"], "READY_FOR_IDEA")
+            self.assertIn("product_founder", preflight_data["required_roles"])
+
+    def test_opening_preflight_blocks_missing_deepseek_key(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            env = os.environ.copy()
+            env.pop("DEEPSEEK_API_KEY", None)
+
+            result = run_with_env(repo, ("scripts/novel.py", "opening-preflight", "--json"), env)
+
+            self.assertNotEqual(result.returncode, 0)
+            data = json.loads(result.stdout)
+            self.assertEqual(data["status"], "BLOCKED")
+            self.assertIn("DEEPSEEK_API_KEY is missing", data["blockers"])
+
+    def test_audit_mode_outputs_machine_codes(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            env = os.environ.copy()
+            env["DEEPSEEK_API_KEY"] = "test-key"
+            env["NOVEL_AUDIT_DEPTH"] = "1"
+
+            result = run_with_env(repo, ("scripts/novel.py", "audit", "--mode", "project", "--chapter", "v01_c001", "--json"), env)
+
+            self.assertNotEqual(result.returncode, 0)
+            data = json.loads(result.stdout)
+            self.assertEqual(data["mode"], "project")
+            codes = {step["code"] for step in data["steps"]}
+            self.assertIn("CORE_FREEZE_CHECK_NOT_READY", codes)
 
     def test_local_ci_entrypoint_runs_template_checks(self) -> None:
         with copy_repo() as temp:
@@ -1128,7 +1220,7 @@ class WorkflowGuardTests(unittest.TestCase):
             self.assertTrue((repo / "state/derived/context_quality/v01_c001.md").exists())
             quality = json.loads((repo / "state/derived/context_quality/v01_c001.json").read_text(encoding="utf-8"))
             self.assertEqual(quality["status"], "READY")
-            self.assertEqual(quality["budget_chars"], 6000)
+            self.assertEqual(quality["budget_chars"], 12000)
             quality_md = (repo / "state/derived/context_quality/v01_c001.md").read_text(encoding="utf-8")
             self.assertIn("# Context Quality Report: v01_c001", quality_md)
             self.assertIn("status: READY", quality_md)
@@ -1333,6 +1425,12 @@ class WorkflowGuardTests(unittest.TestCase):
                 "agent_pf_001",
                 "--output",
                 f"{lab}/product_founder_review.md",
+                "--runner-id",
+                "runner_pf_001",
+                "--transcript",
+                f"{lab}/product_founder_transcript.md",
+                "--isolation-attestation",
+                "Only original_idea.md and deepseek_idea.md were read.",
             )
             self.assertEqual(one_run.returncode, 0, one_run.stdout + one_run.stderr)
             partial_manifest = run(repo, "scripts/novel.py", "idea-agent-manifest", "--id", idea)
@@ -1355,6 +1453,12 @@ class WorkflowGuardTests(unittest.TestCase):
                     agent_id,
                     "--output",
                     f"{lab}/{filename}",
+                    "--runner-id",
+                    f"runner_{role}",
+                    "--transcript",
+                    f"{lab}/{role}_transcript.md",
+                    "--isolation-attestation",
+                    "Only original_idea.md and deepseek_idea.md were read.",
                 )
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
@@ -1362,7 +1466,23 @@ class WorkflowGuardTests(unittest.TestCase):
             self.assertEqual(manifest_result.returncode, 0, manifest_result.stdout + manifest_result.stderr)
             manifest = json.loads((repo / f"{lab}/agent_review_manifest.json").read_text(encoding="utf-8"))
             self.assertEqual(manifest["reviews"]["product_founder"]["agent_id"], "agent_pf_001")
+            self.assertEqual(manifest["reviews"]["product_founder"]["agent_run"]["runner_type"], "codex_subagent")
+            self.assertIn("transcript_file", manifest["reviews"]["product_founder"]["agent_run"])
             self.assertEqual(manifest["reviews"]["qa_release"]["agent_run"]["agent_id"], "agent_qa_001")
+
+    def test_agent_manifest_rejects_missing_transcript_proof(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            idea = "idea_missing_transcript"
+            lab = write_ready_idea_lab(repo, idea)
+            data = json.loads((repo / f"{lab}/agent_runs.json").read_text(encoding="utf-8"))
+            data["runs"]["product_founder"].pop("transcript_file")
+            write(repo, f"{lab}/agent_runs.json", json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+
+            result = run(repo, "scripts/novel.py", "idea-agent-manifest", "--id", idea)
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("missing transcript_file", result.stderr)
 
     def test_agent_manifest_rejects_changed_agent_output_hash(self) -> None:
         with copy_repo() as temp:
@@ -1392,6 +1512,21 @@ class WorkflowGuardTests(unittest.TestCase):
             self.assertFalse((repo / f"{lab}/selection.md").exists())
             self.assertFalse((repo / f"{lab}/core_setting_freeze.json").exists())
             self.assertFalse((repo / "state/idea_lab/selected.json").exists())
+
+    def test_freeze_preview_does_not_write_selection_or_freeze(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            idea = "idea_freeze_preview"
+            lab = write_ready_idea_lab(repo, idea)
+
+            result = run(repo, "scripts/novel.py", "freeze-preview", "--id", idea, "--choice", "A", "--json")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            data = json.loads(result.stdout)
+            self.assertEqual(data["choice"], "A")
+            self.assertIn("worldview_core", data["fields"])
+            self.assertFalse((repo / f"{lab}/selection.json").exists())
+            self.assertFalse((repo / f"{lab}/core_setting_freeze.json").exists())
 
     def test_core_freeze_check_detects_changed_evidence(self) -> None:
         with copy_repo() as temp:
@@ -2096,7 +2231,7 @@ print("OK: stub deepseek idea")
             )
 
             self.assertNotEqual(result.returncode, 0)
-            self.assertIn("use --selected-direction DeepSeek", result.stderr)
+            self.assertIn("does not match candidate selection choice DeepSeek", result.stderr)
 
     def test_chapter_evidence_allows_direct_deepseek_adoption(self) -> None:
         with copy_repo() as temp:
@@ -2161,6 +2296,7 @@ print("OK: stub deepseek idea")
             write(repo, "reviews/v01_c001/model_disagreement.md", MODEL_DISAGREEMENT_READY)
             write(repo, "reviews/v01_c001/continuity.md", "# Continuity\n\nstatus: CLEAR\np0_count: 0\np1_count: 0\n")
             write_auxiliary_reviews(repo, "v01_c001")
+            write_element_usage_report(repo, "v01_c001")
 
             result = run(repo, "scripts/novel.py", "evidence", "v01_c001")
 
@@ -3310,6 +3446,81 @@ print("OK: stub deepseek idea")
             self.assertIn("--anchor-end-time", result.stdout)
             self.assertEqual(ledger_before, (repo / "state/event_ledger.jsonl").read_text(encoding="utf-8"))
 
+    def test_fact_cards_write_and_accept_appends_event(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            chapter = "v01_c001"
+            write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF.format(chapter=chapter))
+            write(repo, "chapters/v01/c001.md", "Official chapter v01_c001 with tracked decision.\n")
+
+            cards = run(repo, "scripts/novel.py", "fact-cards", chapter, "--write", "--json")
+            self.assertEqual(cards.returncode, 0, cards.stdout + cards.stderr)
+            self.assertTrue((repo / "reviews/v01_c001/fact_cards.json").exists())
+
+            accepted = run(
+                repo,
+                "scripts/novel.py",
+                "accept-fact-card",
+                chapter,
+                "--id",
+                "protagonist_choice",
+                "--evidence-quote",
+                "tracked decision",
+            )
+
+            self.assertEqual(accepted.returncode, 0, accepted.stdout + accepted.stderr)
+            ledger = (repo / "state/event_ledger.jsonl").read_text(encoding="utf-8")
+            self.assertIn("character_decision", ledger)
+            self.assertIn("protagonist_choice", ledger)
+
+    def test_element_usage_blocks_unauthorized_marker(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF.format(chapter="v01_c001"))
+            write(repo, "chapters/v01/c001.md", "The chapter uses [object:forbidden_key] to solve the case.\n")
+            write(repo, "state/context_pack/v01_c001.md", "context\n")
+            write_context_quality(repo, "v01_c001")
+
+            result = run(repo, "scripts/novel.py", "element-usage", "v01_c001", "--json")
+
+            self.assertNotEqual(result.returncode, 0)
+            data = json.loads(result.stdout)
+            self.assertEqual(data["status"], "NOT_READY")
+            self.assertIn("unauthorized object marker: forbidden_key", data["blockers"])
+
+    def test_context_quality_warns_for_deferred_low_priority_threads(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write(repo, "bible/rules.md", "# Rules\n\nready\n")
+            write(
+                repo,
+                "state/event_ledger.jsonl",
+                json.dumps(
+                    {
+                        "event_id": "v01_c001_e001",
+                        "chapter": "v01_c001",
+                        "type": "thread_opened",
+                        "thread_id": "p2_thread",
+                        "fact": "A low-priority thread opens.",
+                        "evidence_quote": "thread opens",
+                        "consequence": "It can be summarized later.",
+                        "verified_by": "human",
+                        "importance": "P2",
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+            )
+            write(repo, "state/context_pack/v01_c002.md", "context without explicit low priority thread\n")
+            write_context_quality(repo, "v01_c002")
+
+            result = run(repo, "scripts/novel.py", "context-quality", "v01_c002")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            data = json.loads((repo / "state/derived/context_quality/v01_c002.json").read_text(encoding="utf-8"))
+            self.assertEqual(data["status"], "READY")
+            self.assertTrue(data["thread_coverage"]["budget_deferred"])
+
     def test_schema_validator_accepts_and_rejects_event_fixtures(self) -> None:
         with copy_repo() as temp:
             repo = temp
@@ -3348,6 +3559,17 @@ print("OK: stub deepseek idea")
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("SCHEMA:", result.stderr)
             self.assertIn("selected_at", result.stderr)
+
+    def test_template_check_validates_context_manifest_schema(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write(repo, "state/context_pack/v01_c001.manifest.json", json.dumps({"schema_version": 2, "chapter": "bad"}) + "\n")
+
+            result = run(repo, "scripts/novel.py", "check")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("state/context_pack/v01_c001.manifest.json", result.stderr)
+            self.assertIn("budget_chars", result.stderr)
 
     def test_template_check_validates_agent_runs_schema(self) -> None:
         with copy_repo() as temp:
@@ -3599,6 +3821,16 @@ print("OK: stub deepseek idea")
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn("SMOKE OK: workflow sandbox completed", result.stdout)
             self.assertEqual(ledger_before, (repo / "state/event_ledger.jsonl").read_text(encoding="utf-8"))
+
+    def test_longrun_smoke_runs_synthetic_governance_checks(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+
+            result = run(repo, "scripts/novel.py", "longrun-smoke", "--chapters", "10")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("# context-quality: OK", result.stdout)
+            self.assertIn("# long-health: OK", result.stdout)
 
     def test_second_revise_once_is_blocked(self) -> None:
         with copy_repo() as temp:

@@ -601,6 +601,8 @@ def command_idea_agent_manifest(args: argparse.Namespace) -> int:
 def command_idea_agent_run(args: argparse.Namespace) -> int:
     ensure_no_open_locks()
     script_args = ["--id", args.id, "--role", args.role, "--agent-id", args.agent_id, "--output", args.output]
+    script_args.extend(["--runner-type", args.runner_type, "--runner-id", args.runner_id])
+    script_args.extend(["--transcript", args.transcript, "--isolation-attestation", args.isolation_attestation])
     if args.completed_at:
         script_args.extend(["--completed-at", args.completed_at])
     run_script("record_agent_run.py", *script_args)
@@ -646,8 +648,8 @@ def command_brief_candidates(args: argparse.Namespace) -> int:
     brief = ROOT / "outline" / "chapter_briefs" / f"{args.chapter}.md"
     if not brief.exists():
         run_script("new_chapter.py", "--chapter", args.chapter)
-    run_script("brief_precheck.py", args.chapter)
     run_script("build_derived_state.py")
+    run_script("brief_precheck.py", args.chapter)
     run_script("build_brief_pack.py", "--chapter", args.chapter)
     if args.deepseek or args.deepseek_dry_run:
         script_args = ["--chapter", args.chapter]
@@ -884,6 +886,7 @@ def command_close(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
             return 1
+        run_script("element_usage.py", args.chapter, "--write")
         run_script("chapter_evidence.py", "--chapter", args.chapter)
 
     command_decision(args)
@@ -975,6 +978,15 @@ def command_chapter_evidence(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_element_usage(args: argparse.Namespace) -> int:
+    script_args = [args.chapter]
+    if args.json:
+        script_args.append("--json")
+    if args.write:
+        script_args.append("--write")
+    return run_script("element_usage.py", *script_args, check=False)
+
+
 def command_context_quality(args: argparse.Namespace) -> int:
     return run_script("context_pack_quality.py", "--chapter", args.chapter, check=False)
 
@@ -1024,6 +1036,40 @@ def command_idea_status(args: argparse.Namespace) -> int:
     return run_script("idea_status.py", *script_args, check=False)
 
 
+def command_start_here(args: argparse.Namespace) -> int:
+    script_args: list[str] = []
+    if args.json:
+        script_args.append("--json")
+    return run_script("start_here.py", *script_args, check=False)
+
+
+def command_opening_preflight(args: argparse.Namespace) -> int:
+    script_args: list[str] = []
+    if args.json:
+        script_args.append("--json")
+    if args.live:
+        script_args.append("--live")
+    return run_script("opening_preflight.py", *script_args, check=False)
+
+
+def command_opening_status(args: argparse.Namespace) -> int:
+    script_args: list[str] = []
+    if args.id:
+        script_args.extend(["--id", args.id])
+    if args.json:
+        script_args.append("--json")
+    return run_script("idea_status.py", *script_args, check=False)
+
+
+def command_freeze_preview(args: argparse.Namespace) -> int:
+    script_args = ["--id", args.id, "--choice", args.choice]
+    if args.mixed_strategy:
+        script_args.extend(["--mixed-strategy", args.mixed_strategy])
+    if args.json:
+        script_args.append("--json")
+    return run_script("freeze_preview.py", *script_args, check=False)
+
+
 def command_brief_check(args: argparse.Namespace) -> int:
     return run_script("brief_check.py", "--chapter", args.chapter, check=False)
 
@@ -1063,6 +1109,44 @@ def command_event_suggest(args: argparse.Namespace) -> int:
     return run_script("event_suggest.py", args.chapter, check=False)
 
 
+def command_fact_cards(args: argparse.Namespace) -> int:
+    script_args = [args.chapter]
+    if args.json:
+        script_args.append("--json")
+    if args.write:
+        script_args.append("--write")
+    return run_script("fact_cards.py", *script_args, check=False)
+
+
+def command_accept_fact_card(args: argparse.Namespace) -> int:
+    ensure_no_open_locks()
+    script_args = [args.chapter, "--id", args.id]
+    for attr, option in [
+        ("fact", "--fact"),
+        ("evidence_quote", "--evidence-quote"),
+        ("consequence", "--consequence"),
+        ("thread_id", "--thread-id"),
+        ("importance", "--importance"),
+        ("anchor_end_time", "--anchor-end-time"),
+        ("anchor_end_location", "--anchor-end-location"),
+        ("anchor_protagonist_state", "--anchor-protagonist-state"),
+        ("anchor_unfinished_action", "--anchor-unfinished-action"),
+        ("anchor_next_required_continuity", "--anchor-next-required-continuity"),
+    ]:
+        value = getattr(args, attr, "")
+        if value:
+            script_args.extend([option, value])
+    for value in args.entity:
+        script_args.extend(["--entity", value])
+    for value in args.tag:
+        script_args.extend(["--tag", value])
+    for value in args.anchor_present_character:
+        script_args.extend(["--anchor-present-character", value])
+    for value in args.anchor_carried_item:
+        script_args.extend(["--anchor-carried-item", value])
+    return run_script("accept_fact_card.py", *script_args, check=False)
+
+
 def command_canon_propose(args: argparse.Namespace) -> int:
     return run_script("canon_propose.py", args.chapter, check=False)
 
@@ -1072,6 +1156,17 @@ def command_health_report(args: argparse.Namespace) -> int:
     if args.to:
         script_args.extend(["--to", args.to])
     return run_script("health_report.py", *script_args, check=False)
+
+
+def command_long_health(args: argparse.Namespace) -> int:
+    script_args: list[str] = []
+    if args.to:
+        script_args.extend(["--to", args.to])
+    if args.json:
+        script_args.append("--json")
+    if args.write:
+        script_args.append("--write")
+    return run_script("long_health.py", *script_args, check=False)
 
 
 def command_deepseek_preflight(args: argparse.Namespace) -> int:
@@ -1131,6 +1226,13 @@ def command_workflow_smoke(args: argparse.Namespace) -> int:
     return run_script("workflow_smoke.py", *script_args, check=False)
 
 
+def command_longrun_smoke(args: argparse.Namespace) -> int:
+    script_args = ["--chapters", str(args.chapters)]
+    if args.keep_temp:
+        script_args.append("--keep-temp")
+    return run_script("longrun_smoke.py", *script_args, check=False)
+
+
 def command_self_test(_args: argparse.Namespace) -> int:
     run_script("self_test.py")
     return 0
@@ -1147,6 +1249,8 @@ def command_audit(args: argparse.Namespace) -> int:
         script_args.extend(["--chapter", args.chapter])
     if args.gate:
         script_args.extend(["--gate", args.gate])
+    if args.mode:
+        script_args.extend(["--mode", args.mode])
     if args.write_report is not None:
         script_args.append("--write-report")
         if args.write_report:
@@ -1372,6 +1476,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--deepseek-dry-run", action="store_true", help="When the brief is ready, also write the DeepSeek prompt without calling the API.")
     p.set_defaults(func=command_go)
 
+    p = sub.add_parser("start-here", help="First-run guide for copied templates.")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=command_start_here)
+
+    p = sub.add_parser("opening-preflight", help="Check DeepSeek and opening experiment prerequisites.")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--live", action="store_true", help="Make a live DeepSeek preflight request.")
+    p.set_defaults(func=command_opening_preflight)
+
     p = sub.add_parser("draft", help="Open or continue a chapter until its context pack is ready.")
     p.add_argument("chapter")
     p.add_argument("--name", default="Untitled Novel")
@@ -1417,6 +1530,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--preview", action="store_true", help="Print planned writes and prerequisite checks without mutating files.")
     p.set_defaults(func=command_idea_select)
 
+    p = sub.add_parser("freeze-preview", help="Preview core setting freeze fields before idea-select.")
+    p.add_argument("--id", required=True, type=validate_idea_id)
+    p.add_argument("--choice", required=True, choices=["A", "B", "C", "Mixed"])
+    p.add_argument("--mixed-strategy", default="")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=command_freeze_preview)
+
     p = sub.add_parser("idea-agent-manifest", help="Record idea-lab multi-agent review provenance.")
     p.add_argument("--id", required=True, type=validate_idea_id)
     p.add_argument("--completed-at", default=None)
@@ -1427,6 +1547,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--role", required=True, choices=["product_founder", "technical_lead", "qa_release"])
     p.add_argument("--agent-id", required=True)
     p.add_argument("--output", required=True)
+    p.add_argument("--runner-type", choices=["codex_subagent", "external_agent"], default="codex_subagent")
+    p.add_argument("--runner-id", required=True)
+    p.add_argument("--transcript", required=True)
+    p.add_argument("--isolation-attestation", required=True)
     p.add_argument("--completed-at", default=None)
     p.set_defaults(func=command_idea_agent_run)
 
@@ -1614,6 +1738,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("chapter")
     p.set_defaults(func=command_chapter_evidence)
 
+    p = sub.add_parser("element-usage", help="Check official chapter element usage against authorized IDs.")
+    p.add_argument("chapter")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--write", action="store_true")
+    p.set_defaults(func=command_element_usage)
+
     p = sub.add_parser("context-quality", help="Check context pack quality before drafting.")
     p.add_argument("chapter")
     p.set_defaults(func=command_context_quality)
@@ -1648,6 +1778,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=command_idea_status)
 
+    p = sub.add_parser("opening-status", help="Alias for idea-status focused on the opening experiment.")
+    p.add_argument("--id", default=None)
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=command_opening_status)
+
     p = sub.add_parser("brief-check", help="Check a chapter brief for anti-drift requirements.")
     p.add_argument("chapter")
     p.set_defaults(func=command_brief_check)
@@ -1674,6 +1809,31 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("chapter")
     p.set_defaults(func=command_event_suggest)
 
+    p = sub.add_parser("fact-cards", help="Generate human-confirmable chapter fact cards.")
+    p.add_argument("chapter")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--write", action="store_true")
+    p.set_defaults(func=command_fact_cards)
+
+    p = sub.add_parser("accept-fact-card", help="Append one accepted fact card to the event ledger.")
+    p.add_argument("chapter")
+    p.add_argument("--id", required=True)
+    p.add_argument("--fact", default="")
+    p.add_argument("--evidence-quote", default="")
+    p.add_argument("--consequence", default="")
+    p.add_argument("--entity", action="append", default=[])
+    p.add_argument("--thread-id", default="")
+    p.add_argument("--importance", choices=["P0", "P1", "P2", "P3"], default=None)
+    p.add_argument("--tag", action="append", default=[])
+    p.add_argument("--anchor-end-time", default="")
+    p.add_argument("--anchor-end-location", default="")
+    p.add_argument("--anchor-present-character", action="append", default=[])
+    p.add_argument("--anchor-protagonist-state", default="")
+    p.add_argument("--anchor-carried-item", action="append", default=[])
+    p.add_argument("--anchor-unfinished-action", default="")
+    p.add_argument("--anchor-next-required-continuity", default="")
+    p.set_defaults(func=command_accept_fact_card)
+
     p = sub.add_parser("canon-propose", help="Propose canon entries without writing canon.")
     p.add_argument("chapter")
     p.set_defaults(func=command_canon_propose)
@@ -1681,6 +1841,12 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("health-report", help="Print a long-form health report without mutating state.")
     p.add_argument("--to", default=None)
     p.set_defaults(func=command_health_report)
+
+    p = sub.add_parser("long-health", help="Show long-run governance health signals.")
+    p.add_argument("--to", default=None)
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--write", action="store_true")
+    p.set_defaults(func=command_long_health)
 
     p = sub.add_parser("deepseek-preflight", help="Check DeepSeek configuration and live API connectivity.")
     p.add_argument("--no-live", action="store_true")
@@ -1718,12 +1884,18 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--keep-temp", action="store_true")
     p.set_defaults(func=command_workflow_smoke)
 
+    p = sub.add_parser("longrun-smoke", help="Run synthetic long-run governance smoke in a temporary copy.")
+    p.add_argument("--chapters", type=int, default=10)
+    p.add_argument("--keep-temp", action="store_true")
+    p.set_defaults(func=command_longrun_smoke)
+
     p = sub.add_parser("ci", help="Run local template CI checks.")
     p.set_defaults(func=command_ci)
 
     p = sub.add_parser("audit", help="Run a complete editor-readable project audit.")
     p.add_argument("--chapter", default=None)
     p.add_argument("--gate", default="A")
+    p.add_argument("--mode", choices=["template", "project", "release"], default="project")
     p.add_argument("--json", action="store_true")
     p.add_argument("--write-report", nargs="?", const="", default=None)
     p.set_defaults(func=command_audit)

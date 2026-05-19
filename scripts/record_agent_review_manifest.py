@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 from datetime import datetime
@@ -38,7 +39,7 @@ def validate_run_hash(path: Path, item: dict, label: str) -> list[str]:
     expected = item.get("sha256")
     if not isinstance(expected, str) or not expected.strip():
         return [f"{label} missing sha256"]
-    if not path.exists():
+    if not path.exists() or not path.is_file():
         return [f"{label} missing file: {path.relative_to(ROOT)}"]
     if sha256(path) != expected:
         return [f"{label} hash mismatch: {path.relative_to(ROOT)}"]
@@ -73,8 +74,14 @@ def load_agent_runs(idea_id: str, lab: Path) -> tuple[dict[str, dict], list[str]
             errors.append(f"agent_runs.json role mismatch for {role}")
         if not str(run.get("agent_id", "")).strip():
             errors.append(f"agent_runs.json {role} missing agent_id")
+        if run.get("runner_type") not in {"codex_subagent", "external_agent"}:
+            errors.append(f"agent_runs.json {role} missing valid runner_type")
+        if not str(run.get("runner_id", "")).strip():
+            errors.append(f"agent_runs.json {role} missing runner_id")
         if not valid_iso(run.get("completed_at")):
             errors.append(f"agent_runs.json {role} missing valid completed_at")
+        if not str(run.get("isolation_attestation", "")).strip():
+            errors.append(f"agent_runs.json {role} missing isolation_attestation")
 
         input_files = run.get("input_files")
         if not isinstance(input_files, list):
@@ -95,6 +102,18 @@ def load_agent_runs(idea_id: str, lab: Path) -> tuple[dict[str, dict], list[str]
                 continue
             errors.extend(validate_run_hash(source, item, f"{role} input {rel_path}"))
 
+        allowed_inputs = run.get("allowed_inputs")
+        if not isinstance(allowed_inputs, list):
+            errors.append(f"agent_runs.json {role} allowed_inputs must be a list")
+            allowed_inputs = []
+        if allowed_inputs != input_files:
+            errors.append(f"agent_runs.json {role} allowed_inputs must match input_files")
+        allowed_hash = run.get("allowed_inputs_sha256")
+        if not isinstance(allowed_hash, str) or not allowed_hash.strip():
+            errors.append(f"agent_runs.json {role} missing allowed_inputs_sha256")
+        elif allowed_hash != stable_hash(allowed_inputs):
+            errors.append(f"agent_runs.json {role} allowed_inputs_sha256 mismatch")
+
         output = run.get("output_file")
         expected_output = lab / filename
         if not isinstance(output, dict):
@@ -104,6 +123,15 @@ def load_agent_runs(idea_id: str, lab: Path) -> tuple[dict[str, dict], list[str]
             if output.get("path") != expected_output_rel:
                 errors.append(f"agent_runs.json {role} output_file path must be {expected_output_rel}")
             errors.extend(validate_run_hash(expected_output, output, f"{role} output"))
+        transcript = run.get("transcript_file")
+        if not isinstance(transcript, dict):
+            errors.append(f"agent_runs.json {role} missing transcript_file")
+        else:
+            transcript_rel = str(transcript.get("path", ""))
+            transcript_path = ROOT / transcript_rel
+            errors.extend(validate_run_hash(transcript_path, transcript, f"{role} transcript"))
+            if transcript.get("sha256") != run.get("transcript_sha256"):
+                errors.append(f"agent_runs.json {role} transcript_sha256 mismatch")
         if role not in validated:
             validated[role] = run
     return validated, errors
@@ -117,6 +145,11 @@ def valid_iso(value: object) -> bool:
     except ValueError:
         return False
     return True
+
+
+def stable_hash(value: object) -> str:
+    payload = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def main() -> int:

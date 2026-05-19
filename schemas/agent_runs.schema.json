@@ -11,9 +11,60 @@
       "type": "object",
       "required": ["product_founder", "technical_lead", "qa_release"],
       "properties": {
-        "product_founder": { "type": "object", "required": ["role", "agent_id", "input_files", "output_file", "completed_at"], "properties": { "role": { "const": "product_founder" }, "agent_id": { "type": "string", "minLength": 1 }, "input_files": { "type": "array", "items": { "type": "object", "required": ["path", "sha256"], "properties": { "path": { "type": "string", "minLength": 1 }, "sha256": { "type": "string", "minLength": 1 } } } }, "output_file": { "type": "object", "required": ["path", "sha256"], "properties": { "path": { "type": "string", "minLength": 1 }, "sha256": { "type": "string", "minLength": 1 } } }, "completed_at": { "type": "string", "minLength": 1 } } },
-        "technical_lead": { "type": "object", "required": ["role", "agent_id", "input_files", "output_file", "completed_at"], "properties": { "role": { "const": "technical_lead" }, "agent_id": { "type": "string", "minLength": 1 }, "input_files": { "type": "array", "items": { "type": "object", "required": ["path", "sha256"], "properties": { "path": { "type": "string", "minLength": 1 }, "sha256": { "type": "string", "minLength": 1 } } } }, "output_file": { "type": "object", "required": ["path", "sha256"], "properties": { "path": { "type": "string", "minLength": 1 }, "sha256": { "type": "string", "minLength": 1 } } }, "completed_at": { "type": "string", "minLength": 1 } } },
-        "qa_release": { "type": "object", "required": ["role", "agent_id", "input_files", "output_file", "completed_at"], "properties": { "role": { "const": "qa_release" }, "agent_id": { "type": "string", "minLength": 1 }, "input_files": { "type": "array", "items": { "type": "object", "required": ["path", "sha256"], "properties": { "path": { "type": "string", "minLength": 1 }, "sha256": { "type": "string", "minLength": 1 } } } }, "output_file": { "type": "object", "required": ["path", "sha256"], "properties": { "path": { "type": "string", "minLength": 1 }, "sha256": { "type": "string", "minLength": 1 } } }, "completed_at": { "type": "string", "minLength": 1 } } }
+        "product_founder": {
+          "type": "object",
+          "required": ["role", "agent_id", "runner_type", "runner_id", "input_files", "allowed_inputs", "allowed_inputs_sha256", "output_file", "transcript_file", "transcript_sha256", "isolation_attestation", "completed_at"],
+          "properties": {
+            "role": { "const": "product_founder" },
+            "agent_id": { "type": "string", "minLength": 1 },
+            "runner_type": { "enum": ["codex_subagent", "external_agent"] },
+            "runner_id": { "type": "string", "minLength": 1 },
+            "input_files": { "type": "array", "items": { "type": "object", "required": ["path", "sha256"], "properties": { "path": { "type": "string", "minLength": 1 }, "sha256": { "type": "string", "minLength": 1 } } } },
+            "allowed_inputs": { "type": "array", "items": { "type": "object", "required": ["path", "sha256"], "properties": { "path": { "type": "string", "minLength": 1 }, "sha256": { "type": "string", "minLength": 1 } } } },
+            "allowed_inputs_sha256": { "type": "string", "minLength": 1 },
+            "output_file": { "type": "object", "required": ["path", "sha256"], "properties": { "path": { "type": "string", "minLength": 1 }, "sha256": { "type": "string", "minLength": 1 } } },
+            "transcript_file": { "type": "object", "required": ["path", "sha256"], "properties": { "path": { "type": "string", "minLength": 1 }, "sha256": { "type": "string", "minLength": 1 } } },
+            "transcript_sha256": { "type": "string", "minLength": 1 },
+            "isolation_attestation": { "type": "string", "minLength": 1 },
+            "completed_at": { "type": "string", "minLength": 1 }
+          }
+        },
+        "technical_lead": {
+          "type": "object",
+          "required": ["role", "agent_id", "runner_type", "runner_id", "input_files", "allowed_inputs", "allowed_inputs_sha256", "output_file", "transcript_file", "transcript_sha256", "isolation_attestation", "completed_at"],
+          "properties": {
+            "role": { "const": "technical_lead" },
+            "agent_id": { "type": "string", "minLength": 1 },
+            "runner_type": { "enum": ["codex_subagent", "external_agent"] },
+            "runner_id": { "type": "string", "minLength": 1 },
+            "input_files": { "type": "array", "items": { "type": "object", "required": ["path", "sha256"], "properties": { "path": { "type": "string", "minLength": 1 }, "sha256": { "type": "string", "minLength": 1 } } } },
+            "allowed_inputs": { "type": "array", "items": { "type": "object", "required": ["path", "sha256"], "properties": { "path": { "type": "string", "minLength": 1 }, "sha256": { "type": "string", "minLength": 1 } } } },
+            "allowed_inputs_sha256": { "type": "string", "minLength": 1 },
+            "output_file": { "type": "object", "required": ["path", "sha256"], "properties": { "path": { "type": "string", "minLength": 1 }, "sha256": { "type": "string", "minLength": 1 } } },
+            "transcript_file": { "type": "object", "required": ["path", "sha256"], "properties": { "path": { "type": "string", "minLength": 1 }, "sha256": { "type": "string", "minLength": 1 } } },
+            "transcript_sha256": { "type": "string", "minLength": 1 },
+            "isolation_attestation": { "type": "string", "minLength": 1 },
+            "completed_at": { "type": "string", "minLength": 1 }
+          }
+        },
+        "qa_release": {
+          "type": "object",
+          "required": ["role", "agent_id", "runner_type", "runner_id", "input_files", "allowed_inputs", "allowed_inputs_sha256", "output_file", "transcript_file", "transcript_sha256", "isolation_attestation", "completed_at"],
+          "properties": {
+            "role": { "const": "qa_release" },
+            "agent_id": { "type": "string", "minLength": 1 },
+            "runner_type": { "enum": ["codex_subagent", "external_agent"] },
+            "runner_id": { "type": "string", "minLength": 1 },
+            "input_files": { "type": "array", "items": { "type": "object", "required": ["path", "sha256"], "properties": { "path": { "type": "string", "minLength": 1 }, "sha256": { "type": "string", "minLength": 1 } } } },
+            "allowed_inputs": { "type": "array", "items": { "type": "object", "required": ["path", "sha256"], "properties": { "path": { "type": "string", "minLength": 1 }, "sha256": { "type": "string", "minLength": 1 } } } },
+            "allowed_inputs_sha256": { "type": "string", "minLength": 1 },
+            "output_file": { "type": "object", "required": ["path", "sha256"], "properties": { "path": { "type": "string", "minLength": 1 }, "sha256": { "type": "string", "minLength": 1 } } },
+            "transcript_file": { "type": "object", "required": ["path", "sha256"], "properties": { "path": { "type": "string", "minLength": 1 }, "sha256": { "type": "string", "minLength": 1 } } },
+            "transcript_sha256": { "type": "string", "minLength": 1 },
+            "isolation_attestation": { "type": "string", "minLength": 1 },
+            "completed_at": { "type": "string", "minLength": 1 }
+          }
+        }
       }
     }
   }

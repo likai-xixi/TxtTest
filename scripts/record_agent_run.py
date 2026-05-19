@@ -29,12 +29,38 @@ def file_item(path: Path) -> dict[str, str]:
     return {"path": path.relative_to(ROOT).as_posix(), "sha256": sha256(path)}
 
 
+def resolve_repo_path(value: str) -> Path:
+    path = Path(value)
+    if not path.is_absolute():
+        path = ROOT / path
+    return path
+
+
+def allowed_inputs_hash(items: list[dict[str, str]]) -> str:
+    payload = json.dumps(items, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    import hashlib
+
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Record one idea-lab agent run before building the agent manifest.")
     parser.add_argument("--id", required=True, type=validate_idea_id)
     parser.add_argument("--role", required=True, choices=sorted(AGENT_ROLES))
     parser.add_argument("--agent-id", required=True)
     parser.add_argument("--output", required=True)
+    parser.add_argument("--runner-type", choices=["codex_subagent", "external_agent"], default="codex_subagent")
+    parser.add_argument("--runner-id", required=True)
+    parser.add_argument(
+        "--transcript",
+        required=True,
+        help="Transcript or run log proving the isolated agent review execution.",
+    )
+    parser.add_argument(
+        "--isolation-attestation",
+        required=True,
+        help="Short statement that the agent read only original_idea.md and deepseek_idea.md.",
+    )
     parser.add_argument("--completed-at", default=None, type=valid_completed_at)
     args = parser.parse_args()
 
@@ -48,16 +74,21 @@ def main() -> int:
         return 1
 
     expected_output = lab / AGENT_ROLES[args.role]
-    output = Path(args.output)
-    if not output.is_absolute():
-        output = ROOT / output
+    output = resolve_repo_path(args.output)
+    transcript = resolve_repo_path(args.transcript)
     if output.resolve() != expected_output.resolve():
         print(f"ERROR: --output for {args.role} must be {expected_output.relative_to(ROOT).as_posix()}", file=sys.stderr)
         return 1
-    required = [lab / "original_idea.md", lab / "deepseek_idea.md", output]
+    required = [lab / "original_idea.md", lab / "deepseek_idea.md", output, transcript]
     missing = [path.relative_to(ROOT).as_posix() for path in required if not path.exists() or not read_text(path).strip()]
     if missing:
         print(f"ERROR: missing or empty agent run files: {', '.join(missing)}", file=sys.stderr)
+        return 1
+    if not args.runner_id.strip():
+        print("ERROR: --runner-id must not be empty.", file=sys.stderr)
+        return 1
+    if not args.isolation_attestation.strip():
+        print("ERROR: --isolation-attestation must not be empty.", file=sys.stderr)
         return 1
 
     path = lab / "agent_runs.json"
@@ -65,11 +96,19 @@ def main() -> int:
     runs = data.get("runs") if isinstance(data, dict) else {}
     if not isinstance(runs, dict):
         runs = {}
+    input_files = [file_item(lab / "original_idea.md"), file_item(lab / "deepseek_idea.md")]
     runs[args.role] = {
         "role": args.role,
         "agent_id": args.agent_id.strip(),
-        "input_files": [file_item(lab / "original_idea.md"), file_item(lab / "deepseek_idea.md")],
+        "runner_type": args.runner_type,
+        "runner_id": args.runner_id.strip(),
+        "input_files": input_files,
+        "allowed_inputs": input_files,
+        "allowed_inputs_sha256": allowed_inputs_hash(input_files),
         "output_file": file_item(output),
+        "transcript_file": file_item(transcript),
+        "transcript_sha256": sha256(transcript),
+        "isolation_attestation": args.isolation_attestation.strip(),
         "completed_at": args.completed_at or now_iso(),
     }
     data = {

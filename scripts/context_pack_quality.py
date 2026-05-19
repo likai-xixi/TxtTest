@@ -107,6 +107,10 @@ def active_threads(chapter: str, events: list[dict[str, Any]]) -> dict[str, dict
         thread_id = str(event.get("thread_id") or event.get("fact") or event["event_id"])
         item = threads.setdefault(thread_id, {"id": thread_id, "status": "open", "event_ids": []})
         item["event_ids"].append(event["event_id"])
+        rank = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}
+        importance = str(event.get("importance") or item.get("importance") or "P2")
+        current = str(item.get("importance") or importance)
+        item["importance"] = importance if rank.get(importance, 2) < rank.get(current, 2) else current
         if event["type"] == "thread_advanced":
             item["status"] = "active"
         elif event["type"] == "thread_paid_off":
@@ -208,12 +212,37 @@ def evaluate_context_pack(chapter: str) -> dict[str, Any]:
 
     threads = active_threads(chapter, events)
     included_threads = 0
+    thread_coverage_items: list[dict[str, Any]] = []
     for thread_id, thread in threads.items():
-        if thread_id in pack_text or any(event_id in included_event_ids for event_id in thread["event_ids"]):
+        included = thread_id in pack_text or any(event_id in included_event_ids for event_id in thread["event_ids"])
+        if included:
             included_threads += 1
+        thread_coverage_items.append(
+            {
+                "thread_id": thread_id,
+                "importance": thread.get("importance", "P2"),
+                "status": thread.get("status", "open"),
+                "covered": included,
+                "event_ids": thread.get("event_ids", []),
+            }
+        )
     active_thread_coverage = 1.0 if not threads else included_threads / len(threads)
-    if threads and active_thread_coverage < 1.0:
-        blockers.append(f"active/open thread coverage incomplete: {included_threads}/{len(threads)}")
+    critical_missing = [
+        item for item in thread_coverage_items if not item["covered"] and item.get("importance") in {"P0", "P1"}
+    ]
+    deferred_threads = [
+        item for item in thread_coverage_items if not item["covered"] and item.get("importance") not in {"P0", "P1"}
+    ]
+    if critical_missing:
+        blockers.append(
+            "critical active/open thread coverage incomplete: "
+            + ", ".join(str(item["thread_id"]) for item in critical_missing)
+        )
+    if deferred_threads:
+        warnings.append(
+            "lower-priority active/open threads not explicitly included: "
+            + ", ".join(str(item["thread_id"]) for item in deferred_threads[:10])
+        )
 
     truncation_count = sum(1 for section in sections if isinstance(section, dict) and section.get("truncated"))
     empty_sections = sum(
@@ -248,6 +277,13 @@ def evaluate_context_pack(chapter: str) -> dict[str, Any]:
         "required_fact_coverage": required_fact_coverage,
         "unsupported_key_fact_count": len(missing_critical) + len(source_failures),
         "active_thread_coverage": active_thread_coverage,
+        "thread_coverage": {
+            "total": len(thread_coverage_items),
+            "covered": included_threads,
+            "critical_missing": critical_missing,
+            "summarized_covered": [item for item in thread_coverage_items if item["covered"]],
+            "budget_deferred": deferred_threads,
+        },
         "irrelevant_section_ratio": irrelevant_section_ratio,
         "truncation_count": truncation_count,
         "source_traceability": {
@@ -302,6 +338,8 @@ def render_markdown_report(report: dict[str, Any]) -> str:
             f"- required_fact_coverage: {report.get('required_fact_coverage', 'unknown')}",
             f"- active_thread_coverage: {report.get('active_thread_coverage', 'unknown')}",
             f"- source_traceability: {report.get('source_traceability', {}).get('ok', 'unknown')}",
+            f"- critical_missing_threads: {len(report.get('thread_coverage', {}).get('critical_missing', []))}",
+            f"- budget_deferred_threads: {len(report.get('thread_coverage', {}).get('budget_deferred', []))}",
             "",
             "## Authorized IDs",
             "",

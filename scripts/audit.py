@@ -19,6 +19,7 @@ class StepResult:
     command: list[str]
     returncode: int
     status: str
+    code: str
     output: str
 
 
@@ -49,10 +50,35 @@ def step_summary(output: str, limit: int = 10) -> list[str]:
 def run_step(name: str, args: list[str], *, audit_depth: int, state: dict | None = None) -> StepResult:
     command = [sys.executable, str(ROOT / "scripts" / "novel.py"), *args]
     if name == "self-test" and audit_depth > 0:
-        return StepResult(name, command, 0, "READY", "skipped nested self-test to avoid audit recursion")
+        return StepResult(name, command, 0, "READY", "SELF_TEST_SKIPPED_NESTED", "skipped nested self-test to avoid audit recursion")
     result = run_command(command, audit_depth=audit_depth)
     output = (result.stdout or "") + (result.stderr or "")
-    return StepResult(name, command, result.returncode, classify(name, result.returncode, output, state), output)
+    status = classify(name, result.returncode, output, state)
+    code = f"{name.upper().replace('-', '_')}_{status}"
+    return StepResult(name, command, result.returncode, status, code, output)
+
+
+def step_defs_for(mode: str, chapter: str, gate: str) -> list[tuple[str, list[str]]]:
+    project = [
+        ("check", ["check"]),
+        ("status", ["status", "--json"]),
+        ("core-freeze-check", ["core-freeze-check"]),
+        ("brief-check", ["brief-check", chapter]),
+        ("evidence", ["evidence", chapter]),
+        ("gate-rehearsal", ["gate-rehearsal", gate]),
+        ("self-test", ["self-test"]),
+        ("deepseek-preflight", ["deepseek-preflight", "--no-live"]),
+    ]
+    if mode == "template":
+        return [
+            ("check", ["check"]),
+            ("self-test", ["self-test"]),
+            ("workflow-smoke", ["workflow-smoke"]),
+            ("deepseek-preflight", ["deepseek-preflight", "--no-live"]),
+        ]
+    if mode == "release":
+        return project + [("workflow-smoke", ["workflow-smoke"]), ("longrun-smoke", ["longrun-smoke", "--chapters", "10"])]
+    return project
 
 
 def overall_status(steps: list[StepResult]) -> str:
@@ -64,37 +90,39 @@ def overall_status(steps: list[StepResult]) -> str:
     return "READY"
 
 
-def render_human_report(state: dict, steps: list[StepResult], chapter: str, gate: str) -> str:
+def render_human_report(state: dict, steps: list[StepResult], chapter: str, gate: str, mode: str) -> str:
     overall = overall_status(steps)
     lines = [
-        "# 总编审查报告",
+        "# Editor Audit Report",
         "",
+        f"mode: {mode}",
         f"overall: {overall}",
+        f"env: {state.get('env_status', 'ENV_UNKNOWN')}",
+        f"template: {state.get('template_status', 'TEMPLATE_UNKNOWN')}",
+        f"story: {state.get('story_status', 'STORY_UNKNOWN')}",
         f"chapter: {chapter}",
         f"gate: {gate}",
         f"current_blocker: {state.get('blocker') or 'none'}",
         f"next_prompt: {state.get('next_prompt') or state.get('recommended_command') or 'none'}",
         "",
-        "## 总编提示",
+        "## Editor Prompt",
         "",
-        f"- 当前阶段: {state.get('phase_id') or 'unknown'}",
-        f"- 下一条口令: {state.get('human_action') or state.get('recommended_command') or 'none'}",
-        f"- 风险标记: {', '.join(state.get('risk_flags', [])) or 'none'}",
+        f"- phase: {state.get('phase_id') or 'unknown'}",
+        f"- human_action: {state.get('human_action') or state.get('recommended_command') or 'none'}",
+        f"- codex_action: {state.get('codex_action') or state.get('next_prompt') or 'none'}",
+        f"- risk_flags: {', '.join(state.get('risk_flags', [])) or 'none'}",
         "",
-        "## 检查结果",
+        "## Checks",
         "",
     ]
     for step in steps:
         lines.append(f"### {step.name}: {step.status}")
+        lines.append(f"code: {step.code}")
         lines.append(f"returncode: {step.returncode}")
         for line in step_summary(step.output):
             lines.append(f"- {line}")
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
-
-
-def print_human_report(state: dict, steps: list[StepResult], chapter: str, gate: str) -> None:
-    print(render_human_report(state, steps, chapter, gate), end="")
 
 
 def resolve_report_path(value: str) -> Path:
@@ -117,9 +145,14 @@ def write_human_report(value: str, report: str) -> list[Path]:
     return written
 
 
-def json_report(state: dict, steps: list[StepResult], chapter: str, gate: str) -> dict:
+def json_report(state: dict, steps: list[StepResult], chapter: str, gate: str, mode: str) -> dict:
     return {
+        "mode": mode,
         "overall": overall_status(steps),
+        "env_status": state.get("env_status"),
+        "template_status": state.get("template_status"),
+        "story_status": state.get("story_status"),
+        "readiness": state.get("readiness"),
         "chapter": chapter,
         "gate": gate,
         "current_blocker": state.get("blocker"),
@@ -128,6 +161,7 @@ def json_report(state: dict, steps: list[StepResult], chapter: str, gate: str) -
             {
                 "name": step.name,
                 "status": step.status,
+                "code": step.code,
                 "returncode": step.returncode,
                 "command": [str(item) for item in step.command],
                 "output": step.output,
@@ -138,9 +172,10 @@ def json_report(state: dict, steps: list[StepResult], chapter: str, gate: str) -
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run a complete editor-readable project audit.")
+    parser = argparse.ArgumentParser(description="Run an editor-readable project audit.")
     parser.add_argument("--chapter", default=None)
     parser.add_argument("--gate", default="A")
+    parser.add_argument("--mode", choices=["template", "project", "release"], default="project")
     parser.add_argument("--json", action="store_true")
     parser.add_argument(
         "--write-report",
@@ -155,30 +190,19 @@ def main() -> int:
     chapter = args.chapter or state.get("chapter") or "v01_c001"
     gate = args.gate.upper()
     audit_depth = int(os.environ.get("NOVEL_AUDIT_DEPTH", "0") or "0")
-
-    step_defs = [
-        ("check", ["check"]),
-        ("status", ["status", "--json"]),
-        ("core-freeze-check", ["core-freeze-check"]),
-        ("brief-check", ["brief-check", chapter]),
-        ("evidence", ["evidence", chapter]),
-        ("gate-rehearsal", ["gate-rehearsal", gate]),
-        ("self-test", ["self-test"]),
-        ("deepseek-preflight", ["deepseek-preflight", "--no-live"]),
-    ]
     steps = [
         run_step(name, command_args, audit_depth=audit_depth, state=state if name == "status" else None)
-        for name, command_args in step_defs
+        for name, command_args in step_defs_for(args.mode, chapter, gate)
     ]
 
-    human_report = render_human_report(state, steps, chapter, gate)
+    human_report = render_human_report(state, steps, chapter, gate, args.mode)
     if args.write_report:
         written = write_human_report(args.write_report, human_report)
         for path in written:
             print(f"wrote_report: {path.relative_to(ROOT).as_posix()}", file=sys.stderr)
 
     if args.json:
-        print(json.dumps(json_report(state, steps, chapter, gate), ensure_ascii=False, indent=2))
+        print(json.dumps(json_report(state, steps, chapter, gate, args.mode), ensure_ascii=False, indent=2))
     else:
         print(human_report, end="")
     return 0 if overall_status(steps) == "READY" else 1

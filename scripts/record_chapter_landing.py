@@ -86,7 +86,7 @@ def main() -> int:
     brief_path = ROOT / "outline" / "chapter_briefs" / f"{args.chapter}.md"
     selection_path = ROOT / "state" / "selections" / f"{args.chapter}.json"
 
-    required = [chapter_path, context_path, quality_path, brief_path]
+    required = [chapter_path, context_path, quality_path, brief_path, selection_path]
     missing = [path for path in required if not path.exists() or not path.read_text(encoding="utf-8").strip()]
     if missing:
         for path in missing:
@@ -99,12 +99,31 @@ def main() -> int:
 
     inputs = [input_item(context_path), input_item(quality_path), input_item(brief_path)]
     selection = read_json(selection_path, {})
-    if selection_path.exists():
-        inputs.append(input_item(selection_path))
+    choice = selection.get("choice")
+    if choice not in SOURCES:
+        print(
+            f"ERROR: candidate selection must be one of {', '.join(SOURCES)} before landing: {rel(selection_path)}",
+            file=sys.stderr,
+        )
+        return 1
+    if choice != selected_direction:
+        print(
+            f"ERROR: landing selected_direction {selected_direction} does not match candidate selection choice {choice}.",
+            file=sys.stderr,
+        )
+        return 1
+    inputs.append(input_item(selection_path))
     for item in selection.get("selected_candidates", []):
         candidate_path = ROOT / str(item.get("path", ""))
-        if candidate_path.exists():
-            inputs.append(input_item(candidate_path))
+        if not candidate_path.exists():
+            print(f"ERROR: selected candidate missing on disk: {item.get('path')}", file=sys.stderr)
+            return 1
+        expected = item.get("sha256")
+        actual = sha256(candidate_path)
+        if expected != actual:
+            print(f"ERROR: selected candidate hash mismatch: {item.get('path')}", file=sys.stderr)
+            return 1
+        inputs.append(input_item(candidate_path))
 
     matched = chapter_matches_deepseek_candidate(chapter_path, selection)
     deepseek_direct_adoption = matched is not None

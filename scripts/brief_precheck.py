@@ -55,6 +55,30 @@ def load_aftermath() -> dict[str, Any]:
     return read_json(ROOT / "state" / "derived" / "pacing" / "aftermath_obligations.json", {})
 
 
+def stale_derived_findings(chapter: str) -> tuple[list[str], list[str]]:
+    blockers: list[str] = []
+    info: list[str] = []
+    current = ROOT / "state" / "derived" / "current_state.yaml"
+    progress = ROOT / "state" / "derived" / "pacing" / "progress_index.json"
+    ledger = ROOT / "state" / "event_ledger.jsonl"
+    if not current.exists() or not progress.exists():
+        blockers.append("derived state is missing; run build-derived-state before brief precheck")
+        return blockers, info
+    if ledger.exists() and ledger.stat().st_mtime > current.stat().st_mtime + 0.5:
+        blockers.append("derived state is older than state/event_ledger.jsonl")
+    brief_dir = ROOT / "outline" / "chapter_briefs"
+    newer_briefs = [
+        path.relative_to(ROOT).as_posix()
+        for path in sorted(brief_dir.glob("v*_c*.md"))
+        if path.stat().st_mtime > progress.stat().st_mtime + 0.5
+    ]
+    if newer_briefs:
+        blockers.append("derived pacing is older than chapter brief inputs: " + ", ".join(newer_briefs[:5]))
+    if not blockers:
+        info.append("derived state freshness: current")
+    return blockers, info
+
+
 def aftermath_findings(chapter: str) -> tuple[list[str], list[str], list[str]]:
     blockers: list[str] = []
     warnings: list[str] = []
@@ -114,6 +138,9 @@ def evaluate(chapter: str) -> dict[str, Any]:
     blockers.extend(f"open stop lock: {item.get('id')}: {item.get('reason')}" for item in locks)
     blockers.extend(validate_freeze())
     blockers.extend(gate_errors_for_chapter(chapter, "preparing"))
+    derived_blockers, derived_info = stale_derived_findings(chapter)
+    blockers.extend(derived_blockers)
+    info.extend(derived_info)
 
     previous = previous_chapter(chapter)
     if previous is None:

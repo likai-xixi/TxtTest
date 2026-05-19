@@ -13,26 +13,26 @@ except ImportError:  # pragma: no cover
 
 
 DEFAULT_CONTEXT_PACK = {
-    "hard_max_chars": 24000,
+    "hard_max_chars": 48000,
     "tiers": [
-        {"max_chapter": 3, "limit_chars": 6000},
-        {"max_chapter": 10, "limit_chars": 8000},
-        {"max_chapter": 50, "limit_chars": 10000},
-        {"max_chapter": 200, "limit_chars": 12000},
-        {"max_chapter": 500, "limit_chars": 16000},
-        {"max_chapter": 800, "limit_chars": 20000},
+        {"max_chapter": 3, "limit_chars": 12000},
+        {"max_chapter": 10, "limit_chars": 16000},
+        {"max_chapter": 50, "limit_chars": 20000},
+        {"max_chapter": 200, "limit_chars": 24000},
+        {"max_chapter": 500, "limit_chars": 32000},
+        {"max_chapter": 800, "limit_chars": 40000},
     ],
     "section_budgets": {
-        "core_freeze": 1600,
-        "chapter_brief": 2500,
-        "chapter_anchor_continuity": 900,
-        "active_aftermath_obligations": 900,
-        "authorized_elements_full": 4000,
-        "active_entity_cards": 3500,
-        "open_threads": 2500,
-        "recent_events": 2000,
-        "arc_summary": 2000,
-        "rules_and_boundaries": 2000,
+        "core_freeze": 3200,
+        "chapter_brief": 5000,
+        "chapter_anchor_continuity": 1800,
+        "active_aftermath_obligations": 1800,
+        "authorized_elements_full": 8000,
+        "active_entity_cards": 7000,
+        "open_threads": 5000,
+        "recent_events": 4000,
+        "arc_summary": 4000,
+        "rules_and_boundaries": 4000,
     },
 }
 

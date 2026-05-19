@@ -22,6 +22,7 @@ from brief_contract import (
 )
 from context_governance import context_manifest_path, context_quality_path
 from element_context import markdown_sections, missing_section, section_body
+from element_usage import evaluate as evaluate_element_usage
 
 
 PLACEHOLDERS = (
@@ -323,6 +324,26 @@ def validate_authorized_breakers(chapter: str) -> list[str]:
     return failures
 
 
+def validate_element_usage(chapter: str) -> list[str]:
+    path = ROOT / "reviews" / chapter / "element_usage.json"
+    try:
+        current = evaluate_element_usage(chapter)
+    except (FileNotFoundError, ValueError) as exc:
+        return [f"{chapter}: element usage cannot be evaluated: {exc}"]
+    if not path.exists():
+        return [f"{chapter}: missing element usage report reviews/{chapter}/element_usage.json"]
+    recorded = read_json(path, {})
+    failures: list[str] = []
+    if recorded.get("status") != "READY":
+        failures.append(f"{chapter}: element usage status is {recorded.get('status', 'MISSING')}")
+    for key in ("used_object_ids", "used_ability_ids", "authorized_object_ids", "authorized_ability_ids"):
+        if sorted(recorded.get(key, [])) != sorted(current.get(key, [])):
+            failures.append(f"{chapter}: element usage {key} is stale")
+    for blocker in current.get("blockers", []):
+        failures.append(f"{chapter}: {blocker}")
+    return failures
+
+
 def validate_selection(chapter: str) -> list[str]:
     selection = read_json(ROOT / "state" / "selections" / f"{chapter}.json", {})
     failures: list[str] = []
@@ -473,6 +494,7 @@ def chapter_evidence_failures(chapter: str) -> list[str]:
     failures.extend(validate_landing(chapter))
     failures.extend(validate_context_quality(chapter, landing))
     failures.extend(validate_authorized_breakers(chapter))
+    failures.extend(validate_element_usage(chapter))
     failures.extend(validate_deepseek_direct_adoption(chapter, selection, landing))
     failures.extend(validate_progress_contract(chapter))
 

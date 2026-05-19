@@ -25,9 +25,11 @@ def print_text(report: dict) -> None:
         manifest = "yes" if item.get("manifest_covered") else "no"
         inputs = "current" if item.get("input_hashes_current") else "not_current"
         output = "current" if item.get("output_hash_current") else "not_current"
+        transcript = "current" if item.get("transcript_hash_current") else "not_current"
         print(
             f"- {role}: {item.get('status')} agent_id={agent_id} "
-            f"inputs={inputs} output={output} manifest={manifest}"
+            f"runner={item.get('runner_type') or 'missing'} inputs={inputs} "
+            f"output={output} transcript={transcript} manifest={manifest}"
         )
         for error in item.get("errors", [])[:3]:
             print(f"  - {error}")

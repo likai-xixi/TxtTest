@@ -158,11 +158,16 @@ def parse_iso_datetime(value: object) -> bool:
 def validate_manifest_hash(path: Path, expected: object, label: str) -> list[str]:
     if not isinstance(expected, str) or not expected.strip():
         return [f"{label} missing sha256"]
-    if not path.exists():
+    if not path.exists() or not path.is_file():
         return [f"{label} missing file: {path.relative_to(ROOT)}"]
     if sha256(path) != expected:
         return [f"{label} hash mismatch: {path.relative_to(ROOT)}"]
     return []
+
+
+def stable_hash(value: object) -> str:
+    payload = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def validate_agent_run(idea_id: str, lab: Path, role: str, filename: str, item: dict) -> list[str]:
@@ -176,6 +181,12 @@ def validate_agent_run(idea_id: str, lab: Path, role: str, filename: str, item: 
         errors.append(f"agent_review_manifest.json {role} agent_run agent_id mismatch")
     if not parse_iso_datetime(run.get("completed_at")):
         errors.append(f"agent_review_manifest.json {role} agent_run missing valid completed_at")
+    if run.get("runner_type") not in {"codex_subagent", "external_agent"}:
+        errors.append(f"agent_review_manifest.json {role} agent_run missing valid runner_type")
+    if not str(run.get("runner_id", "")).strip():
+        errors.append(f"agent_review_manifest.json {role} agent_run missing runner_id")
+    if not str(run.get("isolation_attestation", "")).strip():
+        errors.append(f"agent_review_manifest.json {role} agent_run missing isolation_attestation")
 
     expected_inputs = {
         (lab / "original_idea.md").relative_to(ROOT).as_posix(): lab / "original_idea.md",
@@ -199,6 +210,17 @@ def validate_agent_run(idea_id: str, lab: Path, role: str, filename: str, item: 
             errors.append(f"agent_review_manifest.json {role} agent_run missing input {rel_path}")
             continue
         errors.extend(validate_manifest_hash(path, input_item.get("sha256"), f"{role} agent_run input {rel_path}"))
+    allowed_inputs = run.get("allowed_inputs")
+    if not isinstance(allowed_inputs, list):
+        errors.append(f"agent_review_manifest.json {role} agent_run allowed_inputs must be a list")
+        allowed_inputs = []
+    if allowed_inputs != input_files:
+        errors.append(f"agent_review_manifest.json {role} agent_run allowed_inputs must match input_files")
+    allowed_hash = run.get("allowed_inputs_sha256")
+    if not isinstance(allowed_hash, str) or not allowed_hash.strip():
+        errors.append(f"agent_review_manifest.json {role} agent_run missing allowed_inputs_sha256")
+    elif allowed_hash != stable_hash(allowed_inputs):
+        errors.append(f"agent_review_manifest.json {role} agent_run allowed_inputs_sha256 mismatch")
 
     output = run.get("output_file")
     expected_output = lab / filename
@@ -209,6 +231,14 @@ def validate_agent_run(idea_id: str, lab: Path, role: str, filename: str, item: 
         if output.get("path") != expected_output_rel:
             errors.append(f"agent_review_manifest.json {role} agent_run output_file path must be {expected_output_rel}")
         errors.extend(validate_manifest_hash(expected_output, output.get("sha256"), f"{role} agent_run output"))
+    transcript = run.get("transcript_file")
+    if not isinstance(transcript, dict):
+        errors.append(f"agent_review_manifest.json {role} agent_run missing transcript_file")
+    else:
+        transcript_path = ROOT / str(transcript.get("path", ""))
+        errors.extend(validate_manifest_hash(transcript_path, transcript.get("sha256"), f"{role} agent_run transcript"))
+        if transcript.get("sha256") != run.get("transcript_sha256"):
+            errors.append(f"agent_review_manifest.json {role} agent_run transcript_sha256 mismatch")
     return errors
 
 
