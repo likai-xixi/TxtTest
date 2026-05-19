@@ -82,6 +82,25 @@ def seed(repo: Path, chapters: int) -> str:
         {"id": "chapter_brief", "body_chars": 20, "sources": [{"path": f"outline/chapter_briefs/{target}.md"}]},
         {"id": "chapter_anchor_continuity", "body_chars": 20, "sources": [{"event_id": events[-3]["event_id"]}]},
         {"id": "active_aftermath_obligations", "body_chars": 20, "sources": [{"path": "state/derived/pacing/aftermath_obligations.json"}]},
+        {
+            "id": "book_outline_contract",
+            "body_chars": 20,
+            "included_reason": "strategic_plan_not_fact_source",
+            "sources": [
+                {"path": "outline/book_outline.json", "note": "strategic_plan_not_fact_source"},
+                {"path": "outline/book_outline.md", "note": "strategic_plan_not_fact_source"},
+            ],
+        },
+        {
+            "id": "style_instruction",
+            "body_chars": 20,
+            "included_reason": "style_instruction_not_fact_source",
+            "sources": [
+                {"path": "state/project_style_contract.json", "note": "style_instruction_not_fact_source"},
+                {"path": "state/project_style_contract.md", "note": "style_instruction_not_fact_source"},
+                {"path": "bible/style_guide.md", "note": "style_instruction_not_fact_source"},
+            ],
+        },
         {"id": "authorized_elements_full", "body_chars": 20, "sources": [{"path": f"outline/chapter_briefs/{target}.md"}]},
         {"id": "rules_and_boundaries", "body_chars": 20, "sources": [{"path": "bible/rules.md"}]},
         {"id": "recent_events", "body_chars": len(pack), "sources": [{"event_id": item["event_id"]} for item in events[:-2]]},

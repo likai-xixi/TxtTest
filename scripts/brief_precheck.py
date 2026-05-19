@@ -7,11 +7,13 @@ from pathlib import Path
 from typing import Any
 
 from _common import ROOT, chapter_number, chapter_parts, read_json, read_text, unresolved_locks
+from book_outline import BOOK_JSON, validate_contract as validate_book_outline_contract
 from core_setting_freeze import freeze_markdown_path, validate_freeze
 from element_context import yaml_id_index
 from gate_policy import gate_errors_for_chapter
 from pacing_check import analyze as analyze_pacing
 from pacing_check import parse_entry
+from style_contract import CONTRACT_JSON, validate_contract as validate_style_contract
 
 
 PLACEHOLDERS = ("待定", "待填", "待生成", "TODO", "TBD", "寰呭畾", "寰呭～")
@@ -137,6 +139,14 @@ def evaluate(chapter: str) -> dict[str, Any]:
     locks = unresolved_locks()
     blockers.extend(f"open stop lock: {item.get('id')}: {item.get('reason')}" for item in locks)
     blockers.extend(validate_freeze())
+    try:
+        blockers.extend(validate_book_outline_contract(read_json(BOOK_JSON, {}), official=True))
+    except Exception as exc:
+        blockers.append(f"book outline check failed: {exc}")
+    try:
+        blockers.extend(validate_style_contract(read_json(CONTRACT_JSON, {}), official=True))
+    except Exception as exc:
+        blockers.append(f"style contract check failed: {exc}")
     blockers.extend(gate_errors_for_chapter(chapter, "preparing"))
     derived_blockers, derived_info = stale_derived_findings(chapter)
     blockers.extend(derived_blockers)

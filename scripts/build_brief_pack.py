@@ -6,9 +6,11 @@ import sys
 from pathlib import Path
 
 from _common import ROOT, chapter_number, chapter_parts, now_iso, read_text, truncate, write_blocked_by_locks, write_text
+from book_outline import BOOK_JSON, BOOK_MD, ensure_ready as ensure_book_outline
 from core_setting_freeze import ensure_ready as ensure_core_setting_freeze, freeze_markdown_path
 from element_context import yaml_id_index
 from gate_policy import gate_errors_for_chapter
+from style_contract import CONTRACT_JSON, CONTRACT_MD, STYLE_GUIDE, STYLE_PROFILE, ensure_ready as ensure_style_contract
 
 
 def file_section(title: str, path: Path, limit: int) -> str:
@@ -66,7 +68,7 @@ def gate_ready(chapter: str) -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Build the allowed source pack for Codex/DeepSeek brief candidates.")
     parser.add_argument("--chapter", required=True)
-    parser.add_argument("--limit", type=int, default=7000)
+    parser.add_argument("--limit", type=int, default=9500)
     args = parser.parse_args()
 
     if write_blocked_by_locks("brief candidate pack build"):
@@ -81,6 +83,10 @@ def main() -> int:
         print(f"ERROR: {error}", file=sys.stderr)
         return 1
     if not ensure_core_setting_freeze():
+        return 1
+    if not ensure_book_outline():
+        return 1
+    if not ensure_style_contract():
         return 1
     anchor_text, anchor_errors = previous_anchor_section(args.chapter)
     if anchor_errors:
@@ -107,6 +113,12 @@ def main() -> int:
         "- 未在本章 brief 中授权的新道具、新技能、新规则，后续不得成为正文破局钥匙。",
         "",
         anchor_text,
+        file_section("Book Outline Contract", BOOK_MD, 900),
+        file_section("Book Outline Machine Contract", BOOK_JSON, 900),
+        file_section("Project Style Contract", CONTRACT_MD, 700),
+        file_section("Project Style Machine Contract", CONTRACT_JSON, 700),
+        file_section("Style Guide", STYLE_GUIDE, 700),
+        file_section("Derived Style Profile", STYLE_PROFILE, 500),
         file_section("开书前核心设定冻结", freeze_markdown_path() or ROOT / "state" / "idea_lab" / "missing.md", 1400),
         file_section("一句话卖点与主角核心", ROOT / "outline" / "premise.md", 900),
         file_section("当前卷目标", ROOT / "outline" / "volume_01.md", 700),

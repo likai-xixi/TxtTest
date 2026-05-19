@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "VolumeOutline",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "status",
+    "volume",
+    "volume_title_working",
+    "estimated_word_count",
+    "volume_function",
+    "start_state",
+    "end_state",
+    "primary_opposition",
+    "major_character_change",
+    "promises_to_pay_off",
+    "questions_not_to_solve_early",
+    "writes_canon",
+    "writes_chapters",
+    "writes_event_ledger"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "status": { "enum": ["DRAFT", "READY"] },
+    "book_outline_ref": { "type": "object" },
+    "volume": { "type": "string" },
+    "volume_title_working": { "type": "string" },
+    "estimated_word_count": { "type": "integer" },
+    "volume_function": { "type": "string" },
+    "start_state": { "type": "string" },
+    "end_state": { "type": "string" },
+    "primary_opposition": { "type": "string" },
+    "major_character_change": { "type": "string" },
+    "promises_to_pay_off": { "type": "array", "items": { "type": "string" } },
+    "questions_not_to_solve_early": { "type": "array", "items": { "type": "string" } },
+    "updated_at": { "type": "string" },
+    "writes_canon": { "const": false },
+    "writes_chapters": { "const": false },
+    "writes_event_ledger": { "const": false }
+  }
+}

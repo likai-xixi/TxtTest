@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from _common import ROOT, chapter_number, chapter_parts, gate_decision, read_text, unresolved_locks
+from book_outline import BOOK_JSON, validate_contract as validate_book_outline_contract, volume_json_path, validate_volume
 from core_setting_freeze import validate_freeze
 from record_idea_selection import (
     AGENT_ROLES,
@@ -18,6 +19,7 @@ from record_idea_selection import (
     validate_codex_synthesis,
     validate_output_freshness,
 )
+from style_contract import CONTRACT_JSON, STYLE_PROFILE, validate_contract as validate_style_contract
 
 
 PLACEHOLDERS = ("待定", "待填", "待评", "待生成", "待人类裁决", "寰呭畾", "寰呭～", "寰呰瘎", "TODO")
@@ -589,6 +591,48 @@ def advisory_snapshot(chapter: str, idea_id: str | None) -> dict[str, str]:
     }
 
 
+def contract_snapshot() -> dict[str, str]:
+    book_data, book_error = _safe_json(BOOK_JSON)
+    style_data, style_error = _safe_json(CONTRACT_JSON)
+    profile_data, _profile_error = _safe_json(STYLE_PROFILE)
+    volume_data, volume_error = _safe_json(volume_json_path("v01"))
+
+    book_errors = validate_book_outline_contract(book_data or {}, official=True)
+    style_errors = validate_style_contract(style_data or {}, official=True)
+    if book_error or not isinstance(book_data, dict) or book_data.get("status") != "READY":
+        book_status = "missing"
+    else:
+        book_status = "ready" if not book_errors else "conflict"
+    if style_error or not isinstance(style_data, dict) or style_data.get("status") != "READY":
+        style_status = "missing"
+    else:
+        style_status = "ready" if not style_errors else "drift"
+    if profile_data and profile_data.get("status") == "READY":
+        profile_status = "ready"
+    elif profile_data:
+        profile_status = "not_built"
+    else:
+        profile_status = "missing"
+    if volume_error:
+        volume_status = "missing"
+    elif not validate_volume(volume_data or {}):
+        volume_status = "ready"
+    else:
+        volume_status = "rough"
+    target = str((book_data or {}).get("target_word_count") or "unset") if isinstance(book_data, dict) else "unset"
+    genre = "clear" if isinstance(book_data, dict) and not has_placeholders(BOOK_JSON) and (book_data or {}).get("genre_lane") else "missing"
+    ending = "clear" if isinstance(book_data, dict) and not has_placeholders(BOOK_JSON) and (book_data or {}).get("ending_direction") else "missing"
+    return {
+        "book_outline": book_status,
+        "volume_outline": volume_status,
+        "target_word_count": target,
+        "genre_lane": genre,
+        "ending_direction": ending,
+        "style_contract": style_status,
+        "style_profile": profile_status,
+    }
+
+
 def gate_prompt() -> str | None:
     if shipped_through(125) and gate_decision("e") != "continue":
         return "进入 Gate E，评估是否进入 300 万字模式，并给我 continue / pause / kill / rework 裁决建议。"
@@ -653,6 +697,12 @@ def next_prompt(chapter: str | None = None) -> str:
         return f"修复开书实验 {idea['idea_id']} 的 readiness 阻塞；先运行 `python scripts/novel.py idea-status --id {idea['idea_id']}`。"
     if freeze_errors:
         return "开书前先走开书实验：用 DeepSeek 和 product_founder/technical_lead/qa_release 三类 agent 固定世界观、主角异常原因和主角家属关系。"
+    book_outline_errors = validate_book_outline_contract(_safe_json(BOOK_JSON)[0] or {}, official=True)
+    if book_outline_errors:
+        return "定纲：运行 book-outline-start / book-outline-land，先把书本总纲落为 READY，再进入 brief 候选。"
+    style_contract_errors = validate_style_contract(_safe_json(CONTRACT_JSON)[0] or {}, official=True)
+    if style_contract_errors:
+        return "定风格：运行 style-contract-start / style-contract-land，先把写作风格契约落为 READY，再进入 brief 候选。"
     if has_placeholders(ROOT / "outline" / "premise.md"):
         return "我想开一本新书。先判断应该走开书实验还是启动问卷，并给我下一步提示词。"
     return prompt_for_chapter(chapter or first_unshipped())
@@ -661,6 +711,8 @@ def next_prompt(chapter: str | None = None) -> str:
 def dashboard(chapter: str | None = None) -> dict[str, Any]:
     chapter = chapter or first_unshipped()
     freeze_errors = validate_freeze()
+    book_outline_errors = validate_book_outline_contract(_safe_json(BOOK_JSON)[0] or {}, official=True)
+    style_contract_errors = validate_style_contract(_safe_json(CONTRACT_JSON)[0] or {}, official=True)
     idea = analyze_idea_lab()
     paths = chapter_paths(chapter)
     locks = unresolved_locks()
@@ -676,6 +728,16 @@ def dashboard(chapter: str | None = None) -> dict[str, Any]:
         blocker = "缺核心设定冻结"
         why = "开正文前必须完成 DeepSeek + 三类 agent 开书实验并锁定 core_setting_freeze。"
         command = "想法：..."
+    elif book_outline_errors:
+        phase_id = "book_outline_contract"
+        blocker = "book outline contract is not ready"
+        why = "; ".join(book_outline_errors[:3])
+        command = "定纲 / book-outline-land"
+    elif style_contract_errors:
+        phase_id = "style_contract"
+        blocker = "style contract is not ready"
+        why = "; ".join(style_contract_errors[:3])
+        command = "定风格 / style-contract-land"
     elif gate:
         phase_id = "gate_review"
         blocker = f"Gate {gate} 等待总编裁决"
@@ -701,7 +763,7 @@ def dashboard(chapter: str | None = None) -> dict[str, Any]:
     if not os.environ.get("DEEPSEEK_API_KEY"):
         env_blockers.append("DEEPSEEK_API_KEY is missing")
     template = template_readiness()
-    story_ready = phase_id == "draft_or_close" and not locks and not freeze_errors and not gate
+    story_ready = phase_id == "draft_or_close" and not locks and not freeze_errors and not book_outline_errors and not style_contract_errors and not gate
     readiness = {
         "env_status": "ENV_READY" if not env_blockers else "ENV_NOT_READY",
         "template_status": template["status"],
@@ -725,6 +787,10 @@ def dashboard(chapter: str | None = None) -> dict[str, Any]:
         risk_flags.append("stop_lock_open")
     if freeze_errors:
         risk_flags.append("core_freeze_missing")
+    if book_outline_errors:
+        risk_flags.append("book_outline_not_ready")
+    if style_contract_errors:
+        risk_flags.append("style_contract_not_ready")
     if has_placeholders(ROOT / "outline" / "premise.md"):
         risk_flags.append("premise_placeholders")
     if has_placeholders(ROOT / "outline" / "chapter_briefs" / "v01_c001.md"):
@@ -742,6 +808,7 @@ def dashboard(chapter: str | None = None) -> dict[str, Any]:
         evidence_paths.append(rel(paths["context_quality"]))
     idea_id = idea.get("idea_id")
     advisory = advisory_snapshot(chapter, idea_id)
+    contracts = contract_snapshot()
     if idea_id:
         evidence_paths.extend(
             [
@@ -778,9 +845,14 @@ def dashboard(chapter: str | None = None) -> dict[str, Any]:
         "writes": writes,
         "risk_flags": risk_flags,
         "advisory": advisory,
+        "contracts": contracts,
         "evidence_paths": evidence_paths,
         "freeze_ready": not freeze_errors,
         "freeze_errors": freeze_errors,
+        "book_outline_ready": not book_outline_errors,
+        "book_outline_errors": book_outline_errors,
+        "style_contract_ready": not style_contract_errors,
+        "style_contract_errors": style_contract_errors,
         "idea": idea,
         "locks": locks,
         "gates": {

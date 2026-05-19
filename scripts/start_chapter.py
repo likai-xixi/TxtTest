@@ -7,8 +7,10 @@ import sys
 
 from _common import ROOT, chapter_parts, non_ws_count, read_json, read_text, unresolved_locks
 from context_governance import load_process_budget
+from book_outline import ensure_ready as ensure_book_outline
 from core_setting_freeze import ensure_ready as ensure_core_setting_freeze
 from gate_policy import gate_errors_for_chapter
+from style_contract import ensure_ready as ensure_style_contract
 
 
 PLACEHOLDERS = ("待定", "待填", "TODO")
@@ -93,6 +95,10 @@ def main() -> int:
         return 1
 
     if not ensure_core_setting_freeze():
+        return 1
+    if not ensure_book_outline():
+        return 1
+    if not ensure_style_contract():
         return 1
 
     errors = validate_brief(args.chapter, args.allow_placeholders)

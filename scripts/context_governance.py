@@ -27,6 +27,8 @@ DEFAULT_CONTEXT_PACK = {
         "chapter_brief": 5000,
         "chapter_anchor_continuity": 1800,
         "active_aftermath_obligations": 1800,
+        "book_outline_contract": 1800,
+        "style_instruction": 1800,
         "authorized_elements_full": 8000,
         "active_entity_cards": 7000,
         "open_threads": 5000,

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from _common import ROOT, chapter_number, chapter_parts, now_iso, read_text, truncate, write_text
+from book_outline import BOOK_JSON, BOOK_MD, ensure_ready as ensure_book_outline
 from context_governance import context_manifest_path, context_pack_budget, input_hash, rel, section_budgets, sha256
 from core_setting_freeze import ensure_ready as ensure_core_setting_freeze, freeze_markdown_path
 from element_context import (
@@ -22,6 +23,7 @@ from element_context import (
     section_body,
     selected_yaml_section,
 )
+from style_contract import CONTRACT_JSON, CONTRACT_MD, STYLE_GUIDE, STYLE_PROFILE, ensure_ready as ensure_style_contract
 
 
 LEGACY_OBJECT_TITLE = "本章可用道具完整条目"
@@ -299,6 +301,37 @@ def validate_brief_element_sections(brief_sections: dict[str, str]) -> tuple[lis
     )
 
 
+def book_outline_body() -> str:
+    return "\n\n".join(
+        [
+            "### Contract Boundary\n\nBook outline is a strategic map, not a fact source. It cannot write canon, event ledger, or chapters.",
+            "### Machine Contract\n\n" + file_body(BOOK_JSON),
+            "### Human Summary\n\n" + file_body(BOOK_MD),
+        ]
+    )
+
+
+def style_instruction_body() -> str:
+    return "\n\n".join(
+        [
+            "### Instruction Boundary\n\nStyle assets guide voice and drift checks. They are not story facts and cannot write canon, event ledger, or chapters.",
+            "### Project Style Contract\n\n" + file_body(CONTRACT_JSON),
+            "### Human Style Contract\n\n" + file_body(CONTRACT_MD),
+            "### Style Guide\n\n" + file_body(STYLE_GUIDE),
+            "### Derived Style Profile\n\n" + file_body(STYLE_PROFILE),
+        ]
+    )
+
+
+def style_sources() -> list[SourceRef]:
+    return [
+        SourceRef(CONTRACT_JSON, note="style_instruction_not_fact_source"),
+        SourceRef(CONTRACT_MD, note="style_instruction_not_fact_source"),
+        SourceRef(STYLE_GUIDE, note="style_instruction_not_fact_source"),
+        SourceRef(STYLE_PROFILE, note="derived_style_profile_not_fact_source"),
+    ]
+
+
 def build_sections(chapter: str, brief_text: str, object_ids: list[str], ability_ids: list[str], allowed_new: str, prohibited_solutions: str) -> tuple[list[Section], list[str]]:
     budgets = section_budgets()
     freeze_path = freeze_markdown_path() or ROOT / "state" / "idea_lab" / "missing.md"
@@ -340,7 +373,6 @@ def build_sections(chapter: str, brief_text: str, object_ids: list[str], ability
         [
             "### Canon Hard Facts\n\n" + file_body(ROOT / "bible" / "canon.md"),
             "### Rules and Boundaries\n\n" + file_body(ROOT / "bible" / "rules.md"),
-            "### Style / Forbidden Drift\n\n" + file_body(ROOT / "bible" / "style_guide.md"),
         ]
     )
 
@@ -371,12 +403,14 @@ def build_sections(chapter: str, brief_text: str, object_ids: list[str], ability
         Section("chapter_brief", "本章 brief", brief_text, budgets["chapter_brief"], [SourceRef(ROOT / "outline" / "chapter_briefs" / f"{chapter}.md")], "always", 2),
         Section("chapter_anchor_continuity", "上一章章末锚点连续性", anchor_body, budgets.get("chapter_anchor_continuity", 900), anchor_sources, "previous_chapter_end_anchor", 3),
         Section("active_aftermath_obligations", "Active Aftermath Obligations", aftermath_body, budgets.get("active_aftermath_obligations", 900), aftermath_sources, "unresolved_cost_and_consequence_debt", 4),
+        Section("book_outline_contract", "Book Outline Strategic Map", book_outline_body(), budgets.get("book_outline_contract", 1800), [SourceRef(BOOK_JSON, note="strategic_plan_not_fact_source"), SourceRef(BOOK_MD, note="strategic_plan_not_fact_source")], "strategic_plan_not_fact_source", 5),
+        Section("style_instruction", "Style Instruction", style_instruction_body(), budgets.get("style_instruction", 1800), style_sources(), "style_instruction_not_fact_source", 6),
         Section("authorized_elements_full", "本章元素授权", authorization, budgets["authorized_elements_full"], [SourceRef(ROOT / "outline" / "chapter_briefs" / f"{chapter}.md"), SourceRef(object_path), SourceRef(ability_path)], "brief_authorized_ids", 5),
         Section("active_entity_cards", "本章相关实体状态卡", entity_cards, budgets["active_entity_cards"], entity_sources, "brief_and_authorized_entity_recall", 6),
         Section("open_threads", "Active / Open Threads", thread_body(), budgets["open_threads"], thread_sources(), "active_or_open_threads", 7),
         Section("recent_events", "Recent Key Events", event_body(events), budgets["recent_events"], event_sources, "recent_3_to_5_chapters_plus_P0_P1", 8),
         Section("arc_summary", "Arc / Chunk Summary", arc_body(chapter), budgets["arc_summary"], arc_sources(chapter), "long_cause_by_arc_chunk", 9),
-        Section("rules_and_boundaries", "Rules And Boundaries", boundaries, budgets["rules_and_boundaries"], [SourceRef(ROOT / "bible" / "canon.md"), SourceRef(ROOT / "bible" / "rules.md"), SourceRef(ROOT / "bible" / "style_guide.md")], "hard_rules_only", 10),
+        Section("rules_and_boundaries", "Rules And Boundaries", boundaries, budgets["rules_and_boundaries"], [SourceRef(ROOT / "bible" / "canon.md"), SourceRef(ROOT / "bible" / "rules.md")], "hard_rules_only", 10),
         Section("legacy_state_compat", LEGACY_CURRENT_OBJECTS, file_body(ROOT / "state" / "derived" / "current_objects.yaml"), 700, [SourceRef(ROOT / "state" / "derived" / "current_objects.yaml")], "legacy_compatibility", 11),
         Section("legacy_ability_compat", LEGACY_CURRENT_ABILITIES, file_body(ROOT / "state" / "derived" / "current_abilities.yaml"), 700, [SourceRef(ROOT / "state" / "derived" / "current_abilities.yaml")], "legacy_compatibility", 12),
     ], []
@@ -407,6 +441,10 @@ def main() -> int:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
     if not ensure_core_setting_freeze():
+        return 1
+    if not ensure_book_outline():
+        return 1
+    if not ensure_style_contract():
         return 1
     limit = context_pack_budget(chapter, args.limit)
 

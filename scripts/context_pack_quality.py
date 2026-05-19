@@ -16,6 +16,8 @@ REQUIRED_SECTIONS = {
     "chapter_brief",
     "chapter_anchor_continuity",
     "active_aftermath_obligations",
+    "book_outline_contract",
+    "style_instruction",
     "authorized_elements_full",
     "rules_and_boundaries",
 }
@@ -139,6 +141,24 @@ def source_trace_failures(manifest: dict[str, Any]) -> list[str]:
     return failures
 
 
+def planning_source_role_failures(manifest: dict[str, Any]) -> list[str]:
+    failures: list[str] = []
+    for section in manifest.get("sections", []):
+        if not isinstance(section, dict):
+            continue
+        reason = str(section.get("included_reason", ""))
+        for source in section.get("sources", []) or []:
+            if not isinstance(source, dict):
+                continue
+            path = str(source.get("path", ""))
+            note = str(source.get("note", ""))
+            if path in {"outline/book_outline.json", "outline/book_outline.md"} and "strategic_plan_not_fact_source" not in reason + note:
+                failures.append(f"book outline source is not marked strategic_plan_not_fact_source: {path}")
+            if path in {"state/project_style_contract.json", "state/project_style_contract.md", "bible/style_guide.md", "state/derived/style_profile.json"} and "style" not in reason + note:
+                failures.append(f"style source is not marked style_instruction_not_fact_source: {path}")
+    return failures
+
+
 def stale_input_failures(input_hashes: list[dict[str, Any]]) -> list[str]:
     failures: list[str] = []
     for item in input_hashes:
@@ -197,6 +217,7 @@ def evaluate_context_pack(chapter: str) -> dict[str, Any]:
         input_hashes = []
     blockers.extend(stale_input_failures(input_hashes))
     blockers.extend(source_trace_failures(manifest))
+    blockers.extend(planning_source_role_failures(manifest))
     source_blockers, source_warnings = source_placeholder_findings(chapter)
     blockers.extend(source_blockers)
     warnings.extend(source_warnings)

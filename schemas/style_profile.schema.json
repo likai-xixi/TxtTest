@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "StyleProfile",
+  "type": "object",
+  "required": ["schema_version", "status", "generated_from_chapters", "metrics", "warnings", "blockers"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "status": { "enum": ["UNBUILT", "WARMUP", "READY", "NOT_READY"] },
+    "generated_at": { "type": "string" },
+    "generated_from_chapters": { "type": "array", "items": { "type": "string" } },
+    "metrics": { "type": "object" },
+    "warnings": { "type": "array", "items": { "type": "string" } },
+    "blockers": { "type": "array", "items": { "type": "string" } }
+  }
+}

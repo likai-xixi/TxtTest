@@ -404,6 +404,31 @@ def validate_continuity(chapter: str) -> list[str]:
     return failures
 
 
+def validate_style_check(chapter: str) -> list[str]:
+    path = ROOT / "reviews" / chapter / "style_metrics.json"
+    failures: list[str] = []
+    if not path.exists():
+        return [f"{chapter}: missing style check artifact {path.relative_to(ROOT)}"]
+    data = read_json(path, {})
+    if data.get("status") != "READY":
+        failures.append(f"{chapter}: style check status is {data.get('status', 'MISSING')}")
+    official = data.get("official_chapter")
+    if not isinstance(official, dict):
+        failures.append(f"{chapter}: style check missing official_chapter")
+        return failures
+    rel_path = official.get("path")
+    expected_sha = official.get("sha256")
+    if not rel_path or not expected_sha:
+        failures.append(f"{chapter}: style check official_chapter missing path/sha256")
+        return failures
+    chapter_file = ROOT / str(rel_path)
+    if not chapter_file.exists():
+        failures.append(f"{chapter}: style check official chapter missing on disk")
+    elif sha256(chapter_file) != expected_sha:
+        failures.append(f"{chapter}: style check official chapter hash is stale")
+    return failures
+
+
 def validate_auxiliary_review(chapter: str, name: str) -> list[str]:
     path = ROOT / "reviews" / chapter / name
     if not path.exists() or not read_text(path).strip():
@@ -602,6 +627,7 @@ def chapter_evidence_failures(chapter: str) -> list[str]:
     failures.extend(validate_progress_contract(chapter))
     failures.extend(validate_fact_cards(chapter))
     failures.extend(validate_end_state_change(chapter))
+    failures.extend(validate_style_check(chapter))
 
     required_reviews = [
         "codex_integrated_review.md",

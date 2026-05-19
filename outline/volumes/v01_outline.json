@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "status": "DRAFT",
+  "book_outline_ref": {},
+  "volume": "v01",
+  "volume_title_working": "Pilot Volume",
+  "estimated_word_count": 120000,
+  "volume_function": "Validate hook, protagonist agency, and reader pull.",
+  "start_state": "Opening state is pending the core freeze.",
+  "end_state": "Gate evidence determines whether to continue.",
+  "primary_opposition": "Pending the core freeze.",
+  "major_character_change": "Protagonist agency becomes visible.",
+  "promises_to_pay_off": [
+    "First three chapters must validate the premise."
+  ],
+  "questions_not_to_solve_early": [
+    "Do not solve the central rule before brief authorization."
+  ],
+  "updated_at": "2000-01-01T00:00:00+00:00",
+  "writes_canon": false,
+  "writes_chapters": false,
+  "writes_event_ledger": false
+}

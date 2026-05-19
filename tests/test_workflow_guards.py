@@ -81,6 +81,25 @@ def write_context_quality(repo: Path, chapter: str) -> None:
             {"id": "chapter_brief", "body_chars": 10, "sources": [{"path": f"outline/chapter_briefs/{chapter}.md"}]},
             {"id": "chapter_anchor_continuity", "body_chars": 10, "sources": [{"path": "AGENTS.md"}]},
             {"id": "active_aftermath_obligations", "body_chars": 10, "sources": [{"path": "state/derived/pacing/aftermath_obligations.json"}]},
+            {
+                "id": "book_outline_contract",
+                "body_chars": 10,
+                "included_reason": "strategic_plan_not_fact_source",
+                "sources": [
+                    {"path": "outline/book_outline.json", "note": "strategic_plan_not_fact_source"},
+                    {"path": "outline/book_outline.md", "note": "strategic_plan_not_fact_source"},
+                ],
+            },
+            {
+                "id": "style_instruction",
+                "body_chars": 10,
+                "included_reason": "style_instruction_not_fact_source",
+                "sources": [
+                    {"path": "state/project_style_contract.json", "note": "style_instruction_not_fact_source"},
+                    {"path": "state/project_style_contract.md", "note": "style_instruction_not_fact_source"},
+                    {"path": "bible/style_guide.md", "note": "style_instruction_not_fact_source"},
+                ],
+            },
             {"id": "authorized_elements_full", "body_chars": 10, "sources": [{"path": f"outline/chapter_briefs/{chapter}.md"}]},
             {"id": "rules_and_boundaries", "body_chars": 10, "sources": [{"path": "bible/rules.md"}]},
         ],
@@ -644,6 +663,102 @@ def write_core_setting_freeze(repo: Path, idea: str = "idea_core") -> None:
         )
         + "\n",
     )
+    write_ready_book_outline(repo, idea)
+    write_ready_style_contract(repo, idea)
+
+
+def write_ready_book_outline(repo: Path, idea: str = "idea_core") -> None:
+    freeze_rel = f"state/idea_lab/{idea}/core_setting_freeze.json"
+    freeze_sha = file_sha(repo, freeze_rel) if (repo / freeze_rel).exists() else ""
+    outline = {
+        "schema_version": 1,
+        "status": "READY",
+        "idea_id": idea,
+        "created_at": "2000-01-01T00:00:00+00:00",
+        "core_setting_freeze_ref": {"idea_id": idea, "path": freeze_rel, "sha256": freeze_sha},
+        "book_title_working": "Test Book",
+        "genre_lane": "test genre",
+        "target_reader": "test reader",
+        "target_word_count": 3000000,
+        "word_count_range": {"min": 800000, "max": 3000000},
+        "estimated_volumes": 6,
+        "chapter_word_count_range": {"min": 2500, "max": 6000},
+        "one_sentence_promise": "A test promise.",
+        "main_story_question": "Can the protagonist solve the test question?",
+        "protagonist_long_term_desire": "Protect the anchor and solve the mystery.",
+        "core_opposition": "A hard opposition.",
+        "worldview_reveal_strategy": "Reveal through scenes.",
+        "commercial_hook": "A test hook.",
+        "emotional_hook": "A test emotional hook.",
+        "differentiation_angle": "Pilot-first governance.",
+        "volume_plan": [
+            {
+                "volume": "v01",
+                "volume_title_working": "Pilot Volume",
+                "estimated_word_count": 120000,
+                "volume_function": "Validate the premise.",
+                "start_state": "Start.",
+                "end_state": "End.",
+                "primary_opposition": "Opposition.",
+                "major_character_change": "Agency increases.",
+                "promises_to_pay_off": ["Promise."],
+                "questions_not_to_solve_early": ["Core mystery."],
+            }
+        ],
+        "major_character_arcs": ["Agency arc."],
+        "main_thread_plan": ["Main thread."],
+        "relationship_thread_plan": ["Relationship thread."],
+        "power_or_rule_progression": ["Brief-authorized progression."],
+        "risk_and_cost_progression": ["Cost progression."],
+        "first_3_chapters_validation": ["Hook.", "Agency.", "Reader pull."],
+        "first_10_chapters_validation": ["Volume traction."],
+        "gate_plan": {"A": "3 chapters", "B": "10 chapters", "C": "25 chapters", "E": "125 chapters", "F": "200 chapters", "G": "500 chapters", "H": "800 chapters"},
+        "ending_direction": "Resolve through paid costs.",
+        "red_lines": ["Do not override core freeze."],
+        "open_questions": ["Later details remain open."],
+        "anti_imitation_attestation": "No protected plot, setting, phrase, or voice copying.",
+        "core_setting_freeze_conflicts": [],
+        "writes_canon": False,
+        "writes_chapters": False,
+        "writes_event_ledger": False,
+    }
+    write(repo, "outline/book_outline.json", json.dumps(outline, ensure_ascii=False, indent=2) + "\n")
+    write(repo, "outline/book_outline.md", "# Book Outline\n\nstatus: READY\n")
+    volume = {"schema_version": 1, "status": "READY", "book_outline_ref": {"path": "outline/book_outline.json", "sha256": file_sha(repo, "outline/book_outline.json")}, **outline["volume_plan"][0], "updated_at": "2000-01-01T00:00:00+00:00", "writes_canon": False, "writes_chapters": False, "writes_event_ledger": False}
+    write(repo, "outline/volumes/v01_outline.json", json.dumps(volume, ensure_ascii=False, indent=2) + "\n")
+    write(repo, "outline/volumes/v01_outline.md", "# Volume Outline\n\nstatus: READY\n")
+
+
+def write_ready_style_contract(repo: Path, idea: str = "idea_core") -> None:
+    contract = {
+        "schema_version": 1,
+        "status": "READY",
+        "idea_id": idea,
+        "created_at": "2000-01-01T00:00:00+00:00",
+        "narration_person": "third_person_limited",
+        "narration_distance": "close_to_protagonist",
+        "tense_policy": "standard_chinese_narrative_tense",
+        "sentence_rhythm": "short_and_medium",
+        "paragraph_density": "medium",
+        "dialogue_ratio": "medium",
+        "interiority_ratio": "controlled",
+        "action_style": "continuous_scene_motion",
+        "exposition_policy": "scene_first",
+        "emotional_tone": "restrained tension",
+        "humor_level": "low",
+        "payoff_style": ["choice", "information_gap"],
+        "metaphor_sources": ["daily life", "urban pressure"],
+        "forbidden_styles": ["copying protected author voice"],
+        "reference_style_policy": {"allowed": ["pacing"], "forbidden": ["distinctive voice"]},
+        "imitation_policy": "Do not imitate a specific modern copyrighted work or author voice.",
+        "style_profile_policy": "Build after three shipped chapters.",
+        "writes_canon": False,
+        "writes_chapters": False,
+        "writes_event_ledger": False,
+    }
+    write(repo, "state/project_style_contract.json", json.dumps(contract, ensure_ascii=False, indent=2) + "\n")
+    write(repo, "state/project_style_contract.md", "# Project Style Contract\n\nstatus: READY\n")
+    write(repo, "bible/style_guide.md", "# Style Guide\n\nstatus: READY\n\nDo not imitate a specific modern copyrighted work or author voice.\n")
 
 
 def write_brief_landing(repo: Path, chapter: str = "v01_c001", source: str = "Manual") -> None:
@@ -764,6 +879,26 @@ def write_fact_cards_report(repo: Path, chapter: str) -> None:
     write(repo, f"reviews/{chapter}/fact_cards.md", f"# Fact Cards: {chapter}\n\nstatus: READY\n")
 
 
+def write_style_metrics(repo: Path, chapter: str) -> None:
+    volume = chapter[:3]
+    chapter_file = f"c{int(chapter[-3:]):03d}.md"
+    chapter_rel = f"chapters/{volume}/{chapter_file}"
+    report = {
+        "schema_version": 1,
+        "chapter": chapter,
+        "generated_at": "2000-01-01T00:00:00+00:00",
+        "status": "READY",
+        "official_chapter": {"path": chapter_rel, "sha256": file_sha(repo, chapter_rel)},
+        "style_contract": {"path": "state/project_style_contract.json", "status": "READY"},
+        "style_profile": {"path": "state/derived/style_profile.json", "status": "UNBUILT"},
+        "metrics": {"char_count": len((repo / chapter_rel).read_text(encoding="utf-8"))},
+        "blockers": [],
+        "warnings": [],
+    }
+    write(repo, f"reviews/{chapter}/style_metrics.json", json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+    write(repo, f"reviews/{chapter}/style_consistency.md", f"# Style Consistency: {chapter}\n\nstatus: READY\n")
+
+
 def write_complete_chapter_evidence(repo: Path, chapter: str, number: int) -> None:
     volume = chapter[:3]
     chapter_file = f"c{number:03d}.md"
@@ -853,6 +988,7 @@ def write_complete_chapter_evidence(repo: Path, chapter: str, number: int) -> No
     write(repo, f"reviews/{chapter}/continuity.md", "# Continuity\n\nstatus: CLEAR\np0_count: 0\np1_count: 0\n")
     write(repo, f"reviews/{chapter}/decision.md", "# Decision\n\ndecision: Ship\n")
     write_auxiliary_reviews(repo, chapter)
+    write_style_metrics(repo, chapter)
     write_element_usage_report(repo, chapter)
     write_fact_cards_report(repo, chapter)
 
@@ -893,7 +1029,7 @@ class WorkflowGuardTests(unittest.TestCase):
             write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF.format(chapter="v01_c001"))
 
             self.assertEqual(run(repo, "scripts/build_derived_state.py").returncode, 0)
-            context = run(repo, "scripts/build_context_pack.py", "--chapter", "v01_c001", "--limit", "7000")
+            context = run(repo, "scripts/build_context_pack.py", "--chapter", "v01_c001", "--limit", "12000")
             self.assertEqual(context.returncode, 0, context.stdout + context.stderr)
 
             subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True)
@@ -948,6 +1084,8 @@ class WorkflowGuardTests(unittest.TestCase):
             review = run(repo, "scripts/novel.py", "review", "v01_c001")
             self.assertEqual(review.returncode, 0, review.stdout + review.stderr)
             write_auxiliary_reviews(repo, "v01_c001")
+            style = run(repo, "scripts/novel.py", "style-check", "v01_c001")
+            self.assertEqual(style.returncode, 0, style.stdout + style.stderr)
             fact_cards = run(repo, "scripts/novel.py", "fact-cards", "v01_c001", "--write")
             self.assertEqual(fact_cards.returncode, 0, fact_cards.stdout + fact_cards.stderr)
             event = run(
@@ -1045,6 +1183,18 @@ class WorkflowGuardTests(unittest.TestCase):
                 "setting",
                 "desk",
                 "core-freeze-check",
+                "book-outline-start",
+                "book-outline-check",
+                "book-outline-land",
+                "volume-outline-build",
+                "volume-outline-check",
+                "style-contract-start",
+                "style-contract-check",
+                "style-contract-land",
+                "style-profile-build",
+                "style-profile-check",
+                "style-check",
+                "style-drift-report",
                 "idea",
                 "idea-form",
                 "idea-select",
@@ -1090,6 +1240,108 @@ class WorkflowGuardTests(unittest.TestCase):
             evidence = run(repo, "scripts/novel.py", "evidence", "v01_c001")
             self.assertNotEqual(evidence.returncode, 0)
             self.assertIn("status: NOT_READY", evidence.stdout)
+
+    def test_start_blocks_when_book_outline_is_not_ready(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_core_setting_freeze(repo)
+            write(repo, "outline/book_outline.json", json.dumps({"schema_version": 1, "status": "DRAFT"}) + "\n")
+            write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF.format(chapter="v01_c001"))
+            write_brief_landing(repo)
+
+            result = run(repo, "scripts/novel.py", "start", "v01_c001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("book outline", result.stderr)
+
+    def test_book_outline_context_source_must_not_be_fact_source(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_core_setting_freeze(repo)
+            chapter = "v01_c001"
+            write(repo, f"state/context_pack/{chapter}.md", "context\n")
+            manifest = {
+                "schema_version": 2,
+                "chapter": chapter,
+                "budget_chars": 12000,
+                "hard_max_chars": 48000,
+                "allow_truncated": False,
+                "pack_truncated": False,
+                "pack_chars": 8,
+                "sections": [
+                    {"id": "core_freeze", "sources": [{"path": "state/idea_lab/selected.json"}]},
+                    {"id": "chapter_brief", "sources": [{"path": f"outline/chapter_briefs/{chapter}.md"}]},
+                    {"id": "chapter_anchor_continuity", "sources": [{"path": "AGENTS.md"}]},
+                    {"id": "active_aftermath_obligations", "sources": [{"path": "state/derived/pacing/aftermath_obligations.json"}]},
+                    {"id": "book_outline_contract", "included_reason": "recent_3_to_5_chapters_plus_P0_P1", "sources": [{"path": "outline/book_outline.json"}]},
+                    {"id": "style_instruction", "included_reason": "style_instruction_not_fact_source", "sources": [{"path": "bible/style_guide.md", "note": "style_instruction_not_fact_source"}]},
+                    {"id": "authorized_elements_full", "sources": [{"path": f"outline/chapter_briefs/{chapter}.md"}]},
+                    {"id": "rules_and_boundaries", "sources": [{"path": "bible/rules.md"}]},
+                ],
+                "input_hashes": [{"path": f"state/context_pack/{chapter}.md", "sha256": file_sha(repo, f"state/context_pack/{chapter}.md")}],
+                "context_pack": {"path": f"state/context_pack/{chapter}.md", "sha256": file_sha(repo, f"state/context_pack/{chapter}.md")},
+            }
+            write(repo, f"state/context_pack/{chapter}.manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
+
+            result = run(repo, "scripts/novel.py", "context-quality", chapter)
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("strategic_plan_not_fact_source", result.stdout)
+
+    def test_context_manifest_tracks_book_outline_and_style_hashes(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_core_setting_freeze(repo)
+            chapter = "v01_c001"
+            write(repo, f"outline/chapter_briefs/{chapter}.md", COMPLETE_BRIEF.format(chapter=chapter))
+            self.assertEqual(run(repo, "scripts/build_derived_state.py").returncode, 0)
+            build = run(repo, "scripts/build_context_pack.py", "--chapter", chapter, "--limit", "12000")
+            self.assertEqual(build.returncode, 0, build.stdout + build.stderr)
+            manifest = json.loads((repo / f"state/context_pack/{chapter}.manifest.json").read_text(encoding="utf-8"))
+            paths = {item["path"] for item in manifest["input_hashes"]}
+            self.assertIn("outline/book_outline.json", paths)
+            self.assertIn("state/project_style_contract.json", paths)
+            self.assertIn("bible/style_guide.md", paths)
+
+            write(repo, "bible/style_guide.md", "# Style Guide\n\nstatus: READY\n\nChanged after context build.\n")
+            diff = run(repo, "scripts/novel.py", "context-diff", chapter, "--json")
+
+            self.assertEqual(diff.returncode, 0, diff.stdout + diff.stderr)
+            data = json.loads(diff.stdout)
+            self.assertEqual(data["status"], "STALE")
+            self.assertIn("bible/style_guide.md", data["stale_inputs"])
+
+    def test_style_contract_blocks_identifiable_imitation_request(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_core_setting_freeze(repo)
+            write(repo, "bible/style_guide.md", "# Style Guide\n\n仿写《某现代小说》的叙述声音。\n")
+
+            result = run(repo, "scripts/novel.py", "style-contract-check")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("identifiable imitation", result.stdout)
+
+    def test_style_check_blocks_declared_person_drift(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_core_setting_freeze(repo)
+            write(repo, "chapters/v01/c001.md", "Official chapter [style-drift:person]\n")
+
+            result = run(repo, "scripts/novel.py", "style-check", "v01_c001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("person drift", result.stdout)
+
+    def test_volume_outline_missing_is_warning_not_blocker(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            (repo / "outline/volumes/v01_outline.json").unlink()
+
+            result = run(repo, "scripts/novel.py", "volume-outline-check", "--volume", "v01")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("status: WARNING", result.stdout)
 
     def test_audit_reports_not_ready_without_stopping_early(self) -> None:
         with copy_repo() as temp:
@@ -2384,6 +2636,7 @@ print("OK: stub deepseek idea")
             write(repo, "reviews/v01_c001/model_disagreement.md", MODEL_DISAGREEMENT_READY)
             write(repo, "reviews/v01_c001/continuity.md", "# Continuity\n\nstatus: CLEAR\np0_count: 0\np1_count: 0\n")
             write_auxiliary_reviews(repo, "v01_c001")
+            write_style_metrics(repo, "v01_c001")
             write_element_usage_report(repo, "v01_c001")
 
             result = run(repo, "scripts/novel.py", "evidence", "v01_c001")

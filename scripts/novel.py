@@ -33,6 +33,10 @@ IDEA_FORCE_CLEANUP_FILES = (
     "selection.md",
     "core_setting_freeze.json",
     "core_setting_freeze.md",
+    "book_outline_candidate.json",
+    "book_outline_candidate.md",
+    "style_contract.json",
+    "style_contract.md",
 )
 
 
@@ -340,6 +344,15 @@ def command_go(args: argparse.Namespace) -> int:
         print()
         print("next: run `python scripts/novel.py idea --text \"...\"`, complete the three agent reviews, then run `python scripts/novel.py idea-select --id idea_xxx --choice A`.")
         print("guardrail: chapters cannot open until worldview, protagonist anomaly cause, and family stakes are fixed.")
+        return 1
+
+    if run_script_text("book_outline.py", "check") != 0:
+        print()
+        print("next: run `python scripts/novel.py book-outline-start --id idea_xxx`, then `python scripts/novel.py book-outline-land --id idea_xxx --source selected --build-volume`.")
+        return 1
+    if run_script_text("style_contract.py", "contract-check") != 0:
+        print()
+        print("next: run `python scripts/novel.py style-contract-start --id idea_xxx`, then `python scripts/novel.py style-contract-land --id idea_xxx --source selected`.")
         return 1
 
     answers = Path(args.answers)
@@ -1023,6 +1036,74 @@ def command_core_freeze_check(args: argparse.Namespace) -> int:
     if args.idea_id:
         script_args.extend(["--idea-id", args.idea_id])
     return run_script("core_setting_freeze.py", *script_args, check=False)
+
+
+def command_book_outline_start(args: argparse.Namespace) -> int:
+    script_args = ["start"]
+    if args.id:
+        script_args.extend(["--id", args.id])
+    return run_script("book_outline.py", *script_args, check=False)
+
+
+def command_book_outline_check(args: argparse.Namespace) -> int:
+    script_args = ["check"]
+    if args.id:
+        script_args.extend(["--id", args.id])
+    return run_script("book_outline.py", *script_args, check=False)
+
+
+def command_book_outline_land(args: argparse.Namespace) -> int:
+    script_args = ["land", "--id", args.id, "--source", args.source]
+    if args.volume:
+        script_args.extend(["--volume", args.volume])
+    if args.build_volume:
+        script_args.append("--build-volume")
+    return run_script("book_outline.py", *script_args, check=False)
+
+
+def command_volume_outline_build(args: argparse.Namespace) -> int:
+    return run_script("book_outline.py", "volume-build", "--volume", args.volume, check=False)
+
+
+def command_volume_outline_check(args: argparse.Namespace) -> int:
+    return run_script("book_outline.py", "volume-check", "--volume", args.volume, check=False)
+
+
+def command_style_contract_start(args: argparse.Namespace) -> int:
+    script_args = ["start"]
+    if args.id:
+        script_args.extend(["--id", args.id])
+    return run_script("style_contract.py", *script_args, check=False)
+
+
+def command_style_contract_check(args: argparse.Namespace) -> int:
+    script_args = ["contract-check"]
+    if args.id:
+        script_args.extend(["--id", args.id])
+    return run_script("style_contract.py", *script_args, check=False)
+
+
+def command_style_contract_land(args: argparse.Namespace) -> int:
+    return run_script("style_contract.py", "land", "--id", args.id, "--source", args.source, check=False)
+
+
+def command_style_profile_build(_args: argparse.Namespace) -> int:
+    return run_script("style_contract.py", "profile-build", check=False)
+
+
+def command_style_profile_check(_args: argparse.Namespace) -> int:
+    return run_script("style_contract.py", "profile-check", check=False)
+
+
+def command_style_check(args: argparse.Namespace) -> int:
+    script_args = ["style-check"]
+    if args.chapter:
+        script_args.append(args.chapter)
+    return run_script("style_contract.py", *script_args, check=False)
+
+
+def command_style_drift_report(_args: argparse.Namespace) -> int:
+    return run_script("style_contract.py", "drift-report", check=False)
 
 
 def command_doctor(_args: argparse.Namespace) -> int:
@@ -1812,6 +1893,55 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("core-freeze-check", help="Check the pre-opening core setting freeze.")
     p.add_argument("--idea-id", default=None)
     p.set_defaults(func=command_core_freeze_check)
+
+    p = sub.add_parser("book-outline-start", help="Create an idea-lab book outline candidate.")
+    p.add_argument("--id", default=None)
+    p.set_defaults(func=command_book_outline_start)
+
+    p = sub.add_parser("book-outline-check", help="Check book outline readiness.")
+    p.add_argument("--id", default=None)
+    p.set_defaults(func=command_book_outline_check)
+
+    p = sub.add_parser("book-outline-land", help="Land selected book outline into outline/.")
+    p.add_argument("--id", required=True)
+    p.add_argument("--source", default="selected", choices=["selected"])
+    p.add_argument("--volume", default="v01")
+    p.add_argument("--build-volume", action="store_true")
+    p.set_defaults(func=command_book_outline_land)
+
+    p = sub.add_parser("volume-outline-build", help="Build the rolling outline for one volume.")
+    p.add_argument("--volume", required=True)
+    p.set_defaults(func=command_volume_outline_build)
+
+    p = sub.add_parser("volume-outline-check", help="Check the rolling outline for one volume.")
+    p.add_argument("--volume", required=True)
+    p.set_defaults(func=command_volume_outline_check)
+
+    p = sub.add_parser("style-contract-start", help="Create an idea-lab style contract candidate.")
+    p.add_argument("--id", default=None)
+    p.set_defaults(func=command_style_contract_start)
+
+    p = sub.add_parser("style-contract-check", help="Check project style contract readiness.")
+    p.add_argument("--id", default=None)
+    p.set_defaults(func=command_style_contract_check)
+
+    p = sub.add_parser("style-contract-land", help="Land selected style contract into state/ and bible/style_guide.md.")
+    p.add_argument("--id", required=True)
+    p.add_argument("--source", default="selected", choices=["selected"])
+    p.set_defaults(func=command_style_contract_land)
+
+    p = sub.add_parser("style-profile-build", help="Build style profile from shipped chapters.")
+    p.set_defaults(func=command_style_profile_build)
+
+    p = sub.add_parser("style-profile-check", help="Check derived style profile status.")
+    p.set_defaults(func=command_style_profile_check)
+
+    p = sub.add_parser("style-check", help="Check project or chapter style consistency.")
+    p.add_argument("chapter", nargs="?")
+    p.set_defaults(func=command_style_check)
+
+    p = sub.add_parser("style-drift-report", help="Show style drift/profile status.")
+    p.set_defaults(func=command_style_drift_report)
 
     p = sub.add_parser("doctor", help="Check whether the project environment is ready to run the workflow.")
     p.set_defaults(func=command_doctor)

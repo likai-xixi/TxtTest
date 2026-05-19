@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "status": "UNBUILT",
+  "generated_at": "2000-01-01T00:00:00+00:00",
+  "generated_from_chapters": [],
+  "metrics": {},
+  "warnings": [
+    "style profile is built after three shipped chapters"
+  ],
+  "blockers": []
+}

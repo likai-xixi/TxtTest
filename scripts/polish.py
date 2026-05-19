@@ -9,6 +9,7 @@ from typing import Any
 
 from _common import ROOT, chapter_parts, now_iso, read_json, read_text, write_json, write_text
 from element_usage import authorized_ids
+from style_contract import BLOCKER_MARKERS, WARNING_MARKERS
 
 
 def sha256(path: Path) -> str:
@@ -108,6 +109,12 @@ def check_polish(chapter: str) -> tuple[str, list[str], list[str]]:
             blockers.append("polish draft introduces unauthorized ability markers: " + ", ".join(sorted(new_abilities)))
         if len(draft_text) > len(official_text) * 1.5:
             warnings.append("polish candidate is much longer than official chapter; review style drift")
+        for marker, message in BLOCKER_MARKERS.items():
+            if marker in draft_text and marker not in official_text:
+                blockers.append(f"polish draft changes protected style dimension: {message}")
+        for marker, message in WARNING_MARKERS.items():
+            if marker in draft_text and marker not in official_text:
+                warnings.append(f"polish draft may drift style: {message}")
     if blockers:
         return "BLOCKED", blockers, warnings
     if warnings:

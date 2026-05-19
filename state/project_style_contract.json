@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "status": "DRAFT",
+  "idea_id": "",
+  "created_at": "2000-01-01T00:00:00+00:00",
+  "narration_person": "third_person_limited",
+  "narration_distance": "close_to_protagonist",
+  "tense_policy": "standard_chinese_narrative_tense",
+  "sentence_rhythm": "short_and_medium_sentences_for_forward_motion",
+  "paragraph_density": "medium",
+  "dialogue_ratio": "medium",
+  "interiority_ratio": "controlled",
+  "action_style": "continuous_scene_motion_with_concrete_cost",
+  "exposition_policy": "reveal_in_scene_or_after_action; no encyclopedia dumps",
+  "emotional_tone": "tense, restrained, commercially readable",
+  "humor_level": "low",
+  "payoff_style": [
+    "information_gap_payoff",
+    "choice_payoff",
+    "costly_progress"
+  ],
+  "metaphor_sources": [
+    "daily life",
+    "urban pressure",
+    "technology when authorized by brief"
+  ],
+  "forbidden_styles": [
+    "internet meme voice",
+    "lecture voice",
+    "uncontrolled lyrical drift",
+    "copying protected author voice or distinctive phrasing"
+  ],
+  "reference_style_policy": {
+    "allowed": [
+      "abstract pacing",
+      "narration distance",
+      "dialogue density",
+      "emotional structure"
+    ],
+    "forbidden": [
+      "specific sentence patterns",
+      "character catchphrases",
+      "worldview structure",
+      "plot-beat combinations",
+      "distinctive protected narrative voice"
+    ]
+  },
+  "imitation_policy": "Do not ask any model to imitate a living or modern copyrighted author's identifiable voice. Translate references into technical parameters only.",
+  "style_profile_policy": "After Gate A, build a style profile from the first three shipped chapters.",
+  "writes_canon": false,
+  "writes_chapters": false,
+  "writes_event_ledger": false
+}

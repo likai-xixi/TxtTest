@@ -132,3 +132,24 @@ DeepSeek 和 Codex 可以创造新鲜细节，但重要新元素必须有授权�
 ## Gate 提醒
 
 第 3、10、25、125 章完成后，必须优先进入对应 Gate。Gate 只检查证据，不会自动通过，最终由人类总编裁决。
+
+## P0.6 / P0.7 Contracts
+
+Book outline and style contract are planning and writing-voice assets. They are not canon, not event ledger entries, and not chapter text.
+
+```bash
+python scripts/novel.py book-outline-start --id idea_xxx
+python scripts/novel.py book-outline-check --id idea_xxx
+python scripts/novel.py book-outline-land --id idea_xxx --source selected --build-volume
+python scripts/novel.py volume-outline-build --volume v01
+python scripts/novel.py volume-outline-check --volume v01
+
+python scripts/novel.py style-contract-start --id idea_xxx
+python scripts/novel.py style-contract-check --id idea_xxx
+python scripts/novel.py style-contract-land --id idea_xxx --source selected
+python scripts/novel.py style-profile-build
+python scripts/novel.py style-check v01_c001
+python scripts/novel.py style-drift-report
+```
+
+`start` and `write` are blocked until `core_setting_freeze`, `outline/book_outline.json`, and `state/project_style_contract.json` are READY. `context_pack` may include the book outline only as `strategic_plan_not_fact_source`, and style assets only as `style_instruction_not_fact_source`.
