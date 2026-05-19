@@ -16,6 +16,50 @@ from validate_event_ledger import ALLOWED_TYPES, IMPORTANCE_LEVELS, validate
 EVENT_RE = re.compile(r"^v\d{2}_c\d{3}_e(?P<num>\d{3})$")
 
 
+def anchor_args_present(args: argparse.Namespace) -> bool:
+    return any(
+        [
+            args.anchor_end_time,
+            args.anchor_end_location,
+            args.anchor_present_character,
+            args.anchor_protagonist_state,
+            args.anchor_carried_item,
+            args.anchor_unfinished_action,
+            args.anchor_next_required_continuity,
+        ]
+    )
+
+
+def build_anchor(args: argparse.Namespace) -> dict | None:
+    if args.type != "chapter_anchor":
+        if anchor_args_present(args):
+            raise ValueError("anchor fields are only allowed with --type chapter_anchor")
+        return None
+    required = {
+        "--anchor-end-time": args.anchor_end_time,
+        "--anchor-end-location": args.anchor_end_location,
+        "--anchor-protagonist-state": args.anchor_protagonist_state,
+        "--anchor-unfinished-action": args.anchor_unfinished_action,
+        "--anchor-next-required-continuity": args.anchor_next_required_continuity,
+    }
+    missing = [flag for flag, value in required.items() if not str(value or "").strip()]
+    if not args.anchor_present_character:
+        missing.append("--anchor-present-character")
+    if not args.anchor_carried_item:
+        missing.append("--anchor-carried-item")
+    if missing:
+        raise ValueError("chapter_anchor requires " + ", ".join(missing))
+    return {
+        "end_time": args.anchor_end_time.strip(),
+        "end_location": args.anchor_end_location.strip(),
+        "present_characters": args.anchor_present_character,
+        "protagonist_state": args.anchor_protagonist_state.strip(),
+        "carried_items": args.anchor_carried_item,
+        "unfinished_action": args.anchor_unfinished_action.strip(),
+        "next_required_continuity": args.anchor_next_required_continuity.strip(),
+    }
+
+
 def next_event_id(chapter: str, ledger_text: str) -> str:
     max_num = 0
     for line in ledger_text.splitlines():
@@ -65,6 +109,13 @@ def main() -> int:
     parser.add_argument("--thread-id", default="", help="Long-running thread id when the event opens/advances/pays off a thread.")
     parser.add_argument("--importance", choices=sorted(IMPORTANCE_LEVELS), default=None)
     parser.add_argument("--tag", action="append", default=[], help="Search tag for this event; may be repeated.")
+    parser.add_argument("--anchor-end-time", default="", help="For chapter_anchor: visible end time.")
+    parser.add_argument("--anchor-end-location", default="", help="For chapter_anchor: visible end location.")
+    parser.add_argument("--anchor-present-character", action="append", default=[], help="For chapter_anchor: character present at chapter end; may be repeated.")
+    parser.add_argument("--anchor-protagonist-state", default="", help="For chapter_anchor: protagonist physical/emotional state.")
+    parser.add_argument("--anchor-carried-item", action="append", default=[], help="For chapter_anchor: carried item or evidence; may be repeated.")
+    parser.add_argument("--anchor-unfinished-action", default="", help="For chapter_anchor: unfinished action at chapter end.")
+    parser.add_argument("--anchor-next-required-continuity", default="", help="For chapter_anchor: continuity the next chapter must address.")
     args = parser.parse_args()
 
     if write_blocked_by_locks("event ledger append"):
@@ -73,6 +124,11 @@ def main() -> int:
     chapter_parts(args.chapter)
     ledger = ROOT / "state" / "event_ledger.jsonl"
     ledger.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        anchor = build_anchor(args)
+    except ValueError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
 
     try:
         with LedgerLock(ledger.parent / ".event_ledger.lock"):
@@ -94,6 +150,8 @@ def main() -> int:
                 entry["importance"] = args.importance
             if args.tag:
                 entry["tags"] = args.tag
+            if anchor is not None:
+                entry["anchor"] = anchor
             proposed_line = json.dumps(entry, ensure_ascii=False, separators=(",", ":")) + "\n"
             proposed = current + proposed_line
             with tempfile.NamedTemporaryFile(

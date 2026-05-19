@@ -207,6 +207,75 @@ def arc_body(chapter: str) -> str:
     return "\n\n".join(parts) if parts else "none"
 
 
+def previous_chapter_id(chapter: str) -> str | None:
+    number = chapter_number(chapter)
+    if number <= 1:
+        return None
+    return f"{chapter[:3]}_c{number - 1:03d}"
+
+
+def previous_anchor_body_and_sources(chapter: str) -> tuple[str, list[SourceRef], list[str]]:
+    previous = previous_chapter_id(chapter)
+    if previous is None:
+        return "开篇章，无上章章末锚点。", [SourceRef(ROOT / "AGENTS.md", note="opening chapter has no previous anchor")], []
+    path = ROOT / "state" / "derived" / "chapter_anchors" / f"{previous}.json"
+    if not path.exists():
+        return "", [], [f"missing previous chapter anchor: {path.relative_to(ROOT)}"]
+    try:
+        data = json.loads(read_text(path))
+    except json.JSONDecodeError as exc:
+        return "", [], [f"invalid previous chapter anchor JSON: {path.relative_to(ROOT)}: {exc}"]
+    body = "\n".join(
+        [
+            f"- previous_chapter: {previous}",
+            f"- source_event_id: {data.get('source_event_id', 'unknown')}",
+            f"- 章末时间：{data.get('end_time', '')}",
+            f"- 章末地点：{data.get('end_location', '')}",
+            "- 章末在场人物：" + "、".join(str(item) for item in data.get("present_characters", [])),
+            f"- 主角状态：{data.get('protagonist_state', '')}",
+            "- 携带物 / 证据：" + "、".join(str(item) for item in data.get("carried_items", [])),
+            f"- 未完成动作：{data.get('unfinished_action', '')}",
+            f"- 本章必须承接：{data.get('next_required_continuity', '')}",
+        ]
+    )
+    return body, [SourceRef(path), SourceRef(ROOT / "state" / "event_ledger.jsonl", data.get("source_event_id"))], []
+
+
+def active_aftermath_body_and_sources(chapter: str) -> tuple[str, list[SourceRef]]:
+    path = ROOT / "state" / "derived" / "pacing" / "aftermath_obligations.json"
+    if not path.exists():
+        return "none", [SourceRef(path, note="no derived aftermath obligations yet")]
+    try:
+        data = json.loads(read_text(path))
+    except json.JSONDecodeError:
+        return f"invalid JSON: {path.relative_to(ROOT)}", [SourceRef(path)]
+    current_number = chapter_number(chapter)
+    active = []
+    for item in data.get("obligations", []):
+        if not isinstance(item, dict):
+            continue
+        source = str(item.get("source_chapter", ""))
+        due = str(item.get("due_chapter", ""))
+        try:
+            source_number = chapter_number(source)
+            due_number = chapter_number(due)
+        except ValueError:
+            continue
+        if source_number < current_number <= due_number or item.get("status") == "overdue":
+            active.append(item)
+    if not active:
+        return "none", [SourceRef(path, note="no active aftermath obligations for this chapter")]
+    lines = []
+    for item in active:
+        lines.append(
+            "- "
+            f"{item.get('source_chapter')} -> due {item.get('due_chapter')}: "
+            f"{item.get('aftermath_obligation')} "
+            f"(target={item.get('progress_target')}; cooldown={item.get('cooldown_scope')}; status={item.get('status')})"
+        )
+    return "\n".join(lines), [SourceRef(path)]
+
+
 def validate_brief_element_sections(brief_sections: dict[str, str]) -> tuple[list[str], list[str], str, str] | None:
     for aliases in (
         USABLE_OBJECT_ID_SECTIONS,
@@ -275,6 +344,11 @@ def build_sections(chapter: str, brief_text: str, object_ids: list[str], ability
         ]
     )
 
+    anchor_body, anchor_sources, anchor_errors = previous_anchor_body_and_sources(chapter)
+    if anchor_errors:
+        return [], anchor_errors
+    aftermath_body, aftermath_sources = active_aftermath_body_and_sources(chapter)
+
     return [
         Section(
             "writing_boundaries",
@@ -295,14 +369,16 @@ def build_sections(chapter: str, brief_text: str, object_ids: list[str], ability
         ),
         Section("core_freeze", LEGACY_CORE_FREEZE, file_body(freeze_path), budgets["core_freeze"], [SourceRef(freeze_path)], "always", 1),
         Section("chapter_brief", "本章 brief", brief_text, budgets["chapter_brief"], [SourceRef(ROOT / "outline" / "chapter_briefs" / f"{chapter}.md")], "always", 2),
-        Section("authorized_elements_full", "本章元素授权", authorization, budgets["authorized_elements_full"], [SourceRef(ROOT / "outline" / "chapter_briefs" / f"{chapter}.md"), SourceRef(object_path), SourceRef(ability_path)], "brief_authorized_ids", 3),
-        Section("active_entity_cards", "本章相关实体状态卡", entity_cards, budgets["active_entity_cards"], entity_sources, "brief_and_authorized_entity_recall", 4),
-        Section("open_threads", "Active / Open Threads", thread_body(), budgets["open_threads"], thread_sources(), "active_or_open_threads", 5),
-        Section("recent_events", "Recent Key Events", event_body(events), budgets["recent_events"], event_sources, "recent_3_to_5_chapters_plus_P0_P1", 6),
-        Section("arc_summary", "Arc / Chunk Summary", arc_body(chapter), budgets["arc_summary"], arc_sources(chapter), "long_cause_by_arc_chunk", 7),
-        Section("rules_and_boundaries", "Rules And Boundaries", boundaries, budgets["rules_and_boundaries"], [SourceRef(ROOT / "bible" / "canon.md"), SourceRef(ROOT / "bible" / "rules.md"), SourceRef(ROOT / "bible" / "style_guide.md")], "hard_rules_only", 8),
-        Section("legacy_state_compat", LEGACY_CURRENT_OBJECTS, file_body(ROOT / "state" / "derived" / "current_objects.yaml"), 700, [SourceRef(ROOT / "state" / "derived" / "current_objects.yaml")], "legacy_compatibility", 9),
-        Section("legacy_ability_compat", LEGACY_CURRENT_ABILITIES, file_body(ROOT / "state" / "derived" / "current_abilities.yaml"), 700, [SourceRef(ROOT / "state" / "derived" / "current_abilities.yaml")], "legacy_compatibility", 10),
+        Section("chapter_anchor_continuity", "上一章章末锚点连续性", anchor_body, budgets.get("chapter_anchor_continuity", 900), anchor_sources, "previous_chapter_end_anchor", 3),
+        Section("active_aftermath_obligations", "Active Aftermath Obligations", aftermath_body, budgets.get("active_aftermath_obligations", 900), aftermath_sources, "unresolved_cost_and_consequence_debt", 4),
+        Section("authorized_elements_full", "本章元素授权", authorization, budgets["authorized_elements_full"], [SourceRef(ROOT / "outline" / "chapter_briefs" / f"{chapter}.md"), SourceRef(object_path), SourceRef(ability_path)], "brief_authorized_ids", 5),
+        Section("active_entity_cards", "本章相关实体状态卡", entity_cards, budgets["active_entity_cards"], entity_sources, "brief_and_authorized_entity_recall", 6),
+        Section("open_threads", "Active / Open Threads", thread_body(), budgets["open_threads"], thread_sources(), "active_or_open_threads", 7),
+        Section("recent_events", "Recent Key Events", event_body(events), budgets["recent_events"], event_sources, "recent_3_to_5_chapters_plus_P0_P1", 8),
+        Section("arc_summary", "Arc / Chunk Summary", arc_body(chapter), budgets["arc_summary"], arc_sources(chapter), "long_cause_by_arc_chunk", 9),
+        Section("rules_and_boundaries", "Rules And Boundaries", boundaries, budgets["rules_and_boundaries"], [SourceRef(ROOT / "bible" / "canon.md"), SourceRef(ROOT / "bible" / "rules.md"), SourceRef(ROOT / "bible" / "style_guide.md")], "hard_rules_only", 10),
+        Section("legacy_state_compat", LEGACY_CURRENT_OBJECTS, file_body(ROOT / "state" / "derived" / "current_objects.yaml"), 700, [SourceRef(ROOT / "state" / "derived" / "current_objects.yaml")], "legacy_compatibility", 11),
+        Section("legacy_ability_compat", LEGACY_CURRENT_ABILITIES, file_body(ROOT / "state" / "derived" / "current_abilities.yaml"), 700, [SourceRef(ROOT / "state" / "derived" / "current_abilities.yaml")], "legacy_compatibility", 12),
     ], []
 
 

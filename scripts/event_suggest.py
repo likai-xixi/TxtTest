@@ -5,6 +5,8 @@ import re
 import sys
 
 from _common import ROOT, chapter_parts, read_text
+from brief_contract import LEDGER_EVENT_TYPES, PROGRESS_CONTRACT_SECTIONS, progress_value
+from element_context import markdown_sections, section_body
 
 
 def first_quote(text: str) -> str:
@@ -37,7 +39,25 @@ def main() -> int:
         return 1
 
     quote = first_quote(text)
+    brief = read_text(ROOT / "outline" / "chapter_briefs" / f"{args.chapter}.md")
+    progress = section_body(markdown_sections(brief), PROGRESS_CONTRACT_SECTIONS)
+    minimum_event = progress_value(progress, "minimum_ledger_event").strip()
     suggestions: list[tuple[str, str, str, str]] = []
+    add_suggestion(
+        suggestions,
+        "chapter_anchor",
+        "记录本章章末可见状态：时间、地点、在场人物、主角状态、携带物/证据、未完成动作。",
+        quote,
+        "下一章 brief 和 context pack 必须承接该章末锚点，防止无解释跳场。",
+    )
+    if minimum_event in LEDGER_EVENT_TYPES and minimum_event != "chapter_anchor":
+        add_suggestion(
+            suggestions,
+            minimum_event,
+            f"记录 brief 进展契约承诺的最低落账事件：{minimum_event}。",
+            quote,
+            "Ship evidence 会检查该事件是否进入 event ledger。",
+        )
     add_suggestion(
         suggestions,
         "character_decision",

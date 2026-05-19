@@ -8,7 +8,18 @@ from pathlib import Path
 from typing import Any
 
 from _common import ROOT, chapter_number, now_iso, write_blocked_by_locks, write_text
+from brief_contract import (
+    COST_CONSEQUENCE_CONTRACT_SECTIONS,
+    PROGRESS_CONTRACT_SECTIONS,
+    RESOLUTION_BOUNDARY_SECTIONS,
+    digestion_window_chapters,
+    normalized_consequence_level,
+    normalized_impact_scale,
+    normalized_progress_mode,
+    progress_value,
+)
 from context_governance import rel
+from element_context import markdown_sections, section_body
 from validate_event_ledger import validate
 
 try:
@@ -69,6 +80,8 @@ def reset_generated_dirs() -> None:
         DERIVED / "indexes" / "events_by_chapter",
         DERIVED / "indexes" / "events_by_type",
         DERIVED / "arcs",
+        DERIVED / "chapter_anchors",
+        DERIVED / "pacing",
     ]:
         if path.exists():
             shutil.rmtree(path)
@@ -269,6 +282,170 @@ def build_arcs(events: list[dict[str, Any]]) -> None:
     write_text(DERIVED / "arcs" / "volume_01.md", "\n".join(volume_lines).rstrip() + "\n")
 
 
+def build_chapter_anchors(events: list[dict[str, Any]]) -> None:
+    anchors: dict[str, dict[str, Any]] = {}
+    for event in events:
+        if event.get("type") != "chapter_anchor":
+            continue
+        anchor = event.get("anchor")
+        if not isinstance(anchor, dict):
+            continue
+        item = {
+            "schema_version": 1,
+            "chapter": event["chapter"],
+            "source_event_id": event["event_id"],
+            "source_path": "state/event_ledger.jsonl",
+            "evidence_quote": event["evidence_quote"],
+            "fact": event["fact"],
+            "consequence": event["consequence"],
+            "end_time": anchor.get("end_time", ""),
+            "end_location": anchor.get("end_location", ""),
+            "present_characters": anchor.get("present_characters", []),
+            "protagonist_state": anchor.get("protagonist_state", ""),
+            "carried_items": anchor.get("carried_items", []),
+            "unfinished_action": anchor.get("unfinished_action", ""),
+            "next_required_continuity": anchor.get("next_required_continuity", ""),
+        }
+        anchors[event["chapter"]] = item
+
+    index = {
+        "schema_version": 1,
+        "generated_at": now_iso(),
+        "anchors": [
+            {
+                "chapter": item["chapter"],
+                "source_event_id": item["source_event_id"],
+                "end_time": item["end_time"],
+                "end_location": item["end_location"],
+                "next_required_continuity": item["next_required_continuity"],
+            }
+            for item in sorted(anchors.values(), key=lambda value: chapter_number(value["chapter"]))
+        ],
+    }
+    write_text(DERIVED / "chapter_anchors" / "index.json", json.dumps(index, ensure_ascii=False, indent=2) + "\n")
+    latest_lines = ["# Chapter Anchors", ""]
+    if not anchors:
+        latest_lines.append("none")
+    else:
+        for item in index["anchors"][-20:]:
+            latest_lines.append(
+                f"- {item['chapter']} ({item['source_event_id']}): {item['end_time']} / "
+                f"{item['end_location']} -> {item['next_required_continuity']}"
+            )
+    write_text(DERIVED / "chapter_anchors" / "latest.md", "\n".join(latest_lines).rstrip() + "\n")
+    for item in anchors.values():
+        write_text(DERIVED / "chapter_anchors" / f"{item['chapter']}.json", json.dumps(item, ensure_ascii=False, indent=2) + "\n")
+
+
+def brief_progress_entries() -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    for path in sorted(
+        (ROOT / "outline" / "chapter_briefs").glob("v*_c*.md"),
+        key=lambda item: (item.stem[:3], chapter_number(item.stem)),
+    ):
+        sections = markdown_sections(path.read_text(encoding="utf-8"))
+        progress = section_body(sections, PROGRESS_CONTRACT_SECTIONS)
+        cost = section_body(sections, COST_CONSEQUENCE_CONTRACT_SECTIONS)
+        boundary = section_body(sections, RESOLUTION_BOUNDARY_SECTIONS)
+        if not progress and not cost and not boundary:
+            continue
+        entries.append(
+            {
+                "chapter": path.stem,
+                "chapter_number": chapter_number(path.stem),
+                "brief_path": rel(path),
+                "progress_mode": normalized_progress_mode(progress_value(progress, "progress_mode")),
+                "progress_target": progress_value(progress, "progress_target"),
+                "start_state_ref": progress_value(progress, "start_state_ref"),
+                "end_state_delta": progress_value(progress, "end_state_delta"),
+                "minimum_ledger_event": progress_value(progress, "minimum_ledger_event").strip(),
+                "progress_importance": progress_value(progress, "progress_importance").strip(),
+                "buffer_function": progress_value(progress, "buffer_function"),
+                "impact_scale": normalized_impact_scale(progress_value(cost, "impact_scale")),
+                "consequence_level": normalized_consequence_level(progress_value(cost, "consequence_level")),
+                "cost_type": progress_value(cost, "cost_type"),
+                "cost_paid_now": progress_value(cost, "cost_paid_now"),
+                "deferred_cost": progress_value(cost, "deferred_cost"),
+                "aftermath_obligation": progress_value(cost, "aftermath_obligation"),
+                "digestion_window": progress_value(cost, "digestion_window"),
+                "digestion_window_chapters": digestion_window_chapters(progress_value(cost, "digestion_window")),
+                "cooldown_scope": progress_value(cost, "cooldown_scope"),
+                "opened_threads": progress_value(boundary, "opened_threads"),
+                "advanced_threads": progress_value(boundary, "advanced_threads"),
+                "resolved_threads": progress_value(boundary, "resolved_threads"),
+                "forbidden_resolution": progress_value(boundary, "forbidden_resolution"),
+                "resolution_requires_cost": progress_value(boundary, "resolution_requires_cost"),
+            }
+        )
+    return entries
+
+
+def build_progress_and_aftermath() -> None:
+    entries = brief_progress_entries()
+    write_text(
+        DERIVED / "pacing" / "progress_index.json",
+        json.dumps(
+            {
+                "schema_version": 1,
+                "generated_at": now_iso(),
+                "entries": entries,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+    )
+
+    obligations: list[dict[str, Any]] = []
+    for index, entry in enumerate(entries):
+        window = entry.get("digestion_window_chapters")
+        resolved_threads = str(entry.get("resolved_threads", "")).strip().lower()
+        creates_obligation = (
+            entry.get("impact_scale") in {"C3", "C4", "I3", "I4"}
+            or entry.get("progress_mode") == "payoff"
+            or resolved_threads not in {"", "none", "无", "无。"}
+        )
+        if not creates_obligation or window is None or window == 0:
+            continue
+        due_number = int(entry["chapter_number"]) + int(window)
+        later = [
+            item
+            for item in entries[index + 1 :]
+            if int(item["chapter_number"]) <= due_number
+        ]
+        resolving = [item for item in later if item.get("progress_mode") in {"digest", "cost_payment"}]
+        status = "resolved" if resolving else "active"
+        if not resolving and entries and int(entries[-1]["chapter_number"]) >= due_number:
+            status = "overdue"
+        obligations.append(
+            {
+                "source_chapter": entry["chapter"],
+                "source_brief_path": entry["brief_path"],
+                "progress_target": entry.get("progress_target", ""),
+                "impact_scale": entry.get("impact_scale", ""),
+                "aftermath_obligation": entry.get("aftermath_obligation", ""),
+                "digestion_window_chapters": window,
+                "due_chapter": f"{entry['chapter'][:3]}_c{due_number:03d}",
+                "cooldown_scope": entry.get("cooldown_scope", ""),
+                "status": status,
+                "resolved_by": [item["chapter"] for item in resolving],
+            }
+        )
+    write_text(
+        DERIVED / "pacing" / "aftermath_obligations.json",
+        json.dumps(
+            {
+                "schema_version": 1,
+                "generated_at": now_iso(),
+                "obligations": obligations,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Build derived state from event ledger.")
     parser.add_argument("--ledger", default=str(LEDGER))
@@ -303,6 +480,8 @@ def main() -> int:
             "threads": "state/derived/threads/",
             "indexes": "state/derived/indexes/",
             "arcs": "state/derived/arcs/",
+            "chapter_anchors": "state/derived/chapter_anchors/",
+            "pacing": "state/derived/pacing/",
             "context_quality": "state/derived/context_quality/",
         },
     }
@@ -318,6 +497,8 @@ def main() -> int:
     build_threads(events)
     build_indexes(events)
     build_arcs(events)
+    build_chapter_anchors(events)
+    build_progress_and_aftermath()
 
     write_text(DERIVED / "current_state.yaml", dump_data(current_state))
     write_text(DERIVED / "latest_events.md", "\n".join(latest_events) + "\n")

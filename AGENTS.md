@@ -63,7 +63,7 @@ python scripts/novel.py self-test
 
 ## 每章流程
 
-每章 brief 必须声明：`本章可用道具 IDs`、`本章可用技能 IDs`、`本章允许新增元素`、`本章禁止临场解决`。`build_context_pack` 只能按这些 ID 拉取完整道具/技能条目；未授权的新道具、新能力或新规则不得成为本章破局钥匙。
+每章 brief 必须声明：`上章章末锚点`、`本章开场落点`、`场景承接说明`、`主线牵引档位`、`外部压力档位`、`本章继承变化`、`本章节奏用途`、`节奏说明`、`本章进展契约`、`本章代价与后果契约`、`本章解决边界`、`本章可用道具 IDs`、`本章可用技能 IDs`、`本章允许新增元素`、`本章禁止临场解决`。`brief_check` 硬查字段完整、场景承接、档位合法、进展契约、代价后果和解决边界；`pacing_check` 硬查跨章连续低推进、连续小事、高推进后无消化，并保留过热预警。`build_derived_state` 必须生成 `state/derived/pacing/progress_index.json` 和 `state/derived/pacing/aftermath_obligations.json`；`build_context_pack` 只能按这些 ID 拉取完整道具/技能条目，并带入上一章人类确认的章末锚点和当前后果承接债务；未授权的新道具、新能力或新规则不得成为本章破局钥匙。Ship evidence 必须核验 brief 承诺的 `最低落账事件` 已进入 `state/event_ledger.jsonl`。
 
 ```text
 1. python scripts/novel.py brief-candidates {chapter}
@@ -82,7 +82,7 @@ python scripts/novel.py self-test
 14. python scripts/novel.py review {chapter} --deepseek
 15. python scripts/novel.py evidence {chapter}
 16. 人类判定：Ship / Revise once / Rewrite brief / Kill chapter / Pause project
-17. python scripts/novel.py event ...
+17. python scripts/novel.py event ...（Ship 前至少记录一个 `chapter_anchor` 章末锚点事件，供下一章承接）
 18. python scripts/novel.py close {chapter} --decision Ship
 ```
 
@@ -111,4 +111,6 @@ Gate 命令只检查证据和记录人类裁决，永不自动通过 Gate。
 - 全书事实只进 `state/event_ledger.jsonl`；可重建状态进 `state/derived/`；本章写作只读 `state/context_pack/{chapter}.md` 和正式 brief。
 - `python scripts/novel.py start {chapter}` 必须依次生成 derived state、context pack、`state/context_pack/{chapter}.manifest.json` 和 `state/derived/context_quality/{chapter}.json`。
 - `context_quality` 必须 READY 后才可进入 DeepSeek 正文生成或正式落章；`--allow-truncated` 产物不得进入正式写作。
+- 正式收章时应记录 `chapter_anchor` 人类确认事件；`build_derived_state` 会生成 `state/derived/chapter_anchors/{chapter}.json`，供下一章 brief pack、context pack 和 continuity 检查使用。
+- 正式 brief 的进展契约会生成 `state/derived/pacing/progress_index.json`；高推进、兑现或解决伏笔产生的后果债务会进入 `state/derived/pacing/aftermath_obligations.json`，供下一章 brief、context pack、pacing check 和 Ship evidence 使用。
 - Gate F/G/H 已纳入长期治理：F=200 章状态索引与伏笔账本，G=500 章重复套路/设定债务/长线兑现，H=800 章终局治理并限制新长期机制。

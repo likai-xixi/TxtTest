@@ -2,12 +2,26 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from _common import ROOT, chapter_parts, read_json, read_text
+from brief_contract import (
+    COST_CONSEQUENCE_CONTRACT_SECTIONS,
+    HIGH_IMPACT_SCALES,
+    LEDGER_EVENT_TYPES,
+    PROGRESS_CONTRACT_SECTIONS,
+    RESOLUTION_BOUNDARY_SECTIONS,
+    concrete_value,
+    is_none_body,
+    normalized_impact_scale,
+    normalized_progress_mode,
+    progress_value,
+)
 from context_governance import context_manifest_path, context_quality_path
+from element_context import markdown_sections, missing_section, section_body
 
 
 PLACEHOLDERS = (
@@ -388,6 +402,68 @@ def validate_auxiliary_review(chapter: str, name: str) -> list[str]:
     return failures
 
 
+def load_ledger_events() -> list[dict]:
+    path = ROOT / "state" / "event_ledger.jsonl"
+    if not path.exists():
+        return []
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def validate_progress_contract(chapter: str) -> list[str]:
+    brief_path = ROOT / "outline" / "chapter_briefs" / f"{chapter}.md"
+    sections = markdown_sections(read_text(brief_path))
+    failures: list[str] = []
+    for aliases in (
+        PROGRESS_CONTRACT_SECTIONS,
+        COST_CONSEQUENCE_CONTRACT_SECTIONS,
+        RESOLUTION_BOUNDARY_SECTIONS,
+    ):
+        if missing_section(sections, aliases):
+            failures.append(f"{chapter}: official brief missing progress evidence section {aliases[0]}")
+    if failures:
+        return failures
+
+    progress = section_body(sections, PROGRESS_CONTRACT_SECTIONS)
+    cost = section_body(sections, COST_CONSEQUENCE_CONTRACT_SECTIONS)
+    boundary = section_body(sections, RESOLUTION_BOUNDARY_SECTIONS)
+    minimum_event = progress_value(progress, "minimum_ledger_event").strip()
+    if minimum_event not in LEDGER_EVENT_TYPES:
+        failures.append(f"{chapter}: progress contract has invalid minimum ledger event {minimum_event or 'MISSING'}")
+        return failures
+
+    chapter_events = [event for event in load_ledger_events() if event.get("chapter") == chapter]
+    if not any(event.get("type") == minimum_event for event in chapter_events):
+        failures.append(f"{chapter}: progress contract minimum ledger event not found: {minimum_event}")
+
+    resolved_threads = progress_value(boundary, "resolved_threads")
+    if not is_none_body(resolved_threads) and not any(event.get("type") == "thread_paid_off" for event in chapter_events):
+        failures.append(f"{chapter}: resolved_threads requires a thread_paid_off event in event ledger")
+
+    impact_scale = normalized_impact_scale(progress_value(cost, "impact_scale"))
+    progress_mode = normalized_progress_mode(progress_value(progress, "progress_mode"))
+    requires_aftermath_record = (
+        impact_scale in HIGH_IMPACT_SCALES
+        or progress_mode == "payoff"
+        or not is_none_body(resolved_threads)
+    )
+    if requires_aftermath_record and concrete_value(progress_value(cost, "aftermath_obligation")):
+        obligations = read_json(ROOT / "state" / "derived" / "pacing" / "aftermath_obligations.json", {})
+        derived_has_obligation = any(
+            isinstance(item, dict) and item.get("source_chapter") == chapter
+            for item in obligations.get("obligations", [])
+        )
+        anchor_has_continuity = any(
+            event.get("type") == "chapter_anchor"
+            and isinstance(event.get("anchor"), dict)
+            and str(event["anchor"].get("next_required_continuity", "")).strip()
+            for event in chapter_events
+        )
+        if not derived_has_obligation and not anchor_has_continuity:
+            failures.append(f"{chapter}: high progress aftermath obligation is not recorded in derived pacing or chapter anchor")
+
+    return failures
+
+
 def chapter_evidence_failures(chapter: str) -> list[str]:
     failures: list[str] = []
     selection = read_json(ROOT / "state" / "selections" / f"{chapter}.json", {})
@@ -398,6 +474,7 @@ def chapter_evidence_failures(chapter: str) -> list[str]:
     failures.extend(validate_context_quality(chapter, landing))
     failures.extend(validate_authorized_breakers(chapter))
     failures.extend(validate_deepseek_direct_adoption(chapter, selection, landing))
+    failures.extend(validate_progress_contract(chapter))
 
     required_reviews = [
         "codex_integrated_review.md",

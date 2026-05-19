@@ -1,8 +1,18 @@
 from __future__ import annotations
 
 import argparse
+import json
 
-from _common import ROOT, chapter_parts, now_iso, read_text, write_text
+from _common import ROOT, chapter_number, chapter_parts, now_iso, read_text, write_text
+from brief_contract import (
+    OPENING_SCENE_ANCHOR_SECTIONS,
+    SCENE_CONTINUITY_SECTIONS,
+    anchor_location,
+    scene_continuity_note,
+    scene_continuity_note_is_concrete,
+    scene_continuity_type,
+)
+from element_context import markdown_sections, missing_section, section_body
 from validate_event_ledger import validate as validate_ledger
 
 
@@ -11,6 +21,60 @@ PLACEHOLDERS = ("待定", "待填", "TODO", "寰呭畾", "寰呭～")
 
 def add_issue(issues: list[tuple[str, str]], level: str, text: str) -> None:
     issues.append((level, text))
+
+
+def previous_chapter_id(chapter: str) -> str | None:
+    number = chapter_number(chapter)
+    if number <= 1:
+        return None
+    return f"{chapter[:3]}_c{number - 1:03d}"
+
+
+def check_anchor_continuity(chapter: str, issues: list[tuple[str, str]]) -> None:
+    previous = previous_chapter_id(chapter)
+    if previous is None:
+        return
+    anchor_path = ROOT / "state" / "derived" / "chapter_anchors" / f"{previous}.json"
+    brief_path = ROOT / "outline" / "chapter_briefs" / f"{chapter}.md"
+    if not anchor_path.exists():
+        add_issue(issues, "P1", f"Missing previous chapter anchor: {anchor_path.relative_to(ROOT)}")
+        return
+    if not brief_path.exists():
+        add_issue(issues, "P1", f"Missing chapter brief for anchor continuity: {brief_path.relative_to(ROOT)}")
+        return
+    try:
+        anchor = json.loads(read_text(anchor_path))
+    except json.JSONDecodeError as exc:
+        add_issue(issues, "P1", f"Invalid previous chapter anchor JSON: {anchor_path.relative_to(ROOT)}: {exc}")
+        return
+
+    sections = markdown_sections(read_text(brief_path))
+    if missing_section(sections, OPENING_SCENE_ANCHOR_SECTIONS):
+        add_issue(issues, "P1", "Brief missing 本章开场落点 for anchor continuity.")
+        return
+    if missing_section(sections, SCENE_CONTINUITY_SECTIONS):
+        add_issue(issues, "P1", "Brief missing 场景承接说明 for anchor continuity.")
+        return
+
+    opening = section_body(sections, OPENING_SCENE_ANCHOR_SECTIONS)
+    continuity = section_body(sections, SCENE_CONTINUITY_SECTIONS)
+    previous_location = str(anchor.get("end_location", "")).strip()
+    opening_location = anchor_location(opening)
+    kind = scene_continuity_type(continuity)
+    note = scene_continuity_note(continuity)
+    if previous_location and opening_location and previous_location != opening_location:
+        if kind == "原地承接":
+            add_issue(
+                issues,
+                "P1",
+                f"Location changes from {previous_location} to {opening_location}, but 场景承接说明 says 原地承接.",
+            )
+        if not scene_continuity_note_is_concrete(note):
+            add_issue(
+                issues,
+                "P1",
+                f"Location changes from {previous_location} to {opening_location} without concrete 场景承接说明.",
+            )
 
 
 def main() -> int:
@@ -40,6 +104,8 @@ def main() -> int:
     ledger_errors = validate_ledger(ledger_path)
     for error in ledger_errors:
         add_issue(issues, "P1", f"Event ledger validation failed: {error}")
+    if not ledger_errors:
+        check_anchor_continuity(args.chapter, issues)
 
     canon_text = read_text(ROOT / "bible" / "canon.md")
     if "当前状态：暂无 canon 事实" not in canon_text and chapter_text:

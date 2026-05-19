@@ -6,6 +6,7 @@ import subprocess
 import sys
 
 from _common import ROOT, chapter_parts, non_ws_count, read_json, read_text, unresolved_locks
+from context_governance import load_process_budget
 from core_setting_freeze import ensure_ready as ensure_core_setting_freeze
 from gate_policy import gate_errors_for_chapter
 
@@ -26,10 +27,13 @@ def validate_brief(chapter: str, allow_placeholders: bool) -> list[str]:
         return [f"missing brief: {brief.relative_to(ROOT)}"]
     text = read_text(brief)
     count = non_ws_count(text)
-    if not allow_placeholders and count < 300:
-        errors.append(f"brief too short for pilot rule: {count} < 300 non-whitespace chars")
-    if not allow_placeholders and count > 800:
-        errors.append(f"brief too long for pilot rule: {count} > 800 non-whitespace chars")
+    chars = load_process_budget()["pilot"]["chapter_brief_chars"]
+    minimum = int(chars["min"])
+    maximum = int(chars["max"])
+    if not allow_placeholders and count < minimum:
+        errors.append(f"brief too short for pilot rule: {count} < {minimum} non-whitespace chars")
+    if not allow_placeholders and count > maximum:
+        errors.append(f"brief too long for pilot rule: {count} > {maximum} non-whitespace chars")
     if not allow_placeholders and any(marker in text for marker in PLACEHOLDERS):
         errors.append("brief still contains placeholders")
     return errors

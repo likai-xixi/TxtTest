@@ -79,6 +79,8 @@ def write_context_quality(repo: Path, chapter: str) -> None:
         "sections": [
             {"id": "core_freeze", "body_chars": 10, "sources": [{"path": "state/idea_lab/selected.json"}]},
             {"id": "chapter_brief", "body_chars": 10, "sources": [{"path": f"outline/chapter_briefs/{chapter}.md"}]},
+            {"id": "chapter_anchor_continuity", "body_chars": 10, "sources": [{"path": "AGENTS.md"}]},
+            {"id": "active_aftermath_obligations", "body_chars": 10, "sources": [{"path": "state/derived/pacing/aftermath_obligations.json"}]},
             {"id": "authorized_elements_full", "body_chars": 10, "sources": [{"path": f"outline/chapter_briefs/{chapter}.md"}]},
             {"id": "rules_and_boundaries", "body_chars": 10, "sources": [{"path": "bible/rules.md"}]},
         ],
@@ -124,6 +126,8 @@ def write_minimal_derived_governance(repo: Path, chapter: str) -> None:
     write(repo, "state/derived/entities/characters/protagonist.yaml", "id: protagonist\n")
     write(repo, "state/derived/arcs/volume_01.md", "# Volume 01 Derived Arc\n")
     write(repo, f"state/derived/arcs/chunk_{start:03d}_{end:03d}.md", f"# Arc Chunk {start:03d}-{end:03d}\n")
+    write(repo, "state/derived/pacing/progress_index.json", '{"schema_version":1,"entries":[]}\n')
+    write(repo, "state/derived/pacing/aftermath_obligations.json", '{"schema_version":1,"obligations":[]}\n')
 
 
 MODEL_DISAGREEMENT_READY = """# Model Disagreement
@@ -241,6 +245,72 @@ COMPLETE_BRIEF = """# {chapter} Brief
 
 主角选择冒险保留关键异常证据。
 
+## 上章章末锚点
+
+开篇章，无上章。
+
+## 本章开场落点
+
+- 时间：深夜
+- 地点：办公室
+- 在场人物：主角
+- 主角状态：紧张但保持调查意愿
+- 第一动作：主角检查异常证据。
+
+## 场景承接说明
+
+- 类型：开篇起始
+- 说明：本章从主角在办公室第一次接触异常证据开始，没有需要承接的上一章场景。
+
+## 主线牵引档位
+
+S2：主角主动保存异常证据，让核心谜题从传闻变成本章行动压力。
+
+## 外部压力档位
+
+W1：平台和利益方的遮蔽形成背景压力，但还没有正面冲突。
+
+## 本章继承变化
+
+开篇章建立主角不信鬼但愿意调查异常的初始变化。
+
+## 本章节奏用途
+
+推进、铺垫。
+
+## 节奏说明
+
+本章用证据选择保持牵引，不强行揭开幕后主谜题。
+
+## 本章进展契约
+
+- 进展类型：decision
+- 推进对象：thread_main_anomaly
+- 起始状态依据：开篇章初始状态。
+- 结束状态变化：主角保存异常证据并承担后续调查压力。
+- 最低落账事件：character_decision
+- 进展重要度：P1
+- 低牵引功能：本章主要功能是让主角做出选择并建立调查方向。
+
+## 本章代价与后果契约
+
+- 推进重量：C2
+- 后果等级：scar
+- 代价类型：emotional
+- 已支付代价：主角冒险保留异常证据，承担被追责的心理压力。
+- 延后代价：下一章需要解释证据去向以及平台追查。
+- 后果承接义务：下一章必须承接主角保存证据后的风险。
+- 消化窗口：2章内
+- 冷却范围：幕后主谜题不能在本章直接揭开。
+
+## 本章解决边界
+
+- 新开伏笔：thread_main_anomaly
+- 推进伏笔：none
+- 解决伏笔：none
+- 禁止解决：幕后主谜题和世界异常根因。
+- 解决是否需要代价：否
+
 ## 本章推进
 
 完成阶段性案件推进。
@@ -313,6 +383,59 @@ L0 场景细节和 L1 一次性线索可以新增；没有 L3/L4 新机制。
 
 禁止换皮参考作品桥段。
 """
+
+
+OPENING_PREVIOUS_ANCHOR = """## 上章章末锚点
+
+开篇章，无上章。"""
+
+
+OPENING_SCENE_ANCHOR = """## 本章开场落点
+
+- 时间：深夜
+- 地点：办公室
+- 在场人物：主角
+- 主角状态：紧张但保持调查意愿
+- 第一动作：主角检查异常证据。"""
+
+
+OPENING_SCENE_CONTINUITY = """## 场景承接说明
+
+- 类型：开篇起始
+- 说明：本章从主角在办公室第一次接触异常证据开始，没有需要承接的上一章场景。"""
+
+
+def brief_with_scene_continuity(
+    chapter: str,
+    previous_location: str = "办公室",
+    opening_location: str = "办公室",
+    transition_type: str = "原地承接",
+    transition_note: str = "本章开场仍在上一章结束的办公室，第一动作直接承接未完成动作。",
+) -> str:
+    previous = f"""## 上章章末锚点
+
+- 时间：深夜
+- 地点：{previous_location}
+- 在场人物：主角
+- 主角状态：紧张但保持调查意愿
+- 携带物 / 证据：旧硬盘
+- 未完成动作：还没决定是否离开办公室"""
+    opening = f"""## 本章开场落点
+
+- 时间：深夜后十分钟
+- 地点：{opening_location}
+- 在场人物：主角
+- 主角状态：被冷风吹醒，仍握着旧硬盘
+- 第一动作：主角确认硬盘还在手里。"""
+    continuity = f"""## 场景承接说明
+
+- 类型：{transition_type}
+- 说明：{transition_note}"""
+    text = COMPLETE_BRIEF.format(chapter=chapter)
+    text = text.replace(OPENING_PREVIOUS_ANCHOR, previous)
+    text = text.replace(OPENING_SCENE_ANCHOR, opening)
+    text = text.replace(OPENING_SCENE_CONTINUITY, continuity)
+    return text
 
 
 def write_ready_idea_lab(repo: Path, idea: str) -> str:
@@ -493,11 +616,29 @@ def write_complete_chapter_evidence(repo: Path, chapter: str, number: int) -> No
     draft_rel = f"drafts/codex/{chapter}.md"
 
     write(repo, context_rel, f"context for {chapter}\n")
-    write(repo, brief_rel, "brief " + ("A" * 320) + "\n")
+    write(repo, brief_rel, COMPLETE_BRIEF.format(chapter=chapter))
     write(repo, chapter_rel, f"Official chapter {chapter} with independent Codex prose.\n")
     write(repo, draft_rel, f"Codex candidate {chapter}.\n")
     write_context_quality(repo, chapter)
     write_minimal_derived_governance(repo, chapter)
+    write(
+        repo,
+        "state/event_ledger.jsonl",
+        json.dumps(
+            {
+                "event_id": f"{chapter}_e001",
+                "chapter": chapter,
+                "type": "character_decision",
+                "fact": f"{chapter} protagonist makes the contracted decision",
+                "evidence_quote": f"Official chapter {chapter}",
+                "consequence": f"{chapter} changes the investigation state",
+                "verified_by": "human",
+                "importance": "P1",
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+    )
     write(repo, f"reviews/{chapter}/candidate_selection.md", f"# Candidate Selection\n\nchoice: Codex\n")
     selection = {
         "chapter": chapter,
@@ -590,7 +731,7 @@ class WorkflowGuardTests(unittest.TestCase):
             write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF.format(chapter="v01_c001"))
 
             self.assertEqual(run(repo, "scripts/build_derived_state.py").returncode, 0)
-            context = run(repo, "scripts/build_context_pack.py", "--chapter", "v01_c001", "--limit", "5000")
+            context = run(repo, "scripts/build_context_pack.py", "--chapter", "v01_c001", "--limit", "7000")
             self.assertEqual(context.returncode, 0, context.stdout + context.stderr)
 
             subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True)
@@ -660,6 +801,39 @@ class WorkflowGuardTests(unittest.TestCase):
                 "The pilot can continue.",
             )
             self.assertEqual(event.returncode, 0, event.stderr)
+            anchor_event = run(
+                repo,
+                "scripts/novel.py",
+                "event",
+                "v01_c001",
+                "--type",
+                "chapter_anchor",
+                "--fact",
+                "v01_c001 章末锚点已确认",
+                "--evidence-quote",
+                "Official chapter text",
+                "--consequence",
+                "下一章必须承接主角完成选择后的状态",
+                "--importance",
+                "P1",
+                "--tag",
+                "chapter_anchor",
+                "--anchor-end-time",
+                "深夜",
+                "--anchor-end-location",
+                "办公室",
+                "--anchor-present-character",
+                "主角",
+                "--anchor-protagonist-state",
+                "完成选择后保持警惕",
+                "--anchor-carried-item",
+                "异常证据",
+                "--anchor-unfinished-action",
+                "尚未公开证据",
+                "--anchor-next-required-continuity",
+                "下一章必须承接主角完成选择后的状态和证据去向",
+            )
+            self.assertEqual(anchor_event.returncode, 0, anchor_event.stdout + anchor_event.stderr)
             close = run(
                 repo,
                 "scripts/novel.py",
@@ -884,6 +1058,17 @@ class WorkflowGuardTests(unittest.TestCase):
                 "主角目标",
                 "主要阻力",
                 "主角主动选择",
+                "上章章末锚点",
+                "本章开场落点",
+                "场景承接说明",
+                "本章进展契约",
+                "本章代价与后果契约",
+                "本章解决边界",
+                "主线牵引档位",
+                "外部压力档位",
+                "本章继承变化",
+                "本章节奏用途",
+                "节奏说明",
                 "本章推进",
                 "信息增量",
                 "章末问题",
@@ -1139,6 +1324,35 @@ print("OK: stub deepseek idea")
                 "consequence",
             )
             self.assertEqual(event.returncode, 0, event.stderr)
+            anchor_event = run(
+                repo,
+                "scripts/novel.py",
+                "event",
+                "v01_c001",
+                "--type",
+                "chapter_anchor",
+                "--fact",
+                "v01_c001 章末锚点已确认",
+                "--evidence-quote",
+                "Official chapter text",
+                "--consequence",
+                "下一章必须承接 Official chapter text 后的状态",
+                "--anchor-end-time",
+                "深夜",
+                "--anchor-end-location",
+                "办公室",
+                "--anchor-present-character",
+                "主角",
+                "--anchor-protagonist-state",
+                "保持警惕",
+                "--anchor-carried-item",
+                "证据",
+                "--anchor-unfinished-action",
+                "尚未公开证据",
+                "--anchor-next-required-continuity",
+                "下一章必须承接证据去向",
+            )
+            self.assertEqual(anchor_event.returncode, 0, anchor_event.stdout + anchor_event.stderr)
 
             close = run(repo, "scripts/novel.py", "close", "v01_c001", "--decision", "Ship")
 
@@ -1682,7 +1896,25 @@ print("OK: stub deepseek idea")
             repo = temp
             chapter_text = "DeepSeek candidate copied exactly with a concrete protagonist choice.\n"
             write(repo, "state/context_pack/v01_c001.md", "context\n")
-            write(repo, "outline/chapter_briefs/v01_c001.md", "brief " + ("A" * 320) + "\n")
+            write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF.format(chapter="v01_c001"))
+            write(
+                repo,
+                "state/event_ledger.jsonl",
+                json.dumps(
+                    {
+                        "event_id": "v01_c001_e001",
+                        "chapter": "v01_c001",
+                        "type": "character_decision",
+                        "fact": "The protagonist chooses to keep the evidence.",
+                        "evidence_quote": "concrete protagonist choice",
+                        "consequence": "The investigation state changes.",
+                        "verified_by": "human",
+                        "importance": "P1",
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+            )
             write(repo, "chapters/v01/c001.md", chapter_text)
             write(repo, "drafts/deepseek/v01_c001.md", chapter_text)
             write_context_quality(repo, "v01_c001")
@@ -2048,6 +2280,17 @@ print("OK: stub deepseek idea")
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("status is BLOCKED", result.stdout)
 
+    def test_chapter_evidence_requires_progress_contract_ledger_event(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_complete_chapter_evidence(repo, "v01_c001", 1)
+            write(repo, "state/event_ledger.jsonl", "")
+
+            result = run(repo, "scripts/novel.py", "evidence", "v01_c001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("progress contract minimum ledger event not found", result.stdout)
+
     def test_chapter_evidence_rejects_stale_context_quality_hash(self) -> None:
         with copy_repo() as temp:
             repo = temp
@@ -2274,6 +2517,208 @@ print("OK: stub deepseek idea")
             self.assertEqual(ready.returncode, 0, ready.stdout + ready.stderr)
             self.assertIn("status: READY", ready.stdout)
 
+    def test_brief_check_requires_pacing_levels_and_explanations(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            brief = COMPLETE_BRIEF.format(chapter="v01_c001").replace(
+                "S2：主角主动保存异常证据，让核心谜题从传闻变成本章行动压力。",
+                "S5：非法档位。",
+            )
+            write(repo, "outline/chapter_briefs/v01_c001.md", brief)
+
+            invalid = run(repo, "scripts/novel.py", "brief-check", "v01_c001")
+
+            self.assertNotEqual(invalid.returncode, 0)
+            self.assertIn("invalid 主线牵引档位", invalid.stdout)
+
+            brief = COMPLETE_BRIEF.format(chapter="v01_c001").replace(
+                "W1：平台和利益方的遮蔽形成背景压力，但还没有正面冲突。",
+                "W1",
+            )
+            write(repo, "outline/chapter_briefs/v01_c001.md", brief)
+
+            thin = run(repo, "scripts/novel.py", "brief-check", "v01_c001")
+
+            self.assertNotEqual(thin.returncode, 0)
+            self.assertIn("外部压力档位 must include a concrete explanation", thin.stdout)
+
+    def test_brief_check_requires_scene_continuity_sections(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            brief = COMPLETE_BRIEF.format(chapter="v01_c001").replace(
+                "## 场景承接说明",
+                "## 场景承接说明缺失",
+            )
+            write(repo, "outline/chapter_briefs/v01_c001.md", brief)
+
+            result = run(repo, "scripts/novel.py", "brief-check", "v01_c001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("missing required section: 场景承接说明", result.stdout)
+
+    def test_brief_check_requires_progress_contract_sections(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            brief = COMPLETE_BRIEF.format(chapter="v01_c001").replace(
+                "## 本章进展契约",
+                "## 本章进展契约缺失",
+            )
+            write(repo, "outline/chapter_briefs/v01_c001.md", brief)
+
+            result = run(repo, "scripts/novel.py", "brief-check", "v01_c001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("missing required section: 本章进展契约", result.stdout)
+
+    def test_brief_check_blocks_low_progress_without_state_delta(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            brief = COMPLETE_BRIEF.format(chapter="v01_c001").replace(
+                "- 推进重量：C2",
+                "- 推进重量：C1",
+            ).replace(
+                "- 结束状态变化：主角保存异常证据并承担后续调查压力。",
+                "- 结束状态变化：无。",
+            )
+            write(repo, "outline/chapter_briefs/v01_c001.md", brief)
+
+            result = run(repo, "scripts/novel.py", "brief-check", "v01_c001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("结束状态变化", result.stdout)
+
+    def test_brief_check_blocks_high_progress_without_cost_and_aftermath(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            brief = COMPLETE_BRIEF.format(chapter="v01_c001").replace(
+                "- 推进重量：C2",
+                "- 推进重量：C4",
+            ).replace(
+                "- 后果承接义务：下一章必须承接主角保存证据后的风险。",
+                "- 后果承接义务：无。",
+            ).replace(
+                "- 消化窗口：2章内",
+                "- 消化窗口：无。",
+            )
+            write(repo, "outline/chapter_briefs/v01_c001.md", brief)
+
+            result = run(repo, "scripts/novel.py", "brief-check", "v01_c001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("高牵引/高推进章必须填写 后果承接义务", result.stdout)
+            self.assertIn("高牵引/高推进章必须填写可解析的 消化窗口", result.stdout)
+
+    def test_brief_check_blocks_location_change_without_concrete_transition(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            brief = brief_with_scene_continuity(
+                "v01_c002",
+                previous_location="办公室",
+                opening_location="街边",
+                transition_type="原地承接",
+                transition_note="自然过渡",
+            )
+            write(repo, "outline/chapter_briefs/v01_c002.md", brief)
+
+            result = run(repo, "scripts/novel.py", "brief-check", "v01_c002")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("cannot use 原地承接 when location changes", result.stdout)
+            self.assertIn("场景承接说明 must include a concrete transition explanation", result.stdout)
+
+            ready = brief_with_scene_continuity(
+                "v01_c002",
+                previous_location="办公室",
+                opening_location="街边",
+                transition_type="明示跳切",
+                transition_note="上一章保安催促主角离开办公室，十分钟后他带着旧硬盘走到街边雨棚下继续确认证据。",
+            )
+            write(repo, "outline/chapter_briefs/v01_c002.md", ready)
+
+            ready_result = run(repo, "scripts/novel.py", "brief-check", "v01_c002")
+
+            self.assertEqual(ready_result.returncode, 0, ready_result.stdout + ready_result.stderr)
+
+    def test_pacing_check_warns_on_repeated_low_pacing(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            for number in range(1, 4):
+                chapter = f"v01_c{number:03d}"
+                brief = COMPLETE_BRIEF.format(chapter=chapter).replace(
+                    "S2：主角主动保存异常证据，让核心谜题从传闻变成本章行动压力。",
+                    "S1：主线只留下线索回声，服务短期铺垫。",
+                ).replace(
+                    "W1：平台和利益方的遮蔽形成背景压力，但还没有正面冲突。",
+                    "W1：外部压力只作为背景回声出现。",
+                )
+                write(repo, f"outline/chapter_briefs/{chapter}.md", brief)
+
+            result = run(repo, "scripts/novel.py", "pacing-check", "v01_c003")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("status: WARN", result.stdout)
+            self.assertIn("连续低主线牵引", result.stdout)
+            self.assertIn("连续低外部压力", result.stdout)
+
+    def test_pacing_check_blocks_repeated_tiny_progress(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            for number in range(1, 4):
+                chapter = f"v01_c{number:03d}"
+                brief = COMPLETE_BRIEF.format(chapter=chapter).replace(
+                    "- 推进重量：C2",
+                    "- 推进重量：C1",
+                ).replace(
+                    "- 后果等级：scar",
+                    "- 后果等级：reversible",
+                )
+                write(repo, f"outline/chapter_briefs/{chapter}.md", brief)
+
+            result = run(repo, "scripts/novel.py", "pacing-check", "v01_c003")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("status: BLOCKED", result.stdout)
+            self.assertIn("连续 3 章推进重量 C0/C1", result.stdout)
+
+    def test_pacing_check_blocks_high_payoff_without_digestion(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            high = COMPLETE_BRIEF.format(chapter="v01_c001").replace(
+                "- 进展类型：decision",
+                "- 进展类型：payoff",
+            ).replace(
+                "- 推进重量：C2",
+                "- 推进重量：C4",
+            ).replace(
+                "- 消化窗口：2章内",
+                "- 消化窗口：下一章",
+            ).replace(
+                "- 解决伏笔：none",
+                "- 解决伏笔：thread_main_anomaly",
+            ).replace(
+                "- 解决是否需要代价：否",
+                "- 解决是否需要代价：是",
+            )
+            write(repo, "outline/chapter_briefs/v01_c001.md", high)
+            write(repo, "outline/chapter_briefs/v01_c002.md", COMPLETE_BRIEF.format(chapter="v01_c002"))
+
+            result = run(repo, "scripts/novel.py", "pacing-check", "v01_c002")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("status: BLOCKED", result.stdout)
+            self.assertIn("高推进/兑现后果未在 1 章内消化", result.stdout)
+
+    def test_pacing_check_blocks_when_pacing_fields_are_missing(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write(repo, "outline/chapter_briefs/v01_c002.md", "# v01_c002 Brief\n\n## 本章功能\n\n只有旧字段。\n")
+
+            result = run(repo, "scripts/novel.py", "pacing-check", "v01_c002")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("status: BLOCKED", result.stdout)
+            self.assertIn("missing or invalid 主线牵引档位", result.stdout)
+
     def test_derived_state_and_context_pack_include_objects_and_abilities(self) -> None:
         with copy_repo() as temp:
             repo = temp
@@ -2325,6 +2770,117 @@ print("OK: stub deepseek idea")
             self.assertIn("A family anchor.", pack)
             self.assertIn("当前道具 / 装备变化", pack)
             self.assertIn("当前技能 / 规则揭示", pack)
+
+    def test_chapter_anchor_event_feeds_brief_and_context_packs(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_core_setting_freeze(repo)
+            write(repo, "chapters/v01/c001.md", "主角在办公室握着旧硬盘，被保安催促离开。\n")
+            event = run(
+                repo,
+                "scripts/novel.py",
+                "event",
+                "v01_c001",
+                "--type",
+                "chapter_anchor",
+                "--fact",
+                "v01_c001 章末锚点已确认",
+                "--evidence-quote",
+                "主角在办公室握着旧硬盘",
+                "--consequence",
+                "下一章必须交代主角是否离开办公室以及旧硬盘去向",
+                "--importance",
+                "P1",
+                "--tag",
+                "chapter_anchor",
+                "--anchor-end-time",
+                "深夜",
+                "--anchor-end-location",
+                "办公室",
+                "--anchor-present-character",
+                "主角",
+                "--anchor-protagonist-state",
+                "紧张但清醒",
+                "--anchor-carried-item",
+                "旧硬盘",
+                "--anchor-unfinished-action",
+                "还没决定是否离开办公室",
+                "--anchor-next-required-continuity",
+                "下一章必须交代主角是否离开办公室以及旧硬盘去向",
+            )
+            self.assertEqual(event.returncode, 0, event.stdout + event.stderr)
+            anchor = json.loads((repo / "state/derived/chapter_anchors/v01_c001.json").read_text(encoding="utf-8"))
+            self.assertEqual(anchor["end_location"], "办公室")
+
+            write(repo, "outline/chapter_briefs/v01_c002.md", brief_with_scene_continuity(
+                "v01_c002",
+                previous_location="办公室",
+                opening_location="街边",
+                transition_type="明示跳切",
+                transition_note="上一章保安催促主角离开办公室，十分钟后他带着旧硬盘走到街边雨棚下继续确认证据。",
+            ))
+            brief_pack = run(repo, "scripts/build_brief_pack.py", "--chapter", "v01_c002")
+            self.assertEqual(brief_pack.returncode, 0, brief_pack.stdout + brief_pack.stderr)
+            self.assertIn("旧硬盘", (repo / "state/context_pack/v01_c002_brief.md").read_text(encoding="utf-8"))
+
+            context = run(repo, "scripts/build_context_pack.py", "--chapter", "v01_c002", "--limit", "10000")
+            self.assertEqual(context.returncode, 0, context.stdout + context.stderr)
+            pack = (repo / "state/context_pack/v01_c002.md").read_text(encoding="utf-8")
+            manifest = json.loads((repo / "state/context_pack/v01_c002.manifest.json").read_text(encoding="utf-8"))
+            self.assertIn("上一章章末锚点连续性", pack)
+            self.assertIn("旧硬盘", pack)
+            self.assertIn("chapter_anchor_continuity", {section["id"] for section in manifest["sections"]})
+
+    def test_continuity_check_blocks_unexplained_location_jump(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_core_setting_freeze(repo)
+            write(repo, "chapters/v01/c001.md", "主角在办公室握着旧硬盘，被保安催促离开。\n")
+            write(
+                repo,
+                "state/event_ledger.jsonl",
+                json.dumps(
+                    {
+                        "event_id": "v01_c001_e001",
+                        "chapter": "v01_c001",
+                        "type": "chapter_anchor",
+                        "fact": "v01_c001 章末锚点已确认",
+                        "evidence_quote": "主角在办公室握着旧硬盘",
+                        "consequence": "下一章必须交代主角是否离开办公室以及旧硬盘去向",
+                        "verified_by": "human",
+                        "importance": "P1",
+                        "tags": ["chapter_anchor"],
+                        "anchor": {
+                            "end_time": "深夜",
+                            "end_location": "办公室",
+                            "present_characters": ["主角"],
+                            "protagonist_state": "紧张但清醒",
+                            "carried_items": ["旧硬盘"],
+                            "unfinished_action": "还没决定是否离开办公室",
+                            "next_required_continuity": "下一章必须交代主角是否离开办公室以及旧硬盘去向",
+                        },
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+            )
+            self.assertEqual(run(repo, "scripts/build_derived_state.py").returncode, 0)
+            write(repo, "outline/chapter_briefs/v01_c002.md", brief_with_scene_continuity(
+                "v01_c002",
+                previous_location="办公室",
+                opening_location="街边",
+                transition_type="原地承接",
+                transition_note="自然过渡",
+            ))
+            write(repo, "state/context_pack/v01_c002.md", "context\n")
+            write(repo, "chapters/v01/c002.md", "主角突然站在街边。\n")
+
+            result = run(repo, "scripts/continuity_check.py", "--chapter", "v01_c002")
+
+            self.assertNotEqual(result.returncode, 0)
+            report = (repo / "reviews/v01_c002/continuity.md").read_text(encoding="utf-8")
+            self.assertIn("status: BLOCKED", report)
+            self.assertIn("Location changes from 办公室 to 街边", report)
 
     def test_derived_state_simulates_200_500_800_chapter_indexes(self) -> None:
         with copy_repo() as temp:

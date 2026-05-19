@@ -130,14 +130,26 @@ python scripts/novel.py desk
 
 如果核心设定冻结缺失，`write`、`draft`、`brief-candidates`、`deepseek-brief`、`start`、`build_context_pack` 和 `deepseek-generate` 都会停止；`--allow-placeholders` 也不能绕过核心冻结。
 
-每章 brief 还要声明新元素边界：
+每章 brief 还要声明场景连续性、节奏档位和新元素边界：
 
+- `上章章末锚点`：记录上一章最后可见状态，包括时间、地点、在场人物、主角状态、携带物 / 证据、未完成动作；首章写“开篇章，无上章”。
+- `本章开场落点`：记录本章第一场的时间、地点、在场人物、主角状态和第一动作。
+- `场景承接说明`：写 `类型：原地承接 / 明示跳切 / 省略过桥 / 开篇起始` 和具体说明；如果从办公室跳到街边，必须写清时间差、离开原因和转移动作。
+- `主线牵引档位`：以 `S0`-`S4` 开头，说明本章与核心主线的距离；低档章必须有功能，高档章必须写后果。
+- `外部压力档位`：以 `W0`-`W4` 开头，说明外部世界、制度、势力、资源或关系如何影响本章行动。
+- `本章继承变化`：写明本章承接的状态、关系、信息或限制；开篇章也要写初始状态，不能写 none。
+- `本章节奏用途` / `节奏说明`：说明本章是推进、缓冲、兑现、铺垫、转场、蓄压还是爆发，并解释为什么不会空转或强行加速。
+- `本章进展契约`：声明进展类型、推进对象、起始状态依据、结束状态变化、最低落账事件、进展重要度和低牵引功能；每章都必须留下可核验的状态变化。
+- `本章代价与后果契约`：声明推进重量 `C0`-`C4`、后果等级 `reversible/scar/structure_change`、代价、后果承接义务、消化窗口和冷却范围；高推进不能无代价解决。
+- `本章解决边界`：声明新开、推进、解决和禁止解决的伏笔；解决伏笔非空时必须付代价。
 - `本章可用道具 IDs`：只列本章允许使用的 `bible/objects.yaml` ID。
 - `本章可用技能 IDs`：只列本章允许使用的 `bible/abilities.yaml` ID。
 - `本章允许新增元素`：L0 场景细节、L1 一次性线索、L2 伏笔、L3 长期机制、L4 核心设定分别说明。
 - `本章禁止临场解决`：禁止靠未授权新道具、新能力或新规则解决本章核心问题。
 
-`build_context_pack` 会按 ID 拉完整道具/技能条目；未列入 ID 或新增授权的元素，只能做细节、线索或伏笔，不能临场破局。
+`python scripts/novel.py brief-check {chapter}` 是单章硬门禁；`python scripts/novel.py pacing-check {chapter} --write` 是跨章硬门禁加预警：连续 3 章都是 `C0/C1` 会 BLOCK，高推进或 payoff 后没有在消化窗口内承接也会 BLOCK。节奏证据写入 `state/derived/pacing/` 供 Gate A/B 和总编裁决参考。
+
+`build_derived_state` 会从 `chapter_anchor` 人类确认事件生成 `state/derived/chapter_anchors/{chapter}.json`，也会从正式 brief 生成 `state/derived/pacing/progress_index.json` 和 `state/derived/pacing/aftermath_obligations.json`。下一章 brief pack 和 context pack 会读取上一章章末锚点与后果承接债务。`chapter_evidence` 会检查 brief 承诺的 `最低落账事件` 是否真的写入 `state/event_ledger.jsonl`。`build_context_pack` 会按 ID 拉完整道具/技能条目；未列入 ID 或新增授权的元素，只能做细节、线索或伏笔，不能临场破局。
 
 需要排查时再拆成细分命令：
 
@@ -165,6 +177,7 @@ python scripts/novel.py codex-review-start v01_c001
 python scripts/novel.py review v01_c001 --deepseek
 python scripts/novel.py evidence v01_c001
 python scripts/novel.py decision v01_c001 --decision "Ship" --keep "..." --change "..." --next-verify "..." --setting-boundary "..." --failure-condition "..."
+python scripts/novel.py event v01_c001 --type chapter_anchor --fact "v01_c001 章末锚点已确认" --evidence-quote "..." --consequence "下一章必须承接..." --importance P1 --tag chapter_anchor --anchor-end-time "深夜" --anchor-end-location "办公室" --anchor-present-character protagonist --anchor-protagonist-state "紧张但清醒" --anchor-carried-item "旧硬盘" --anchor-unfinished-action "还没决定是否离开办公室" --anchor-next-required-continuity "下一章必须交代主角是否离开办公室以及硬盘去向"
 python scripts/novel.py event v01_c001 --type character_decision --fact "..." --evidence-quote "..." --consequence "..."
 python scripts/novel.py close v01_c001 --decision "Ship" --commit-message "complete v01 c001"
 ```

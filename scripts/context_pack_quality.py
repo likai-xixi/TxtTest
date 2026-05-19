@@ -13,6 +13,8 @@ from context_governance import context_manifest_path, context_quality_path, sha2
 REQUIRED_SECTIONS = {
     "core_freeze",
     "chapter_brief",
+    "chapter_anchor_continuity",
+    "active_aftermath_obligations",
     "authorized_elements_full",
     "rules_and_boundaries",
 }

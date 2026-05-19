@@ -25,6 +25,8 @@ DEFAULT_CONTEXT_PACK = {
     "section_budgets": {
         "core_freeze": 1600,
         "chapter_brief": 2500,
+        "chapter_anchor_continuity": 900,
+        "active_aftermath_obligations": 900,
         "authorized_elements_full": 4000,
         "active_entity_cards": 3500,
         "open_threads": 2500,
@@ -52,7 +54,20 @@ def load_process_budget() -> dict[str, Any]:
         **DEFAULT_CONTEXT_PACK["section_budgets"],
         **(context_pack.get("section_budgets") or {}),
     }
-    return {"context_pack": merged}
+    pilot = data.get("pilot") or {}
+    if not isinstance(pilot, dict):
+        pilot = {}
+    chapter_brief_chars = pilot.get("chapter_brief_chars") or {}
+    if not isinstance(chapter_brief_chars, dict):
+        chapter_brief_chars = {}
+    pilot = {
+        **pilot,
+        "chapter_brief_chars": {
+            "min": int(chapter_brief_chars.get("min", 300)),
+            "max": int(chapter_brief_chars.get("max", 1800)),
+        },
+    }
+    return {"context_pack": merged, "pilot": pilot}
 
 
 def context_pack_budget(chapter: str, override: int | None = None) -> int:

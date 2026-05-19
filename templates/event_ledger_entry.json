@@ -1,13 +1,22 @@
 {
   "event_id": "v01_c001_e001",
   "chapter": "v01_c001",
-  "type": "character_decision",
-  "fact": "主角决定隐瞒光痕",
+  "type": "chapter_anchor",
+  "fact": "本章章末锚点已由人类确认",
   "evidence_quote": "他把手缩进袖中",
-  "consequence": "形成信息差",
+  "consequence": "下一章必须承接主角仍在办公室、手里握着证据且尚未决定是否离开",
   "verified_by": "human",
   "entities": ["protagonist"],
   "thread_id": "thread_id_or_empty_if_not_applicable",
   "importance": "P1",
-  "tags": ["rule", "relationship"]
+  "tags": ["chapter_anchor"],
+  "anchor": {
+    "end_time": "深夜",
+    "end_location": "办公室",
+    "present_characters": ["protagonist"],
+    "protagonist_state": "紧张，尚未报警",
+    "carried_items": ["旧硬盘"],
+    "unfinished_action": "还没决定是否带走硬盘",
+    "next_required_continuity": "下一章必须交代主角是否离开办公室以及硬盘去向"
+  }
 }

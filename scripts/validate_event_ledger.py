@@ -20,6 +20,7 @@ ALLOWED_TYPES = {
     "thread_paid_off",
     "location_change",
     "object_change",
+    "chapter_anchor",
     "correction",
 }
 
@@ -37,8 +38,18 @@ OPTIONAL = {
     "thread_id",
     "importance",
     "tags",
+    "anchor",
 }
 IMPORTANCE_LEVELS = {"P0", "P1", "P2", "P3"}
+ANCHOR_REQUIRED = {
+    "end_time",
+    "end_location",
+    "present_characters",
+    "protagonist_state",
+    "carried_items",
+    "unfinished_action",
+    "next_required_continuity",
+}
 
 EVENT_RE = re.compile(r"^v\d{2}_c\d{3}_e\d{3}$")
 CHAPTER_RE = re.compile(r"^v\d{2}_c\d{3}$")
@@ -133,6 +144,24 @@ def validate(path: Path) -> list[str]:
         if tags is not None:
             if not isinstance(tags, list) or any(not isinstance(item, str) or not item.strip() for item in tags):
                 errors.append(f"line {line_no}: tags must be a list of non-empty strings")
+
+        anchor = entry.get("anchor")
+        if event_type == "chapter_anchor":
+            if not isinstance(anchor, dict):
+                errors.append(f"line {line_no}: chapter_anchor events require anchor object")
+            else:
+                missing_anchor = ANCHOR_REQUIRED - set(anchor)
+                if missing_anchor:
+                    errors.append(f"line {line_no}: anchor missing fields: {', '.join(sorted(missing_anchor))}")
+                for field in ("end_time", "end_location", "protagonist_state", "unfinished_action", "next_required_continuity"):
+                    if not str(anchor.get(field, "")).strip():
+                        errors.append(f"line {line_no}: anchor.{field} must not be empty")
+                for field in ("present_characters", "carried_items"):
+                    values = anchor.get(field)
+                    if not isinstance(values, list) or any(not isinstance(item, str) or not item.strip() for item in values):
+                        errors.append(f"line {line_no}: anchor.{field} must be a list of non-empty strings")
+        elif anchor is not None:
+            errors.append(f"line {line_no}: anchor is only allowed on chapter_anchor events")
 
         quote = str(entry.get("evidence_quote", "")).strip()
         if chapter_valid and quote:

@@ -16,6 +16,8 @@ context_pack:
   section_budgets:
     core_freeze: 1600
     chapter_brief: 2500
+    chapter_anchor_continuity: 900
+    active_aftermath_obligations: 900
     authorized_elements_full: 4000
     active_entity_cards: 3500
     open_threads: 2500
@@ -27,7 +29,7 @@ pilot:
   chapters: 3
   chapter_brief_chars:
     min: 300
-    max: 800
+    max: 1800
   revisions_per_chapter: 1
   deepseek:
     generation_model: deepseek-v4-pro

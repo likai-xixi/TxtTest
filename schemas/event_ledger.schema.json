@@ -34,6 +34,7 @@
         "thread_paid_off",
         "location_change",
         "object_change",
+        "chapter_anchor",
         "correction"
       ]
     },
@@ -73,6 +74,34 @@
       "items": {
         "type": "string",
         "minLength": 1
+      }
+    },
+    "anchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "end_time",
+        "end_location",
+        "present_characters",
+        "protagonist_state",
+        "carried_items",
+        "unfinished_action",
+        "next_required_continuity"
+      ],
+      "properties": {
+        "end_time": { "type": "string", "minLength": 1 },
+        "end_location": { "type": "string", "minLength": 1 },
+        "present_characters": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "protagonist_state": { "type": "string", "minLength": 1 },
+        "carried_items": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "unfinished_action": { "type": "string", "minLength": 1 },
+        "next_required_continuity": { "type": "string", "minLength": 1 }
       }
     }
   }

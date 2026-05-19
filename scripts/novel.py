@@ -187,6 +187,26 @@ def chapter_has_events(chapter: str) -> bool:
     return False
 
 
+def chapter_has_anchor(chapter: str) -> bool:
+    ledger = ROOT / "state" / "event_ledger.jsonl"
+    if not ledger.exists():
+        return False
+    for line in ledger.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if (
+            entry.get("chapter") == chapter
+            and entry.get("type") == "chapter_anchor"
+            and entry.get("verified_by") == "human"
+        ):
+            return True
+    return False
+
+
 def brief_landing_path(chapter: str) -> Path:
     return ROOT / "reviews" / chapter / "brief_landing.json"
 
@@ -783,6 +803,20 @@ def command_event(args: argparse.Namespace) -> int:
         script_args.extend(["--importance", args.importance])
     for tag in args.tag or []:
         script_args.extend(["--tag", tag])
+    if args.anchor_end_time:
+        script_args.extend(["--anchor-end-time", args.anchor_end_time])
+    if args.anchor_end_location:
+        script_args.extend(["--anchor-end-location", args.anchor_end_location])
+    for character in args.anchor_present_character or []:
+        script_args.extend(["--anchor-present-character", character])
+    if args.anchor_protagonist_state:
+        script_args.extend(["--anchor-protagonist-state", args.anchor_protagonist_state])
+    for item in args.anchor_carried_item or []:
+        script_args.extend(["--anchor-carried-item", item])
+    if args.anchor_unfinished_action:
+        script_args.extend(["--anchor-unfinished-action", args.anchor_unfinished_action])
+    if args.anchor_next_required_continuity:
+        script_args.extend(["--anchor-next-required-continuity", args.anchor_next_required_continuity])
     run_script("append_event.py", *script_args)
     if args.rebuild:
         run_script("build_derived_state.py")
@@ -801,6 +835,13 @@ def command_close(args: argparse.Namespace) -> int:
             print(
                 "ERROR: Ship requires at least one human-verified event for this chapter. "
                 "Run `python scripts/novel.py event ...`.",
+                file=sys.stderr,
+            )
+            return 1
+        if not chapter_has_anchor(args.chapter):
+            print(
+                "ERROR: Ship requires a human-verified chapter_anchor event for this chapter. "
+                "Run `python scripts/novel.py event ... --type chapter_anchor ...`.",
                 file=sys.stderr,
             )
             return 1
@@ -937,6 +978,17 @@ def command_next_prompt(args: argparse.Namespace) -> int:
 
 def command_brief_check(args: argparse.Namespace) -> int:
     return run_script("brief_check.py", "--chapter", args.chapter, check=False)
+
+
+def command_pacing_check(args: argparse.Namespace) -> int:
+    script_args: list[str] = []
+    if args.chapter:
+        script_args.append(args.chapter)
+    if args.window:
+        script_args.extend(["--window", str(args.window)])
+    if args.write:
+        script_args.append("--write")
+    return run_script("pacing_check.py", *script_args, check=False)
 
 
 def command_event_suggest(args: argparse.Namespace) -> int:
@@ -1334,6 +1386,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--thread-id", default="")
     p.add_argument("--importance", choices=["P0", "P1", "P2", "P3"], default=None)
     p.add_argument("--tag", action="append", default=[])
+    p.add_argument("--anchor-end-time", default="")
+    p.add_argument("--anchor-end-location", default="")
+    p.add_argument("--anchor-present-character", action="append", default=[])
+    p.add_argument("--anchor-protagonist-state", default="")
+    p.add_argument("--anchor-carried-item", action="append", default=[])
+    p.add_argument("--anchor-unfinished-action", default="")
+    p.add_argument("--anchor-next-required-continuity", default="")
     p.add_argument("--no-rebuild", dest="rebuild", action="store_false")
     p.set_defaults(func=command_event, rebuild=True)
 
@@ -1430,6 +1489,12 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("brief-check", help="Check a chapter brief for anti-drift requirements.")
     p.add_argument("chapter")
     p.set_defaults(func=command_brief_check)
+
+    p = sub.add_parser("pacing-check", help="Check cross-chapter mainline and external-pressure pacing.")
+    p.add_argument("chapter", nargs="?")
+    p.add_argument("--window", type=int, default=5)
+    p.add_argument("--write", action="store_true", help="Write JSON evidence to state/derived/pacing/.")
+    p.set_defaults(func=command_pacing_check)
 
     p = sub.add_parser("event-suggest", help="Suggest event ledger entries without writing them.")
     p.add_argument("chapter")
