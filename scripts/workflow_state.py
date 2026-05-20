@@ -459,6 +459,10 @@ def chapter_paths(chapter: str) -> dict[str, Path]:
         "brief_pack": ROOT / "state" / "context_pack" / f"{chapter}_brief.md",
         "context_pack": ROOT / "state" / "context_pack" / f"{chapter}.md",
         "context_quality": ROOT / "state" / "derived" / "context_quality" / f"{chapter}.json",
+        "codex_prompt": ROOT / "external_runs" / "codex" / chapter / "draft.prompt.md",
+        "codex_prompt_manifest": ROOT / "external_runs" / "codex" / chapter / "draft.prompt.manifest.json",
+        "deepseek_prompt": ROOT / "external_runs" / "deepseek" / chapter / "generate.prompt.md",
+        "deepseek_prompt_manifest": ROOT / "external_runs" / "deepseek" / chapter / "generate.prompt.manifest.json",
         "codex_draft": ROOT / "drafts" / "codex" / f"{chapter}.md",
         "deepseek_draft": ROOT / "drafts" / "deepseek" / f"{chapter}.md",
         "selection": ROOT / "state" / "selections" / f"{chapter}.json",
@@ -680,6 +684,8 @@ def prompt_for_chapter(chapter: str) -> str:
         return "正式 brief 已有内容，但还缺 brief landing provenance。请汇总 brief 候选，让我裁决后运行 select-brief 和 land-brief。"
     if not paths["context_pack"].exists():
         return f"确认 brief，开章 {chapter}。"
+    if not paths["codex_prompt_manifest"].exists():
+        return f"Run `python scripts/novel.py codex-draft-prompt {chapter}` to create the Codex candidate prompt with Candidate Style Requirements evidence."
     if not paths["codex_draft"].exists() or not read_text(paths["codex_draft"]).strip():
         return f"生成 Codex 候选稿，并调用 DeepSeek 生成 {chapter} 外部候选。"
     if not paths["selection"].exists():
@@ -791,8 +797,10 @@ def dashboard(chapter: str | None = None) -> dict[str, Any]:
             writes = [f"drafts/codex/{chapter}_brief.md", f"drafts/deepseek/{chapter}_brief.md", f"reviews/{chapter}/brief_candidate_selection.md"]
         elif not paths["context_pack"].exists():
             writes = [f"state/context_pack/{chapter}.md", f"state/derived/context_quality/{chapter}.json"]
+        elif not paths["codex_prompt_manifest"].exists():
+            writes = [f"external_runs/codex/{chapter}/draft.prompt.md", f"external_runs/codex/{chapter}/draft.prompt.manifest.json"]
         else:
-            writes = [f"drafts/codex/{chapter}.md", f"drafts/deepseek/{chapter}.md", f"reviews/{chapter}/"]
+            writes = [f"drafts/codex/{chapter}.md", f"drafts/deepseek/{chapter}.md", f"external_runs/deepseek/{chapter}/generate.prompt.manifest.json", f"reviews/{chapter}/"]
 
     risk_flags: list[str] = []
     if locks:
@@ -818,6 +826,10 @@ def dashboard(chapter: str | None = None) -> dict[str, Any]:
         evidence_paths.append(rel(paths["context_pack"]))
     if paths["context_quality"].exists():
         evidence_paths.append(rel(paths["context_quality"]))
+    if paths["codex_prompt_manifest"].exists():
+        evidence_paths.append(rel(paths["codex_prompt_manifest"]))
+    if paths["deepseek_prompt_manifest"].exists():
+        evidence_paths.append(rel(paths["deepseek_prompt_manifest"]))
     if paths["style_metrics"].exists():
         evidence_paths.append(rel(paths["style_metrics"]))
     if paths["series_style"].exists():

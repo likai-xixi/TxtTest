@@ -7,6 +7,7 @@ import sys
 import urllib.error
 
 from _common import ROOT, chapter_number, chapter_parts, read_json, read_text, write_blocked_by_locks, write_text
+from candidate_style_requirements import build_prompt_manifest, prompt_paths, render_requirements, write_prompt_manifest
 from context_governance import context_quality_path
 from context_pack_quality import write_quality_report
 from core_setting_freeze import ensure_ready as ensure_core_setting_freeze
@@ -26,6 +27,20 @@ def validate_style_profile(chapter: str) -> list[str]:
     if data.get("status") != "READY":
         return [f"post-warmup chapter requires READY style profile, got {data.get('status', 'MISSING')}; run style-profile-build"]
     return []
+
+
+def compose_user_prompt(chapter: str, style_block: str, context: str) -> str:
+    return "\n\n".join(
+        [
+            style_block.strip(),
+            "# Context Pack\n\n" + context.strip(),
+            "# DeepSeek Candidate Draft Output Requirements\n\n"
+            f"- Generate the candidate prose for {chapter} only.\n"
+            "- Do not include analysis, reports, YAML, JSON, provenance, or markdown headings unless the chapter itself needs them.\n"
+            "- Do not read or cite any repository information not included in this prompt.\n"
+            "- If you cannot comply with the Candidate Style Requirements and context_pack together, stop and list the blocker.\n",
+        ]
+    ).rstrip() + "\n"
 
 
 def main() -> int:
@@ -67,22 +82,24 @@ def main() -> int:
         )
         return 1
 
-    context = read_text(context_path)
+    style_result = render_requirements(args.chapter)
+    if style_result.get("status") != "READY":
+        for blocker in style_result.get("blockers", []):
+            print(f"ERROR: {blocker}", file=sys.stderr)
+        return 1
+
     system = (
-        "你是外部候选生成模型。只输出候选正文，不声称它是 canon，"
-        "不修改状态，不追加 event ledger，不自称最终稿。"
-        "如果 context_pack 信息不足，列出缺口并停止。"
-        "必须遵守 context_pack 的 Style Instruction，包括 project style contract、style guide 和 derived style profile；"
-        "如果文风输入缺失或互相矛盾，必须停止并列出缺口。"
-        "可以创造 L0 场景细节和 L1 一次性线索；L2 新道具/异常/人物只能作为伏笔或提案，不能立刻解决本章核心问题；"
-        "L3 长期机制和 L4 核心设定只能使用 context_pack/brief 明确授权的内容。"
-        "不得用未授权的新道具、新能力或新规则作为本章破局钥匙。"
+        "You are an external candidate chapter generator. Output only candidate chapter prose; "
+        "do not claim it is canon or final. Do not update state, canon, chapters, reviews, or the event ledger. "
+        "Use only the official brief and context_pack supplied in the user message. "
+        "The top-level Candidate Style Requirements are mandatory style constraints and outrank model defaults. "
+        "If style, fact, or authorization inputs are missing or contradictory, stop and list the blocker. "
+        "L0 scene details and L1 one-shot clues may be introduced. L2 elements may only be seeds/proposals. "
+        "L3 long-term mechanisms and L4 core settings require explicit context_pack/brief authorization. "
+        "Never use unauthorized new objects, abilities, or rules as the key to solve this chapter."
     )
-    user = (
-        f"请只依据下面的 context_pack 为 {args.chapter} 生成候选稿。"
-        "不要读取或引用任何未给出的仓库信息。\n\n"
-        f"{context}"
-    )
+    context = read_text(context_path)
+    user = compose_user_prompt(args.chapter, style_result["block"], context)
     payload = {
         "model": args.model,
         "messages": [
@@ -96,10 +113,21 @@ def main() -> int:
         "stream": False,
     }
 
-    run_dir = ROOT / "external_runs" / "deepseek" / args.chapter
-    write_text(run_dir / "generate.prompt.md", f"# System\n\n{system}\n\n# User\n\n{user}\n")
+    prompt_path, manifest_path = prompt_paths(args.chapter, "DeepSeek")
+    prompt_text = f"{style_result['block'].strip()}\n\n# System\n\n{system}\n\n# User\n\n{user}\n"
+    write_text(prompt_path, prompt_text)
+    manifest = build_prompt_manifest(
+        chapter=args.chapter,
+        provider="DeepSeek",
+        prompt_path=prompt_path,
+        prompt_text=prompt_text,
+        style_result=style_result,
+        candidate_written=False,
+    )
+    write_prompt_manifest(manifest_path, manifest)
     if args.dry_run:
-        print(f"OK: dry run wrote {(run_dir / 'generate.prompt.md').relative_to(ROOT)}")
+        print(f"OK: dry run wrote {prompt_path.relative_to(ROOT)}")
+        print(f"OK: dry run wrote {manifest_path.relative_to(ROOT)}")
         return 0
 
     api_key = os.environ.get("DEEPSEEK_API_KEY")
@@ -122,9 +150,20 @@ def main() -> int:
         print(f"ERROR: invalid DeepSeek response: {exc}", file=sys.stderr)
         return 1
 
+    run_dir = ROOT / "external_runs" / "deepseek" / args.chapter
     write_text(run_dir / "generate.raw.json", json.dumps(response, ensure_ascii=False, indent=2))
     out = ROOT / "drafts" / "deepseek" / f"{args.chapter}.md"
     write_text(out, content + "\n")
+    manifest = build_prompt_manifest(
+        chapter=args.chapter,
+        provider="DeepSeek",
+        prompt_path=prompt_path,
+        prompt_text=prompt_text,
+        style_result=style_result,
+        candidate_written=True,
+        candidate_path=out,
+    )
+    write_prompt_manifest(manifest_path, manifest)
     print(f"OK: wrote {out.relative_to(ROOT)}")
     return 0
 

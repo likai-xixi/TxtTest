@@ -129,6 +129,21 @@ python scripts/novel.py start v01_c001
 
 DeepSeek 和 Codex 可以创造新鲜细节，但重要新元素必须有授权、伏笔或后续归档。
 
+## Candidate Prompt Style Evidence
+
+Candidate chapter generation must now leave prompt evidence before candidate selection.
+
+```bash
+python scripts/novel.py codex-draft-prompt v01_c001
+python scripts/novel.py deepseek-generate v01_c001 --dry-run
+python scripts/novel.py deepseek-generate v01_c001
+```
+
+- Codex prompt evidence is written to `external_runs/codex/{chapter}/draft.prompt.md` and `draft.prompt.manifest.json`.
+- DeepSeek prompt evidence is written to `external_runs/deepseek/{chapter}/generate.prompt.md` and `generate.prompt.manifest.json`.
+- Both prompts must start with `# Candidate Style Requirements`.
+- `select-candidate`, `land`, and `evidence` verify the selected provider prompt manifests, context pack hash, and style source hashes.
+
 ## Gate 提醒
 
 第 3、10、25、125 章完成后，必须优先进入对应 Gate。Gate 只检查证据，不会自动通过，最终由人类总编裁决。

@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from _common import ROOT, chapter_parts, now_iso, read_json, write_blocked_by_locks, write_json, write_text
+from candidate_style_requirements import prompt_paths, validate_prompt_manifest
 from context_governance import context_quality_path
 from context_pack_quality import write_quality_report
 
@@ -36,6 +37,15 @@ def selected_deepseek_candidates(selection: dict) -> list[Path]:
         if rel_path.startswith("drafts/deepseek/"):
             candidates.append(ROOT / rel_path)
     return candidates
+
+
+def providers_for_choice(choice: str) -> list[str]:
+    providers: list[str] = []
+    if choice in {"Codex", "Mixed"}:
+        providers.append("Codex")
+    if choice in {"DeepSeek", "Mixed"}:
+        providers.append("DeepSeek")
+    return providers
 
 
 def chapter_matches_deepseek_candidate(chapter_path: Path, selection: dict) -> Path | None:
@@ -113,6 +123,14 @@ def main() -> int:
         )
         return 1
     inputs.append(input_item(selection_path))
+    for provider in providers_for_choice(str(choice)):
+        prompt_errors = validate_prompt_manifest(args.chapter, provider, require_candidate_written=(provider == "DeepSeek"))
+        if prompt_errors:
+            for error in prompt_errors:
+                print(f"ERROR: {error}", file=sys.stderr)
+            return 1
+        _prompt_path, manifest_path = prompt_paths(args.chapter, provider)
+        inputs.append(input_item(manifest_path))
     for item in selection.get("selected_candidates", []):
         candidate_path = ROOT / str(item.get("path", ""))
         if not candidate_path.exists():

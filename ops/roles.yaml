@@ -23,6 +23,7 @@ candidate:
     - drafts/deepseek/{chapter}.md
     - drafts/codex/{chapter}_brief.md
     - drafts/deepseek/{chapter}_brief.md
+    - external_runs/codex/{chapter}/**
     - external_runs/deepseek/{chapter}/**
     - reviews/{chapter}/brief_candidate_selection.md
     - reviews/{chapter}/brief_landing.md
@@ -92,6 +93,7 @@ chapter:
     - drafts/deepseek/{chapter}_brief.md
     - drafts/codex/{chapter}.md
     - drafts/deepseek/{chapter}.md
+    - external_runs/codex/{chapter}/**
     - external_runs/deepseek/{chapter}/**
     - reviews/{chapter}/**
     - state/selections/{chapter}_brief.json
@@ -114,6 +116,8 @@ maintenance:
     - bible/objects.yaml
     - bible/abilities.yaml
     - ops/**
+    - external_runs/codex/**
+    - external_runs/deepseek/**
     - references/**
     - scripts/**
     - templates/**

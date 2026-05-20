@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CandidateStyleRequirements",
+  "type": "object",
+  "required": ["schema_version", "chapter", "generated_at", "status", "profile_mode", "context_pack", "style_sources", "candidate_style_requirements_present", "blockers", "warnings"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "chapter": { "type": "string" },
+    "generated_at": { "type": "string" },
+    "status": { "enum": ["READY", "BLOCKED"] },
+    "profile_mode": { "enum": ["warmup_not_hard_gate", "ready_profile_required"] },
+    "context_pack": { "type": "object" },
+    "style_sources": { "type": "array", "items": { "type": "object" } },
+    "candidate_style_requirements_present": { "type": "boolean" },
+    "blockers": { "type": "array", "items": { "type": "string" } },
+    "warnings": { "type": "array", "items": { "type": "string" } }
+  }
+}

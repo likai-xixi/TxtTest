@@ -924,6 +924,65 @@ def write_style_profile(repo: Path) -> None:
     write(repo, "state/derived/style_profile.json", json.dumps(report, ensure_ascii=False, indent=2) + "\n")
 
 
+def write_candidate_prompt_evidence(
+    repo: Path,
+    chapter: str,
+    provider: str = "Codex",
+    *,
+    candidate_written: bool = False,
+) -> tuple[str, str]:
+    context_rel = f"state/context_pack/{chapter}.md"
+    if provider == "Codex":
+        prompt_rel = f"external_runs/codex/{chapter}/draft.prompt.md"
+        manifest_rel = f"external_runs/codex/{chapter}/draft.prompt.manifest.json"
+        candidate_rel = f"drafts/codex/{chapter}.md"
+    elif provider == "DeepSeek":
+        prompt_rel = f"external_runs/deepseek/{chapter}/generate.prompt.md"
+        manifest_rel = f"external_runs/deepseek/{chapter}/generate.prompt.manifest.json"
+        candidate_rel = f"drafts/deepseek/{chapter}.md"
+    else:
+        raise ValueError(provider)
+    prompt = (
+        "# Candidate Style Requirements\n\n"
+        "status: READY\n"
+        f"chapter: {chapter}\n"
+        "profile_mode: warmup_not_hard_gate\n\n"
+        "# Context Pack\n\n"
+        f"{(repo / context_rel).read_text(encoding='utf-8') if (repo / context_rel).exists() else 'context'}\n"
+    )
+    write(repo, prompt_rel, prompt)
+    sources = []
+    source_items = [
+        ("state/project_style_contract.json", "project_style_contract_json"),
+        ("state/project_style_contract.md", "project_style_contract_markdown"),
+        ("bible/style_guide.md", "style_guide"),
+    ]
+    if int(chapter[-3:]) >= 4:
+        source_items.append(("state/derived/style_profile.json", "derived_style_profile"))
+    for rel_path, role in source_items:
+        if (repo / rel_path).exists():
+            sources.append({"path": rel_path, "role": role, "exists": True, "sha256": file_sha(repo, rel_path)})
+    manifest = {
+        "schema_version": 1,
+        "chapter": chapter,
+        "status": "READY",
+        "generated_at": "2000-01-01T00:00:00+00:00",
+        "provider": provider,
+        "prompt_path": prompt_rel,
+        "prompt_sha256": file_sha(repo, prompt_rel),
+        "context_pack": {"path": context_rel, "sha256": file_sha(repo, context_rel)},
+        "style_sources": sources,
+        "candidate_style_requirements_present": True,
+        "profile_mode": "warmup_not_hard_gate" if int(chapter[-3:]) < 4 else "ready_profile_required",
+        "candidate_written": candidate_written,
+        "candidate_path": {"path": candidate_rel, "sha256": file_sha(repo, candidate_rel)} if candidate_written else None,
+        "blockers": [],
+        "warnings": [],
+    }
+    write(repo, manifest_rel, json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
+    return prompt_rel, manifest_rel
+
+
 def write_series_style_report(repo: Path, chapter: str, status: str = "READY") -> None:
     volume = chapter[:3]
     chapter_file = f"c{int(chapter[-3:]):03d}.md"
@@ -975,6 +1034,9 @@ def write_complete_chapter_evidence(repo: Path, chapter: str, number: int) -> No
     write(repo, chapter_rel, f"Official chapter {chapter} with independent Codex prose.\n")
     write(repo, draft_rel, f"Codex candidate {chapter}.\n")
     write_context_quality(repo, chapter)
+    if number >= 4:
+        write_style_profile(repo)
+    _prompt_rel, prompt_manifest_rel = write_candidate_prompt_evidence(repo, chapter, "Codex")
     write_minimal_derived_governance(repo, chapter)
     write(
         repo,
@@ -1002,6 +1064,18 @@ def write_complete_chapter_evidence(repo: Path, chapter: str, number: int) -> No
         "selected_at": "2000-01-01T00:00:00+00:00",
         "reason": "synthetic ready evidence",
         "selected_candidates": [{"path": draft_rel, "sha256": file_sha(repo, draft_rel)}],
+        "selected_prompt_evidence": [
+            {
+                "provider": "Codex",
+                "manifest": {"path": prompt_manifest_rel, "sha256": file_sha(repo, prompt_manifest_rel)},
+                "prompt": {
+                    "path": f"external_runs/codex/{chapter}/draft.prompt.md",
+                    "sha256": file_sha(repo, f"external_runs/codex/{chapter}/draft.prompt.md"),
+                },
+                "context_pack_sha256": file_sha(repo, context_rel),
+                "style_sources": json.loads((repo / prompt_manifest_rel).read_text(encoding="utf-8"))["style_sources"],
+            }
+        ],
     }
     write(repo, f"state/selections/{chapter}.json", json.dumps(selection) + "\n")
     landing = {
@@ -1022,6 +1096,7 @@ def write_complete_chapter_evidence(repo: Path, chapter: str, number: int) -> No
             {"path": f"state/derived/context_quality/{chapter}.json", "sha256": file_sha(repo, f"state/derived/context_quality/{chapter}.json")},
             {"path": brief_rel, "sha256": file_sha(repo, brief_rel)},
             {"path": f"state/selections/{chapter}.json", "sha256": file_sha(repo, f"state/selections/{chapter}.json")},
+            {"path": prompt_manifest_rel, "sha256": file_sha(repo, prompt_manifest_rel)},
             {"path": draft_rel, "sha256": file_sha(repo, draft_rel)},
         ],
         "official_chapter": {"path": chapter_rel, "sha256": file_sha(repo, chapter_rel)},
@@ -1053,7 +1128,6 @@ def write_complete_chapter_evidence(repo: Path, chapter: str, number: int) -> No
     write_auxiliary_reviews(repo, chapter)
     write_style_metrics(repo, chapter)
     if number >= 4:
-        write_style_profile(repo)
         write_series_style_report(repo, chapter)
     write_element_usage_report(repo, chapter)
     write_fact_cards_report(repo, chapter)
@@ -1106,6 +1180,8 @@ class WorkflowGuardTests(unittest.TestCase):
 
             write(repo, "chapters/v01/c001.md", "Official chapter text with a concrete protagonist choice.\n")
             write(repo, "drafts/codex/v01_c001.md", "Codex candidate text.\n")
+            codex_prompt = run(repo, "scripts/novel.py", "codex-draft-prompt", "v01_c001")
+            self.assertEqual(codex_prompt.returncode, 0, codex_prompt.stdout + codex_prompt.stderr)
             selection = run(
                 repo,
                 "scripts/novel.py",
@@ -1284,6 +1360,117 @@ class WorkflowGuardTests(unittest.TestCase):
 
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("series style official chapter hash is stale", result.stdout)
+
+    def test_codex_draft_prompt_writes_style_prompt_and_manifest(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_core_setting_freeze(repo)
+            write(repo, "state/context_pack/v01_c001.md", "context\n")
+            write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF.format(chapter="v01_c001"))
+            write_context_quality(repo, "v01_c001")
+
+            result = run(repo, "scripts/novel.py", "codex-draft-prompt", "v01_c001")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            prompt = (repo / "external_runs/codex/v01_c001/draft.prompt.md").read_text(encoding="utf-8")
+            manifest = json.loads((repo / "external_runs/codex/v01_c001/draft.prompt.manifest.json").read_text(encoding="utf-8"))
+            self.assertTrue(prompt.startswith("# Candidate Style Requirements"))
+            self.assertLess(prompt.index("# Candidate Style Requirements"), prompt.index("# Context Pack"))
+            self.assertEqual(manifest["status"], "READY")
+            self.assertEqual(manifest["profile_mode"], "warmup_not_hard_gate")
+            self.assertFalse(manifest["candidate_written"])
+
+    def test_deepseek_generate_dry_run_writes_style_prompt_manifest(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_core_setting_freeze(repo)
+            write(repo, "state/context_pack/v01_c001.md", "context\n")
+            write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF.format(chapter="v01_c001"))
+            write_context_quality(repo, "v01_c001")
+
+            result = run(repo, "scripts/novel.py", "deepseek-generate", "v01_c001", "--dry-run")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            prompt = (repo / "external_runs/deepseek/v01_c001/generate.prompt.md").read_text(encoding="utf-8")
+            manifest = json.loads((repo / "external_runs/deepseek/v01_c001/generate.prompt.manifest.json").read_text(encoding="utf-8"))
+            self.assertTrue(prompt.startswith("# Candidate Style Requirements"))
+            self.assertIn("# User", prompt)
+            self.assertEqual(manifest["provider"], "DeepSeek")
+            self.assertFalse(manifest["candidate_written"])
+
+    def test_select_candidate_requires_codex_prompt_evidence(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write(repo, "drafts/codex/v01_c001.md", "Codex candidate.\n")
+
+            result = run(
+                repo,
+                "scripts/novel.py",
+                "select-candidate",
+                "v01_c001",
+                "--choice",
+                "Codex",
+                "--reason",
+                "human selected Codex",
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("missing Codex candidate prompt evidence manifest", result.stderr)
+
+    def test_chapter_evidence_rejects_stale_candidate_prompt_style_source(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_complete_chapter_evidence(repo, "v01_c001", 1)
+            write(repo, "bible/style_guide.md", "# Style Guide\n\nstatus: READY\n\nChanged after prompt.\n")
+
+            result = run(repo, "scripts/novel.py", "evidence", "v01_c001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("style source hash is stale", result.stdout)
+
+    def test_chapter_evidence_requires_top_level_candidate_style_requirements(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_complete_chapter_evidence(repo, "v01_c001", 1)
+            prompt_rel = "external_runs/codex/v01_c001/draft.prompt.md"
+            manifest_rel = "external_runs/codex/v01_c001/draft.prompt.manifest.json"
+            write(repo, prompt_rel, "Preface\n\n# Candidate Style Requirements\n\nstatus: READY\n")
+            manifest = json.loads((repo / manifest_rel).read_text(encoding="utf-8"))
+            manifest["prompt_sha256"] = file_sha(repo, prompt_rel)
+            write(repo, manifest_rel, json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
+            selection = json.loads((repo / "state/selections/v01_c001.json").read_text(encoding="utf-8"))
+            selection["selected_prompt_evidence"][0]["manifest"]["sha256"] = file_sha(repo, manifest_rel)
+            write(repo, "state/selections/v01_c001.json", json.dumps(selection, ensure_ascii=False, indent=2) + "\n")
+            landing = json.loads((repo / "reviews/v01_c001/chapter_landing.json").read_text(encoding="utf-8"))
+            for item in landing["inputs"]:
+                if item["path"] == manifest_rel:
+                    item["sha256"] = file_sha(repo, manifest_rel)
+            write(repo, "reviews/v01_c001/chapter_landing.json", json.dumps(landing, ensure_ascii=False, indent=2) + "\n")
+
+            result = run(repo, "scripts/novel.py", "evidence", "v01_c001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("prompt missing top-level Candidate Style Requirements", result.stdout)
+
+    def test_chapter_evidence_allows_legacy_selection_without_prompt_evidence(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_complete_chapter_evidence(repo, "v01_c001", 1)
+            selection = json.loads((repo / "state/selections/v01_c001.json").read_text(encoding="utf-8"))
+            selection.pop("selected_prompt_evidence", None)
+            write(repo, "state/selections/v01_c001.json", json.dumps(selection, ensure_ascii=False, indent=2) + "\n")
+            landing = json.loads((repo / "reviews/v01_c001/chapter_landing.json").read_text(encoding="utf-8"))
+            landing["inputs"] = [
+                item
+                for item in landing["inputs"]
+                if not str(item.get("path", "")).startswith("external_runs/codex/")
+            ]
+            landing["inputs"][3]["sha256"] = file_sha(repo, "state/selections/v01_c001.json")
+            write(repo, "reviews/v01_c001/chapter_landing.json", json.dumps(landing, ensure_ascii=False, indent=2) + "\n")
+
+            result = run(repo, "scripts/novel.py", "evidence", "v01_c001")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_series_style_check_generates_advisory_and_blocks_hard_drift(self) -> None:
         with copy_repo() as temp:
@@ -2594,6 +2781,8 @@ print("OK: stub deepseek idea")
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertEqual((repo / "drafts/deepseek/v01_c001.md").read_text(encoding="utf-8"), "candidate text\n")
             self.assertTrue((repo / "external_runs/deepseek/v01_c001/generate.raw.json").exists())
+            manifest = json.loads((repo / "external_runs/deepseek/v01_c001/generate.prompt.manifest.json").read_text(encoding="utf-8"))
+            self.assertTrue(manifest["candidate_written"])
 
     def test_deepseek_style_review_valid_response_writes_structured_report(self) -> None:
         with copy_repo() as temp:
@@ -2680,6 +2869,7 @@ print("OK: stub deepseek idea")
             write(repo, "chapters/v01/c001.md", chapter_text)
             write(repo, "drafts/deepseek/v01_c001.md", chapter_text)
             write_context_quality(repo, "v01_c001")
+            write_candidate_prompt_evidence(repo, "v01_c001", "DeepSeek", candidate_written=True)
             selection = run(
                 repo,
                 "scripts/novel.py",
@@ -2719,6 +2909,7 @@ print("OK: stub deepseek idea")
             write(repo, "chapters/v01/c001.md", chapter_text)
             write(repo, "drafts/deepseek/v01_c001.md", chapter_text)
             write_context_quality(repo, "v01_c001")
+            write_candidate_prompt_evidence(repo, "v01_c001", "DeepSeek", candidate_written=True)
             selection = run(
                 repo,
                 "scripts/novel.py",
@@ -2775,6 +2966,7 @@ print("OK: stub deepseek idea")
             write(repo, "drafts/deepseek/v01_c001.md", chapter_text)
             write_fact_cards_report(repo, "v01_c001")
             write_context_quality(repo, "v01_c001")
+            write_candidate_prompt_evidence(repo, "v01_c001", "DeepSeek", candidate_written=True)
             selection = run(
                 repo,
                 "scripts/novel.py",

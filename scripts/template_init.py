@@ -13,6 +13,7 @@ DIRS = [
     "chapters/v01",
     "drafts/codex",
     "drafts/deepseek",
+    "external_runs/codex",
     "external_runs/deepseek",
     "reviews",
     "state/derived",
@@ -42,7 +43,10 @@ GENERATED_PATTERNS = [
     "state/idea_lab/*/*.md",
     "state/idea_lab/*/*.json",
     "external_runs/deepseek/*/*.prompt.md",
+    "external_runs/deepseek/*/*.prompt.manifest.json",
     "external_runs/deepseek/*/*.raw.json",
+    "external_runs/codex/*/*.prompt.md",
+    "external_runs/codex/*/*.manifest.json",
 ]
 
 

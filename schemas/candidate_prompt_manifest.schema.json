@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CandidatePromptManifest",
+  "type": "object",
+  "required": ["schema_version", "chapter", "status", "generated_at", "provider", "prompt_path", "prompt_sha256", "context_pack", "style_sources", "candidate_style_requirements_present", "profile_mode", "candidate_written", "blockers", "warnings"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "chapter": { "type": "string" },
+    "status": { "enum": ["READY", "BLOCKED"] },
+    "generated_at": { "type": "string" },
+    "provider": { "enum": ["Codex", "DeepSeek"] },
+    "prompt_path": { "type": "string" },
+    "prompt_sha256": { "type": "string" },
+    "context_pack": { "type": "object" },
+    "style_sources": { "type": "array", "items": { "type": "object" } },
+    "candidate_style_requirements_present": { "type": "boolean" },
+    "profile_mode": { "enum": ["warmup_not_hard_gate", "ready_profile_required"] },
+    "candidate_written": { "type": "boolean" },
+    "candidate_path": { "type": ["object", "null"] },
+    "blockers": { "type": "array", "items": { "type": "string" } },
+    "warnings": { "type": "array", "items": { "type": "string" } }
+  }
+}

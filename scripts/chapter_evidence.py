@@ -20,6 +20,7 @@ from brief_contract import (
     normalized_progress_mode,
     progress_value,
 )
+from candidate_style_requirements import prompt_paths, validate_prompt_manifest
 from context_governance import context_manifest_path, context_quality_path
 from element_context import markdown_sections, missing_section, section_body
 from element_usage import evaluate as evaluate_element_usage
@@ -372,6 +373,61 @@ def validate_selection(chapter: str) -> list[str]:
             actual = sha256(path)
             if expected != actual:
                 failures.append(f"{chapter}: selected candidate hash mismatch for {item.get('path')}")
+    return failures
+
+
+def providers_for_choice(choice: object) -> list[str]:
+    providers: list[str] = []
+    if choice in {"Codex", "Mixed"}:
+        providers.append("Codex")
+    if choice in {"DeepSeek", "Mixed"}:
+        providers.append("DeepSeek")
+    return providers
+
+
+def validate_candidate_prompt_evidence(chapter: str, selection: dict, landing: dict) -> list[str]:
+    choice = selection.get("choice")
+    providers = providers_for_choice(choice)
+    if not providers:
+        return []
+
+    failures: list[str] = []
+    selected_prompt_evidence = selection.get("selected_prompt_evidence")
+    if not isinstance(selected_prompt_evidence, list):
+        return []
+    evidence_by_provider = {
+        item.get("provider"): item
+        for item in selected_prompt_evidence
+        if isinstance(item, dict) and item.get("provider") in providers
+    }
+
+    landing_inputs = landing.get("inputs", []) if isinstance(landing, dict) else []
+    landing_paths = {item.get("path"): item for item in landing_inputs if isinstance(item, dict)}
+    for provider in providers:
+        failures.extend(validate_prompt_manifest(chapter, provider, require_candidate_written=(provider == "DeepSeek")))
+        _prompt_path, manifest_path = prompt_paths(chapter, provider)
+        manifest_rel = manifest_path.relative_to(ROOT).as_posix()
+        selection_item = evidence_by_provider.get(provider)
+        if not isinstance(selection_item, dict):
+            failures.append(f"{chapter}: candidate selection missing {provider} prompt evidence")
+        else:
+            manifest_item = selection_item.get("manifest")
+            if not isinstance(manifest_item, dict):
+                failures.append(f"{chapter}: candidate selection {provider} prompt manifest ref is malformed")
+            else:
+                if manifest_item.get("path") != manifest_rel:
+                    failures.append(f"{chapter}: candidate selection {provider} prompt manifest path mismatch")
+                elif not manifest_path.exists():
+                    failures.append(f"{chapter}: selected {provider} prompt manifest missing on disk")
+                elif manifest_item.get("sha256") != sha256(manifest_path):
+                    failures.append(f"{chapter}: selected {provider} prompt manifest hash mismatch")
+        landing_item = landing_paths.get(manifest_rel)
+        if not isinstance(landing_item, dict):
+            failures.append(f"{chapter}: landing record missing {provider} prompt manifest input {manifest_rel}")
+        elif not manifest_path.exists():
+            failures.append(f"{chapter}: landing {provider} prompt manifest missing on disk")
+        elif landing_item.get("sha256") != sha256(manifest_path):
+            failures.append(f"{chapter}: landing {provider} prompt manifest hash mismatch")
     return failures
 
 
@@ -730,6 +786,7 @@ def chapter_evidence_failures(chapter: str) -> list[str]:
 
     failures.extend(validate_selection(chapter))
     failures.extend(validate_landing(chapter))
+    failures.extend(validate_candidate_prompt_evidence(chapter, selection, landing))
     failures.extend(validate_context_quality(chapter, landing))
     failures.extend(validate_authorized_breakers(chapter))
     failures.extend(validate_element_usage(chapter))

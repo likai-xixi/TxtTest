@@ -414,8 +414,10 @@ def command_go(args: argparse.Namespace) -> int:
         print(f"ready: `{display_path(context)}`")
         return 0
 
+    run_script("build_codex_draft_prompt.py", "--chapter", args.chapter)
     print(f"ready: `{display_path(context)}`")
-    print(f"next: ask Codex to write `drafts/codex/{args.chapter}.md` from the context pack, including its Style Instruction section.")
+    print(f"codex prompt: `external_runs/codex/{args.chapter}/draft.prompt.md`")
+    print(f"next: ask Codex to write `drafts/codex/{args.chapter}.md` from that prompt.")
     if os.environ.get("DEEPSEEK_API_KEY"):
         print(f"optional: run `python scripts/novel.py deepseek-generate {args.chapter}` for a DeepSeek candidate.")
     else:
@@ -662,6 +664,12 @@ def command_deepseek_generate(args: argparse.Namespace) -> int:
     if args.dry_run:
         script_args.append("--dry-run")
     run_script("run_deepseek_generate.py", *script_args)
+    return 0
+
+
+def command_codex_draft_prompt(args: argparse.Namespace) -> int:
+    ensure_no_open_locks()
+    run_script("build_codex_draft_prompt.py", "--chapter", args.chapter)
     return 0
 
 
@@ -1723,6 +1731,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--model", default=model_for("deepseek_generate"))
     p.add_argument("--dry-run", action="store_true")
     p.set_defaults(func=command_deepseek_generate)
+
+    p = sub.add_parser("codex-draft-prompt", help="Build the Codex candidate draft prompt and style evidence.")
+    p.add_argument("chapter")
+    p.set_defaults(func=command_codex_draft_prompt)
 
     p = sub.add_parser("deepseek-style-review", help="Ask DeepSeek for an independent series-style review.")
     p.add_argument("chapter")

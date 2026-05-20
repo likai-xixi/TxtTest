@@ -49,7 +49,7 @@ def changed_files() -> list[str]:
             result = run_git(args)
             if result.returncode == 0:
                 files.update(line.strip() for line in result.stdout.splitlines() if line.strip())
-        status = run_git(["status", "--porcelain"])
+        status = run_git(["status", "--porcelain", "-uall"])
         if status.returncode == 0:
             for line in status.stdout.splitlines():
                 if not line.strip():

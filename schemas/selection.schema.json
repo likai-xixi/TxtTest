@@ -11,6 +11,7 @@
     "verified_by": { "const": "human" },
     "candidates": { "type": "array" },
     "selected_candidates": { "type": "array" },
+    "selected_prompt_evidence": { "type": "array" },
     "reason": { "type": "string" },
     "adopt": { "type": "string" },
     "reject": { "type": "string" },
