@@ -22,6 +22,14 @@ REVIEW_TEMPLATES = [
     "retention_risk.md",
     "originality.md",
     "similarity_risk.md",
+    "opening_retention.md",
+    "personality_drift.md",
+    "hook_retention.md",
+    "protagonist_charm.md",
+    "world_reveal.md",
+    "suspense_ladder.md",
+    "language_memorability.md",
+    "genre_fit.md",
 ]
 
 

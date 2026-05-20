@@ -101,6 +101,26 @@ def check_chapter(chapter: str) -> dict[str, Any]:
     if ledger.exists() and derived.exists() and _mtime(derived) + 0.001 < _mtime(ledger):
         issues.append(issue("STALE", "derived current_state is older than event ledger", rel(derived)))
     checked.append(rel(derived))
+    needs_reader_derived = any(
+        path.exists()
+        for path in (
+            ROOT / "state" / "context_pack" / f"{chapter}.md",
+            ROOT / "state" / "context_pack" / f"{chapter}.manifest.json",
+            ROOT / "state" / "derived" / "context_quality" / f"{chapter}.json",
+        )
+    )
+    for generated in [
+        ROOT / "state" / "derived" / "personality" / "protagonist.json",
+        ROOT / "state" / "derived" / "protagonist_progression.json",
+        ROOT / "state" / "derived" / "concept_index.json",
+        ROOT / "state" / "derived" / "world_reveal_ledger.json",
+        ROOT / "state" / "derived" / "suspense_ledger.json",
+    ]:
+        if needs_reader_derived and not generated.exists():
+            issues.append(issue("MISSING", "reader/personality derived state is missing", rel(generated)))
+        elif ledger.exists() and generated.exists() and _mtime(generated) + 0.001 < _mtime(ledger):
+            issues.append(issue("STALE", "reader/personality derived state is older than event ledger", rel(generated)))
+        checked.append(rel(generated))
 
     brief = ROOT / "outline" / "chapter_briefs" / f"{chapter}.md"
     brief_pack = ROOT / "state" / "context_pack" / f"{chapter}_brief.md"
@@ -143,6 +163,24 @@ def check_chapter(chapter: str) -> dict[str, Any]:
             issues.extend(check_nested_review_inputs(path, data))
         checked.append(rel(path))
 
+    for review_name in (
+        "opening_retention.md",
+        "personality_drift.md",
+        "hook_retention.md",
+        "protagonist_charm.md",
+        "world_reveal.md",
+        "suspense_ladder.md",
+        "language_memorability.md",
+        "genre_fit.md",
+    ):
+        path = ROOT / "reviews" / chapter / review_name
+        if path.exists():
+            text = read_text(path)
+            official = ROOT / "chapters" / chapter[:3] / f"c{chapter[-3:]}.md"
+            if "official_chapter_sha256:" in text and official.exists() and sha256(official) not in text:
+                issues.append(issue("STALE", f"{review_name} does not reference current official chapter sha", rel(path)))
+        checked.append(rel(path))
+
     for landing_name in ("brief_landing.json", "chapter_landing.json"):
         path = ROOT / "reviews" / chapter / landing_name
         data, error = _json(path)
@@ -155,10 +193,10 @@ def check_chapter(chapter: str) -> dict[str, Any]:
     categories = {item["category"] for item in issues}
     if "SCHEMA" in categories:
         status = "SCHEMA"
-    elif "STALE" in categories:
-        status = "STALE"
     elif "MISSING" in categories:
         status = "MISSING"
+    elif "STALE" in categories:
+        status = "STALE"
     else:
         status = "CLEAR"
     return {"chapter": chapter, "status": status, "checked": checked, "issues": issues}
@@ -171,7 +209,7 @@ def stale_summary(chapter: str | None = None) -> dict[str, Any]:
     stale_count = sum(1 for item in results if item["status"] == "STALE")
     schema_count = sum(1 for item in results if item["status"] == "SCHEMA")
     return {
-        "status": "SCHEMA" if schema_count else "STALE" if stale_count else "CLEAR",
+        "status": "SCHEMA" if schema_count else "STALE" if stale_count else "MISSING" if any(item["status"] == "MISSING" for item in results) else "CLEAR",
         "checked_chapters": [item["chapter"] for item in results],
         "issue_count": issue_count,
         "stale_chapter_count": stale_count,

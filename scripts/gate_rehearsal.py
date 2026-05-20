@@ -7,6 +7,7 @@ from typing import Any
 
 from _common import ROOT, gate_decision, read_text
 from gate_config import load_gate_configs
+from reader_personality_contracts import load_reader_promise, validate_reader_promise
 from workflow_errors import issue
 
 
@@ -53,6 +54,31 @@ def context_quality_gaps(chapters: list[str]) -> list[dict[str, Any]]:
     return gaps
 
 
+def reader_experience_gaps(gate: str) -> list[dict[str, Any]]:
+    gaps: list[dict[str, Any]] = []
+    for error in validate_reader_promise(load_reader_promise(), require_ready=True):
+        gaps.append(issue("BLOCKER", f"reader promise not ready: {error}", "state/project_reader_promise.json"))
+    for rel_path in (
+        "state/derived/personality/protagonist.json",
+        "state/derived/protagonist_progression.json",
+        "state/derived/world_reveal_ledger.json",
+        "state/derived/suspense_ledger.json",
+    ):
+        path = ROOT / rel_path
+        if not path.exists():
+            gaps.append(issue("MISSING", "reader experience derived ledger is missing", rel_path))
+            continue
+        try:
+            data = json.loads(read_text(path))
+        except json.JSONDecodeError as exc:
+            gaps.append(issue("SCHEMA", f"reader experience ledger invalid JSON: {exc}", rel_path))
+            continue
+        blockers = data.get("blockers", []) if isinstance(data, dict) else ["malformed ledger"]
+        if blockers:
+            gaps.append(issue("BLOCKER", f"reader experience ledger blockers: {', '.join(map(str, blockers[:3]))}", rel_path))
+    return gaps
+
+
 def rehearse(gate: str) -> dict[str, Any]:
     gate = gate.upper()
     configs = load_gate_configs()
@@ -90,6 +116,7 @@ def rehearse(gate: str) -> dict[str, Any]:
                     issues.append(issue("MISSING", f"assessment section missing: {section}", rel(path)))
 
     issues.extend(context_quality_gaps(shipped))
+    issues.extend(reader_experience_gaps(gate))
     return {
         "gate": gate,
         "status": "READY_FOR_HUMAN_DECISION" if not issues else "REHEARSAL_NOT_READY",
@@ -136,4 +163,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

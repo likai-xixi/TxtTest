@@ -10,7 +10,7 @@ from _common import ROOT, now_iso, read_text, write_text
 ACTIONS = ["Ship", "Revise once", "Rewrite brief", "Kill chapter", "Pause project"]
 ACTION_RE = re.compile(r"(Ship|Revise once|Rewrite brief|Kill chapter|Pause project)", re.IGNORECASE)
 ISSUE_RE = re.compile(
-    r"(P[0-3]|问题|风险|建议|AI 味|撞梗|换皮|主角|推进|读得下去|Rewrite|Revise|Ship|Kill|Pause)",
+    r"(P[0-3]|问题|风险|建议|AI 味|撞梗|换皮|主角|人格|留存|钩子|悬念|世界观|名词|语言|类型|reader|promise|progression|推进|读得下去|Rewrite|Revise|Ship|Kill|Pause)",
     re.IGNORECASE,
 )
 BLOCKING_ACTIONS = {"Rewrite brief", "Kill chapter", "Pause project"}

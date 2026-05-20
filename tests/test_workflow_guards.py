@@ -16,6 +16,41 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
+INITIAL_PERSONALITY_READY = {
+    "essence": "主角相信只有把异常记录成证据，危险才会变得可控。",
+    "opening_mask": "礼貌、冷静、像只是在执行流程。",
+    "true_inner_state": "害怕失控，也害怕自己直觉判断出错。",
+    "visible_traits": ["谨慎", "克制"],
+    "hidden_traits": ["想证明自己判断正确", "不愿承认自己在害怕"],
+    "default_strategy": "遇到危险先保存证据，再寻找可验证解释。",
+    "stress_response": "越紧张越程序化，反复确认细节。",
+    "emotional_leak": "手部动作变多，说话变短。",
+    "speech_profile": {
+        "rhythm": "短句、先结论后证据",
+        "sharpness": "克制直给",
+        "favorite_words": ["确认", "证据"],
+        "forbidden_tone": ["突然热血", "无故轻佻"],
+    },
+    "relationship_modes": {
+        "stranger": "保持距离，先观察对方动机。",
+        "ally": "给对方任务，也会默默兜底。",
+        "authority": "礼貌服从表面流程，私下保留证据。",
+        "intimate": "少说软话，用行动补偿。",
+    },
+    "opening_flaw": "过度依赖可验证证据，回避直觉和情绪判断。",
+    "opening_misbelief": "没有记录下来的东西就不值得相信。",
+    "opening_desire": "把异常解释成可控事件。",
+    "opening_fear": "自己失去判断力，连累亲近者。",
+    "first_three_chapter_limits": [
+        "前三章不能突然完成核心成长。",
+        "前三章不能无事件推翻初始误信。",
+    ],
+    "change_seeds": [
+        "当流程无法保护他时，他会被迫承担不确定性。",
+        "当亲近者受伤时，他可能第一次越过规则。",
+    ],
+}
+
 
 @contextmanager
 def copy_repo() -> Iterator[Path]:
@@ -58,18 +93,74 @@ def write(repo: Path, relative: str, text: str) -> None:
     path.write_text(text, encoding="utf-8", newline="\n")
 
 
+def write_reader_promise_ready(repo: Path) -> None:
+    data = {
+        "schema_version": 1,
+        "status": "READY",
+        "updated_at": "2000-01-01T00:00:00+00:00",
+        "primary_genre": "悬疑",
+        "secondary_genre": "成长",
+        "target_reader": "喜欢强钩子、主角主动和悬念推进的读者",
+        "platform_expectation": "前三章明确追读问题",
+        "core_hook": "主角用证据流程对抗无法归档的异常",
+        "main_reader_rewards": ["悬念推进", "主角主动改变局面"],
+        "non_promises": ["不承诺纯设定百科", "不承诺无代价升级"],
+        "first_chapter_must_deliver": "异常开局、主角选择和章末问题",
+        "second_chapter_must_escalate": "第一章问题升级，主角主动承担风险",
+        "third_chapter_must_hook": "小兑现后打开更大的主线问题",
+        "three_chapter_main_question": "异常信号从何而来，主角能否控制局面",
+        "three_chapter_protagonist_specialness": "主角以证据流程和克制性格改变现场",
+        "per_chapter_must_have": ["第一屏钩子", "主角主动选择", "章末点击理由"],
+        "per_chapter_must_not_only_have": ["流程记录", "设定说明"],
+        "ending_hook_priority": ["新问题", "新代价", "关系变化"],
+        "reward_mix": {"爽点": "中", "悬念": "高", "笑点": "低", "情绪点": "中"},
+        "genre_mismatch_red_lines": ["不得把悬疑写成说明书", "不得让主角连续旁观"],
+        "source_boundary": "instruction_only_not_fact_source",
+    }
+    write(repo, "state/project_reader_promise.json", json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+    write(repo, "state/project_reader_promise.md", "# Project Reader Promise\n\nstatus: READY\nsource_boundary: instruction_only_not_fact_source\n")
+
+
+def write_reader_experience_derived(repo: Path) -> None:
+    write(
+        repo,
+        "state/derived/personality/protagonist.json",
+        json.dumps(
+            {
+                "schema_version": 1,
+                "generated_at": "2000-01-01T00:00:00+00:00",
+                "status": "READY",
+                "initial_personality": INITIAL_PERSONALITY_READY,
+                "current_personality": INITIAL_PERSONALITY_READY,
+                "personality_delta_events": [],
+                "source_refs": [],
+                "blockers": [],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+    )
+    write(repo, "state/derived/protagonist_progression.json", '{"schema_version":1,"generated_at":"2000-01-01T00:00:00+00:00","entries":[],"blockers":[]}\n')
+    write(repo, "state/derived/concept_index.json", '{"schema_version":1,"concepts":[],"blockers":[]}\n')
+    write(repo, "state/derived/world_reveal_ledger.json", '{"schema_version":1,"generated_at":"2000-01-01T00:00:00+00:00","entries":[],"blockers":[]}\n')
+    write(repo, "state/derived/suspense_ledger.json", '{"schema_version":1,"generated_at":"2000-01-01T00:00:00+00:00","threads":[],"blockers":[]}\n')
+
+
 def file_sha(repo: Path, relative: str) -> str:
     return hashlib.sha256((repo / relative).read_bytes()).hexdigest()
 
 
 def write_context_quality(repo: Path, chapter: str) -> None:
+    write_reader_promise_ready(repo)
+    write_reader_experience_derived(repo)
     context_rel = f"state/context_pack/{chapter}.md"
     manifest_rel = f"state/context_pack/{chapter}.manifest.json"
     quality_rel = f"state/derived/context_quality/{chapter}.json"
     manifest = {
         "schema_version": 2,
         "chapter": chapter,
-        "budget_chars": 12000,
+        "budget_chars": 18000,
         "hard_max_chars": 48000,
         "allow_truncated": False,
         "pack_truncated": False,
@@ -100,6 +191,26 @@ def write_context_quality(repo: Path, chapter: str) -> None:
                     {"path": "bible/style_guide.md", "note": "style_instruction_not_fact_source"},
                 ],
             },
+            {
+                "id": "reader_promise",
+                "body_chars": 10,
+                "included_reason": "reader_promise_instruction_not_fact_source",
+                "sources": [
+                    {"path": "state/project_reader_promise.json", "note": "reader_promise_instruction_not_fact_source"},
+                    {"path": "state/project_reader_promise.md", "note": "reader_promise_instruction_not_fact_source"},
+                ],
+            },
+            {
+                "id": "reader_experience_state",
+                "body_chars": 10,
+                "sources": [
+                    {"path": "state/derived/personality/protagonist.json"},
+                    {"path": "state/derived/protagonist_progression.json"},
+                    {"path": "state/derived/concept_index.json"},
+                    {"path": "state/derived/world_reveal_ledger.json"},
+                    {"path": "state/derived/suspense_ledger.json"},
+                ],
+            },
             {"id": "authorized_elements_full", "body_chars": 10, "sources": [{"path": f"outline/chapter_briefs/{chapter}.md"}]},
             {"id": "rules_and_boundaries", "body_chars": 10, "sources": [{"path": "bible/rules.md"}]},
         ],
@@ -115,7 +226,7 @@ def write_context_quality(repo: Path, chapter: str) -> None:
         "manifest_path": manifest_rel,
         "context_pack_sha256": file_sha(repo, context_rel),
         "manifest_sha256": file_sha(repo, manifest_rel),
-        "budget_chars": 12000,
+        "budget_chars": 18000,
         "pack_chars": manifest["pack_chars"],
         "required_fact_coverage": 1.0,
         "unsupported_key_fact_count": 0,
@@ -168,6 +279,7 @@ def write_minimal_derived_governance(repo: Path, chapter: str) -> None:
     write(repo, f"state/derived/arcs/chunk_{start:03d}_{end:03d}.md", f"# Arc Chunk {start:03d}-{end:03d}\n")
     write(repo, "state/derived/pacing/progress_index.json", '{"schema_version":1,"entries":[]}\n')
     write(repo, "state/derived/pacing/aftermath_obligations.json", '{"schema_version":1,"obligations":[]}\n')
+    write_reader_experience_derived(repo)
 
 
 MODEL_DISAGREEMENT_READY = """# Model Disagreement
@@ -208,6 +320,7 @@ IDEA_SYNTHESIS_READY = """# Codex Synthesis: {idea}
 
 - 一句话卖点：A hook.
 - 主角欲望：A desire.
+- 主角初始人格合同：{personality}
 - 核心冲突：A conflict.
 - 世界异常：A anomaly.
 - 世界观核心规则：A worldview core.
@@ -227,6 +340,7 @@ IDEA_SYNTHESIS_READY = """# Codex Synthesis: {idea}
 
 - 一句话卖点：B hook.
 - 主角欲望：B desire.
+- 主角初始人格合同：{personality}
 - 核心冲突：B conflict.
 - 世界异常：B anomaly.
 - 世界观核心规则：B worldview core.
@@ -246,6 +360,7 @@ IDEA_SYNTHESIS_READY = """# Codex Synthesis: {idea}
 
 - 一句话卖点：C hook.
 - 主角欲望：C desire.
+- 主角初始人格合同：{personality}
 - 核心冲突：C conflict.
 - 世界异常：C anomaly.
 - 世界观核心规则：C worldview core.
@@ -261,6 +376,13 @@ IDEA_SYNTHESIS_READY = """# Codex Synthesis: {idea}
 - 适合继续的信号：C continue.
 - 不适合继续的信号：C stop.
 """
+
+
+def idea_synthesis_ready(idea: str) -> str:
+    return IDEA_SYNTHESIS_READY.format(
+        idea=idea,
+        personality=json.dumps(INITIAL_PERSONALITY_READY, ensure_ascii=False, separators=(",", ":")),
+    )
 
 
 COMPLETE_BRIEF = """# {chapter} Brief
@@ -407,6 +529,68 @@ L0 场景细节和 L1 一次性线索可以新增；没有 L3/L4 新机制。
 
 不得靠未授权新道具、新能力或新规则解决本章核心问题。
 
+## 本章留存合同
+
+- 第一屏钩子：开场即出现异常证据和强压力。
+- 本章核心问题：异常证据为什么会被遮蔽？
+- 本章读者期待：看主角在压力下主动保留证据。
+- 本章中段反转 / 加压：平台追查让证据保存变成风险。
+- 本章小兑现：读者确认异常并非普通故障。
+- 本章章末钩子：幕后是谁在制造异常信号？
+- 下一章点击理由：证据已经被保存，但追查即将逼近主角。
+
+## 本章主角魅力合同
+
+- 主角本章主动目标：保存异常证据并判断是否继续调查。
+- 主角本章过人之处：在压力下仍能抓住可验证证据。
+- 主角本章弱点 / 误判 / 上头点：过度依赖记录，低估人的反应。
+- 金手指 / 特殊资源本章表现：特殊资源只提示异常，不直接解决问题。
+- 能力、地位、认知或关系的刻度变化：knowledge_delta small；relationship_delta none。
+- 本章让读者喜欢主角的瞬间：主角明知会被追责仍保留证据。
+
+## 本章初始人格挑战合同
+
+- 是否挑战初始人格：pressure。
+- 被挑战字段：default_strategy、stress_response、opening_misbelief。
+- 挑战方式：异常和追查压力迫使主角继续依赖证据流程。
+- 本章是否形成人格变化：no_durable_change。
+- 若 durable，最低落账事件：none。
+- 前三章限制确认：只压迫初始人格，不完成核心成长。
+
+## 本章世界观展示合同
+
+- 本章允许新增核心名词：none。
+- 本章允许新增次要名词：异常信号。
+- 必须通过场景展示的设定：平台遮蔽通过证据消失和人物反应展示。
+- 禁止集中说明的设定：异常根因和幕后组织。
+- 普通人 / 外部视角对照：平台工作人员只把异常当事故处理。
+- 读者本章必须理解的一条规则：异常会留下可被遮蔽的证据痕迹。
+
+## 本章名词预算
+
+- 新核心名词上限：1
+- 新次要名词上限：2
+- 必须复用的旧名词：thread_main_anomaly。
+- 本章不解释、只露面的名词：异常信号。
+- 本章必须让读者看懂的规则：异常证据可能被平台遮蔽。
+
+## 本章悬念推进合同
+
+- 旧问题：none。
+- 本章给出的新线索：异常证据和普通故障不一致。
+- 本章打碎的错误希望：单靠流程无法把风险隔离在外。
+- 本章部分解答：确认异常不是普通误报。
+- 本章新问题：谁在制造或遮蔽异常信号？
+- 悬念状态：opened
+
+## 本章语言记忆点
+
+- 本章金句：记录不是安全，只是危险留下的签名。
+- 本章梗 / 反差笑点：主角把恐惧说成流程异常。
+- 角色口头禅或标志动作：开始重复确认细节，手指敲桌。
+- 可截图传播的句子：没有记录的东西不一定不存在，只是还没轮到他害怕。
+- 禁止使用的平铺语气：禁止把异常规则写成百科说明。
+
 ## 伏笔：新开 / 推进 / 回收
 
 推进旧案信号。
@@ -486,7 +670,7 @@ def write_ready_idea_lab(repo: Path, idea: str) -> str:
     write(repo, f"{lab}/product_founder_review.md", f"# Product Founder Review: {idea}\n\nA has the clearest hook.\n")
     write(repo, f"{lab}/technical_lead_review.md", f"# Technical Lead Review: {idea}\n\nKeep rules small for three chapters.\n")
     write(repo, f"{lab}/qa_release_review.md", f"# QA Release Review: {idea}\n\nGate A needs protagonist agency evidence.\n")
-    write(repo, f"{lab}/codex_synthesis.md", IDEA_SYNTHESIS_READY.format(idea=idea))
+    write(repo, f"{lab}/codex_synthesis.md", idea_synthesis_ready(idea))
     write_agent_runs(repo, idea)
     write_agent_review_manifest(repo, idea)
     return lab
@@ -605,6 +789,7 @@ def write_core_setting_freeze(repo: Path, idea: str = "idea_core") -> None:
         "first_three_chapter_constraints": "A first three constraints.",
         "forbidden_changes": "A forbidden changes.",
         "open_questions_allowed": "A open questions.",
+        "initial_personality": INITIAL_PERSONALITY_READY,
     }
     evidence_paths = {
         "original_idea": f"{lab}/original_idea.md",
@@ -638,7 +823,9 @@ def write_core_setting_freeze(repo: Path, idea: str = "idea_core") -> None:
     write(
         repo,
         f"{lab}/core_setting_freeze.md",
-        "# Core Setting Freeze: idea_core\n\n## 世界观核心规则\n\nA worldview core.\n\n## 主角异常原因\n\nA anomaly cause.\n\n## 主角家属/亲密关系\n\nA family anchor.\n",
+        "# Core Setting Freeze: idea_core\n\n## 世界观核心规则\n\nA worldview core.\n\n## 主角异常原因\n\nA anomaly cause.\n\n## 主角家属/亲密关系\n\nA family anchor.\n\n## 主角初始人格合同\n\n```json\n"
+        + json.dumps(INITIAL_PERSONALITY_READY, ensure_ascii=False, indent=2)
+        + "\n```\n",
     )
     write(
         repo,
@@ -648,7 +835,34 @@ def write_core_setting_freeze(repo: Path, idea: str = "idea_core") -> None:
     write(
         repo,
         "bible/characters.yaml",
-        'characters:\n  - id: protagonist\n    name: "主角"\n    role: protagonist\n    anomaly_cause: "A anomaly cause."\n  - id: family_anchor\n    name: "主角家属/亲密关系"\n    role: family_or_intimate_anchor\n',
+        "characters:\n"
+        '  - id: protagonist\n    name: "主角"\n    role: protagonist\n    anomaly_cause: "A anomaly cause."\n'
+        "    initial_personality:\n"
+        "      essence: 主角相信只有把异常记录成证据，危险才会变得可控。\n"
+        "      opening_mask: 礼貌、冷静、像只是在执行流程。\n"
+        "      true_inner_state: 害怕失控，也害怕自己直觉判断出错。\n"
+        "      visible_traits:\n        - 谨慎\n        - 克制\n"
+        "      hidden_traits:\n        - 想证明自己判断正确\n        - 不愿承认自己在害怕\n"
+        "      default_strategy: 遇到危险先保存证据，再寻找可验证解释。\n"
+        "      stress_response: 越紧张越程序化，反复确认细节。\n"
+        "      emotional_leak: 手部动作变多，说话变短。\n"
+        "      speech_profile:\n"
+        "        rhythm: 短句、先结论后证据\n"
+        "        sharpness: 克制直给\n"
+        "        favorite_words:\n          - 确认\n          - 证据\n"
+        "        forbidden_tone:\n          - 突然热血\n          - 无故轻佻\n"
+        "      relationship_modes:\n"
+        "        stranger: 保持距离，先观察对方动机。\n"
+        "        ally: 给对方任务，也会默默兜底。\n"
+        "        authority: 礼貌服从表面流程，私下保留证据。\n"
+        "        intimate: 少说软话，用行动补偿。\n"
+        "      opening_flaw: 过度依赖可验证证据，回避直觉和情绪判断。\n"
+        "      opening_misbelief: 没有记录下来的东西就不值得相信。\n"
+        "      opening_desire: 把异常解释成可控事件。\n"
+        "      opening_fear: 自己失去判断力，连累亲近者。\n"
+        "      first_three_chapter_limits:\n        - 前三章不能突然完成核心成长。\n        - 前三章不能无事件推翻初始误信。\n"
+        "      change_seeds:\n        - 当流程无法保护他时，他会被迫承担不确定性。\n        - 当亲近者受伤时，他可能第一次越过规则。\n"
+        '  - id: family_anchor\n    name: "主角家属/亲密关系"\n    role: family_or_intimate_anchor\n',
     )
     write(
         repo,
@@ -665,6 +879,8 @@ def write_core_setting_freeze(repo: Path, idea: str = "idea_core") -> None:
     )
     write_ready_book_outline(repo, idea)
     write_ready_style_contract(repo, idea)
+    write_reader_promise_ready(repo)
+    write_reader_experience_derived(repo)
 
 
 def write_ready_book_outline(repo: Path, idea: str = "idea_core") -> None:
@@ -813,16 +1029,40 @@ def run_deepseek_module_with_response(
 
 
 def write_auxiliary_reviews(repo: Path, chapter: str, status: str = "CLEAR") -> None:
-    for name in ("ai_taste", "web_satisfaction", "retention_risk", "originality", "similarity_risk"):
+    review_names = [
+        "ai_taste",
+        "web_satisfaction",
+        "retention_risk",
+        "originality",
+        "similarity_risk",
+        "personality_drift",
+        "hook_retention",
+        "protagonist_charm",
+        "world_reveal",
+        "suspense_ladder",
+        "language_memorability",
+        "genre_fit",
+    ]
+    if int(chapter[-3:]) <= 3:
+        review_names.append("opening_retention")
+    for name in review_names:
         findings = "- Checked."
         if name == "originality":
             findings = "- 撞梗、换皮、设定名词、人物关系、句式、对白节奏、标志性表达风险已检查。"
         if name == "similarity_risk":
             findings = "- Similarity risk checked; no reskinned plot beats or copied protected expression."
+        if name in {"personality_drift", "hook_retention", "protagonist_charm", "world_reveal", "suspense_ladder", "language_memorability", "genre_fit", "opening_retention"}:
+            findings = "- Reader experience contract checked against the official chapter, brief, context, and derived ledgers."
+        metadata = ""
+        if name in {"personality_drift", "hook_retention", "protagonist_charm", "world_reveal", "suspense_ladder", "language_memorability", "genre_fit", "opening_retention"}:
+            volume = chapter[:3]
+            chapter_rel = f"chapters/{volume}/c{int(chapter[-3:]):03d}.md"
+            if (repo / chapter_rel).exists():
+                metadata = f"\nofficial_chapter_sha256: {file_sha(repo, chapter_rel)}\n"
         write(
             repo,
             f"reviews/{chapter}/{name}.md",
-            f"# {name}: {chapter}\n\nstatus: {status}\n\n## Findings\n\n{findings}\n",
+            f"# {name}: {chapter}\n\nstatus: {status}{metadata}\n## Findings\n\n{findings}\n",
         )
 
 
@@ -956,6 +1196,12 @@ def write_candidate_prompt_evidence(
         ("state/project_style_contract.json", "project_style_contract_json"),
         ("state/project_style_contract.md", "project_style_contract_markdown"),
         ("bible/style_guide.md", "style_guide"),
+        ("state/project_reader_promise.json", "project_reader_promise_json"),
+        ("state/project_reader_promise.md", "project_reader_promise_markdown"),
+        ("state/derived/personality/protagonist.json", "derived_personality"),
+        ("state/derived/protagonist_progression.json", "protagonist_progression"),
+        ("state/derived/world_reveal_ledger.json", "world_reveal_ledger"),
+        ("state/derived/suspense_ledger.json", "suspense_ledger"),
     ]
     if int(chapter[-3:]) >= 4:
         source_items.append(("state/derived/style_profile.json", "derived_style_profile"))
@@ -1155,6 +1401,191 @@ def write_human_events(repo: Path, count: int) -> None:
 
 
 class WorkflowGuardTests(unittest.TestCase):
+    def test_core_freeze_check_requires_initial_personality(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_core_setting_freeze(repo)
+            freeze_path = repo / "state/idea_lab/idea_core/core_setting_freeze.json"
+            freeze = json.loads(freeze_path.read_text(encoding="utf-8"))
+            freeze["fields"].pop("initial_personality")
+            freeze_path.write_text(json.dumps(freeze, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+            result = run(repo, "scripts/novel.py", "core-freeze-check")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("initial_personality", result.stdout + result.stderr)
+
+    def test_event_ledger_personality_delta_only_on_character_state_change(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_core_setting_freeze(repo)
+            write(repo, "chapters/v01/c001.md", "他第一次先伸手，而不是先按下录音。\n")
+            delta = {
+                "target_entity": "protagonist",
+                "durability": "durable",
+                "changed_fields": [
+                    {
+                        "field": "default_strategy",
+                        "from": "遇到危险先保存证据，再寻找可验证解释。",
+                        "to": "遇到危险先保护身边人，再补证据链。",
+                        "trigger_event": "亲近者因等待流程而受伤。",
+                        "evidence_quote": "他第一次先伸手，而不是先按下录音。",
+                    }
+                ],
+                "does_not_rewrite_initial_personality": True,
+            }
+
+            ok = run(
+                repo,
+                "scripts/novel.py",
+                "event",
+                "v01_c001",
+                "--type",
+                "character_state_change",
+                "--fact",
+                "主角策略被事件撬动。",
+                "--evidence-quote",
+                "他第一次先伸手，而不是先按下录音。",
+                "--consequence",
+                "当前人格合成出现 durable delta。",
+                "--personality-delta-json",
+                json.dumps(delta, ensure_ascii=False),
+            )
+            self.assertEqual(ok.returncode, 0, ok.stdout + ok.stderr)
+
+            bad = run(
+                repo,
+                "scripts/novel.py",
+                "event",
+                "v01_c001",
+                "--type",
+                "character_decision",
+                "--fact",
+                "非法把人格变化挂在普通选择上。",
+                "--evidence-quote",
+                "quote",
+                "--consequence",
+                "should fail",
+                "--personality-delta-json",
+                json.dumps(delta, ensure_ascii=False),
+            )
+            self.assertNotEqual(bad.returncode, 0)
+            self.assertIn("only allowed on character_state_change", bad.stderr)
+
+    def test_reader_promise_ready_required_before_context_pack(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_core_setting_freeze(repo)
+            write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF.format(chapter="v01_c001"))
+            draft = {
+                "schema_version": 1,
+                "status": "DRAFT",
+                "updated_at": "2000-01-01T00:00:00+00:00",
+                "primary_genre": "待定",
+                "source_boundary": "instruction_only_not_fact_source",
+            }
+            write(repo, "state/project_reader_promise.json", json.dumps(draft, ensure_ascii=False) + "\n")
+            self.assertEqual(run(repo, "scripts/build_derived_state.py").returncode, 0)
+
+            result = run(repo, "scripts/build_context_pack.py", "--chapter", "v01_c001", "--limit", "18000")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("reader promise", result.stderr)
+
+    def test_new_chapter_scaffolds_reader_experience_reviews(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            result = run(repo, "scripts/novel.py", "new-chapter", "v01_c002")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            for name in (
+                "opening_retention.md",
+                "personality_drift.md",
+                "hook_retention.md",
+                "protagonist_charm.md",
+                "world_reveal.md",
+                "suspense_ladder.md",
+                "language_memorability.md",
+                "genre_fit.md",
+            ):
+                self.assertTrue((repo / f"reviews/v01_c002/{name}").exists(), name)
+
+    def test_brief_check_rejects_missing_reader_contract_sections(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            brief = COMPLETE_BRIEF.format(chapter="v01_c001").split("## 本章留存合同", 1)[0]
+            write(repo, "outline/chapter_briefs/v01_c001.md", brief)
+
+            result = run(repo, "scripts/novel.py", "brief-check", "v01_c001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("本章留存合同", result.stdout)
+
+    def test_idea_select_requires_structured_initial_personality_in_synthesis(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            idea = "idea_no_personality_json"
+            lab = write_ready_idea_lab(repo, idea)
+            text = (repo / f"{lab}/codex_synthesis.md").read_text(encoding="utf-8")
+            write(repo, f"{lab}/codex_synthesis.md", text.replace(json.dumps(INITIAL_PERSONALITY_READY, ensure_ascii=False, separators=(",", ":")), "not structured"))
+            write_agent_runs(repo, idea)
+            write_agent_review_manifest(repo, idea)
+
+            result = run(repo, "scripts/record_idea_selection.py", "--id", idea, "--choice", "A")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("valid JSON", result.stderr)
+
+    def test_reader_test_rejects_repeated_fake_answers(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            answers = {question: "棋野" for question in ["主角想要什么？", "哪段最想继续看？", "哪段想跳过？", "世界观看得懂吗？", "最想知道下一章什么？", "会继续看第 4 章吗？"]}
+            write(repo, "tmp_reader_answers.json", json.dumps(answers, ensure_ascii=False) + "\n")
+
+            result = run(repo, "scripts/reader_test.py", "add", "--gate", "A", "--reader", "r1", "--target-reader", "悬疑读者", "--answers", "tmp_reader_answers.json")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("repeated placeholder", result.stderr)
+
+    def test_chapter_evidence_allows_reader_inputs_in_review_manifest(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_complete_chapter_evidence(repo, "v01_c001", 1)
+            manifest_path = repo / "reviews/v01_c001/review_manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            for rel_path in (
+                "state/project_reader_promise.json",
+                "state/project_reader_promise.md",
+                "state/derived/personality/protagonist.json",
+                "state/derived/protagonist_progression.json",
+                "state/derived/world_reveal_ledger.json",
+                "state/derived/suspense_ledger.json",
+            ):
+                manifest["deepseek"]["inputs"].append({"path": rel_path, "sha256": file_sha(repo, rel_path)})
+            write(repo, "reviews/v01_c001/review_manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
+
+            result = run(repo, "scripts/chapter_evidence.py", "--chapter", "v01_c001")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_reader_review_acceptance_requires_explicit_current_hash(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_complete_chapter_evidence(repo, "v01_c001", 1)
+            current_hash = file_sha(repo, "chapters/v01/c001.md")
+            write(
+                repo,
+                "reviews/v01_c001/genre_fit.md",
+                "# genre_fit: v01_c001\n\nstatus: ACCEPTED_BY_HUMAN\naccepted_at: 2000-01-01T00:00:00+00:00\naccepted_by: human\nreason: human accepted.\nreview_sha256: "
+                + current_hash
+                + "\n\n## Findings\n\n- accepted with hash in wrong field.\n",
+            )
+
+            result = run(repo, "scripts/chapter_evidence.py", "--chapter", "v01_c001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("human acceptance is missing or stale", result.stdout)
+
     def test_minimal_chapter_happy_path_closes_ship(self) -> None:
         with copy_repo() as temp:
             repo = temp
@@ -1169,7 +1600,7 @@ class WorkflowGuardTests(unittest.TestCase):
             write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF.format(chapter="v01_c001"))
 
             self.assertEqual(run(repo, "scripts/build_derived_state.py").returncode, 0)
-            context = run(repo, "scripts/build_context_pack.py", "--chapter", "v01_c001", "--limit", "12000")
+            context = run(repo, "scripts/build_context_pack.py", "--chapter", "v01_c001", "--limit", "18000")
             self.assertEqual(context.returncode, 0, context.stdout + context.stderr)
 
             subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True)
@@ -1592,7 +2023,7 @@ class WorkflowGuardTests(unittest.TestCase):
             manifest = {
                 "schema_version": 2,
                 "chapter": chapter,
-                "budget_chars": 12000,
+                "budget_chars": 18000,
                 "hard_max_chars": 48000,
                 "allow_truncated": False,
                 "pack_truncated": False,
@@ -1624,7 +2055,7 @@ class WorkflowGuardTests(unittest.TestCase):
             chapter = "v01_c001"
             write(repo, f"outline/chapter_briefs/{chapter}.md", COMPLETE_BRIEF.format(chapter=chapter))
             self.assertEqual(run(repo, "scripts/build_derived_state.py").returncode, 0)
-            build = run(repo, "scripts/build_context_pack.py", "--chapter", chapter, "--limit", "12000")
+            build = run(repo, "scripts/build_context_pack.py", "--chapter", chapter, "--limit", "18000")
             self.assertEqual(build.returncode, 0, build.stdout + build.stderr)
             manifest = json.loads((repo / f"state/context_pack/{chapter}.manifest.json").read_text(encoding="utf-8"))
             paths = {item["path"] for item in manifest["input_hashes"]}
@@ -1887,7 +2318,7 @@ class WorkflowGuardTests(unittest.TestCase):
             self.assertTrue((repo / "state/derived/context_quality/v01_c001.md").exists())
             quality = json.loads((repo / "state/derived/context_quality/v01_c001.json").read_text(encoding="utf-8"))
             self.assertEqual(quality["status"], "READY")
-            self.assertEqual(quality["budget_chars"], 12000)
+            self.assertEqual(quality["budget_chars"], 18000)
             quality_md = (repo / "state/derived/context_quality/v01_c001.md").read_text(encoding="utf-8")
             self.assertIn("# Context Quality Report: v01_c001", quality_md)
             self.assertIn("status: READY", quality_md)
@@ -2211,7 +2642,7 @@ class WorkflowGuardTests(unittest.TestCase):
         with copy_repo() as temp:
             repo = temp
             write_core_setting_freeze(repo, "idea_changed")
-            write(repo, "state/idea_lab/idea_changed/codex_synthesis.md", IDEA_SYNTHESIS_READY.format(idea="idea_changed") + "\nchanged\n")
+            write(repo, "state/idea_lab/idea_changed/codex_synthesis.md", idea_synthesis_ready("idea_changed") + "\nchanged\n")
 
             result = run(repo, "scripts/novel.py", "core-freeze-check")
 
@@ -3550,7 +3981,7 @@ print("OK: stub deepseek idea")
             )
             write(repo, "outline/chapter_briefs/v01_c001.md", brief)
 
-            result = run(repo, "scripts/build_context_pack.py", "--chapter", "v01_c001", "--limit", "12000")
+            result = run(repo, "scripts/build_context_pack.py", "--chapter", "v01_c001", "--limit", "18000")
 
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             pack = (repo / "state/context_pack/v01_c001.md").read_text(encoding="utf-8")
@@ -3903,7 +4334,7 @@ print("OK: stub deepseek idea")
             self.assertIn("义眼成为关键调查装备", (repo / "state/derived/current_objects.yaml").read_text(encoding="utf-8"))
             self.assertIn("义眼只能捕捉", (repo / "state/derived/current_abilities.yaml").read_text(encoding="utf-8"))
 
-            context = run(repo, "scripts/build_context_pack.py", "--chapter", "v01_c001", "--limit", "10000")
+            context = run(repo, "scripts/build_context_pack.py", "--chapter", "v01_c001", "--limit", "18000")
             self.assertEqual(context.returncode, 0, context.stdout + context.stderr)
             pack = (repo / "state/context_pack/v01_c001.md").read_text(encoding="utf-8")
             self.assertIn("开书前核心设定冻结", pack)
@@ -3964,7 +4395,7 @@ print("OK: stub deepseek idea")
             self.assertEqual(brief_pack.returncode, 0, brief_pack.stdout + brief_pack.stderr)
             self.assertIn("旧硬盘", (repo / "state/context_pack/v01_c002_brief.md").read_text(encoding="utf-8"))
 
-            context = run(repo, "scripts/build_context_pack.py", "--chapter", "v01_c002", "--limit", "10000")
+            context = run(repo, "scripts/build_context_pack.py", "--chapter", "v01_c002", "--limit", "18000")
             self.assertEqual(context.returncode, 0, context.stdout + context.stderr)
             pack = (repo / "state/context_pack/v01_c002.md").read_text(encoding="utf-8")
             manifest = json.loads((repo / "state/context_pack/v01_c002.manifest.json").read_text(encoding="utf-8"))

@@ -83,7 +83,9 @@ def step_defs_for(mode: str, chapter: str, gate: str) -> list[tuple[str, list[st
         ("volume-outline-check", ["volume-outline-check", "--volume", "v01"]),
         ("style-contract-check", ["style-contract-check"]),
         ("style-profile-check", ["style-profile-check"]),
+        ("reader-promise-check", ["reader-promise-check", "--require-ready"]),
         ("brief-check", ["brief-check", chapter]),
+        ("reader-experience-check", ["reader-experience-check", chapter]),
         ("style-check", ["style-check", chapter]),
         ("series-style-check", ["series-style-check", chapter]),
         ("evidence", ["evidence", chapter]),
@@ -100,6 +102,7 @@ def step_defs_for(mode: str, chapter: str, gate: str) -> list[tuple[str, list[st
     if mode == "template":
         return [
             ("check", ["check"]),
+            ("reader-promise-check", ["reader-promise-check"]),
             ("self-test", ["self-test"]),
             ("workflow-smoke", ["workflow-smoke"]),
             ("deepseek-preflight", ["deepseek-preflight", "--no-live"]),
@@ -162,6 +165,7 @@ def render_human_report(state: dict, steps: list[StepResult], chapter: str, gate
         f"- ending_direction: {state.get('contracts', {}).get('ending_direction', 'unknown')}",
         f"- style_contract: {state.get('contracts', {}).get('style_contract', 'unknown')}",
         f"- style_profile: {state.get('contracts', {}).get('style_profile', 'unknown')}",
+        f"- reader_promise: {state.get('contracts', {}).get('reader_promise', 'unknown')}",
         "",
         "## Checks",
         "",

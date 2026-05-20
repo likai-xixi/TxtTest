@@ -7,7 +7,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
-from _common import ROOT, chapter_number, now_iso, write_blocked_by_locks, write_text
+from _common import ROOT, chapter_number, now_iso, read_text, write_blocked_by_locks, write_text
 from brief_contract import (
     COST_CONSEQUENCE_CONTRACT_SECTIONS,
     PROGRESS_CONTRACT_SECTIONS,
@@ -21,6 +21,12 @@ from brief_contract import (
 from context_governance import rel
 from element_context import markdown_sections, section_body
 from validate_event_ledger import validate
+from reader_personality_contracts import (
+    READER_BRIEF_REQUIRED_SECTIONS,
+    file_ref,
+    protagonist_initial_personality,
+    validate_initial_personality,
+)
 
 try:
     import yaml
@@ -82,6 +88,10 @@ def reset_generated_dirs() -> None:
         DERIVED / "arcs",
         DERIVED / "chapter_anchors",
         DERIVED / "pacing",
+        DERIVED / "personality",
+        DERIVED / "suspense",
+        DERIVED / "world_reveal",
+        DERIVED / "progression",
     ]:
         if path.exists():
             shutil.rmtree(path)
@@ -446,6 +456,207 @@ def build_progress_and_aftermath() -> None:
     )
 
 
+def event_ref(event: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "event_id": event.get("event_id", ""),
+        "chapter": event.get("chapter", ""),
+        "type": event.get("type", ""),
+        "fact": event.get("fact", ""),
+        "importance": event.get("importance", "P2"),
+    }
+
+
+def build_personality_state(events: list[dict[str, Any]]) -> None:
+    initial, source_refs = protagonist_initial_personality()
+    errors = validate_initial_personality(initial, prefix="initial_personality")
+    current = json.loads(json.dumps(initial, ensure_ascii=False)) if initial else {}
+    deltas: list[dict[str, Any]] = []
+    for event in events:
+        if event.get("type") != "character_state_change":
+            continue
+        delta = event.get("personality_delta")
+        if not isinstance(delta, dict):
+            continue
+        if delta.get("target_entity") != "protagonist":
+            continue
+        applied_fields: list[dict[str, Any]] = []
+        for item in delta.get("changed_fields", []):
+            if not isinstance(item, dict):
+                continue
+            field = str(item.get("field", ""))
+            if field and field != "other":
+                current[field] = item.get("to", current.get(field, ""))
+            applied_fields.append(
+                {
+                    "field": field,
+                    "from": item.get("from", ""),
+                    "to": item.get("to", ""),
+                    "trigger_event": item.get("trigger_event", ""),
+                    "evidence_quote": item.get("evidence_quote", ""),
+                }
+            )
+        deltas.append(
+            {
+                "event": event_ref(event),
+                "durability": delta.get("durability", ""),
+                "changed_fields": applied_fields,
+                "does_not_rewrite_initial_personality": delta.get("does_not_rewrite_initial_personality") is True,
+            }
+        )
+    payload = {
+        "schema_version": 1,
+        "generated_at": now_iso(),
+        "entity_id": "protagonist",
+        "status": "READY" if not errors else "NOT_READY",
+        "initial_personality": initial,
+        "current_personality": current,
+        "personality_deltas": deltas,
+        "source_refs": source_refs + [file_ref(ROOT / "state" / "event_ledger.jsonl", "event_ledger")],
+        "blockers": errors,
+    }
+    write_text(DERIVED / "personality" / "protagonist.json", json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
+
+
+def reader_section_body(path: Path, aliases: tuple[str, str]) -> str:
+    return section_body(markdown_sections(read_text(path)), aliases)
+
+
+def labeled_value(body: str, label: str) -> str:
+    for raw in body.splitlines():
+        line = raw.strip().lstrip("-*+ ").strip()
+        if not line:
+            continue
+        if "：" in line:
+            key, value = line.split("：", 1)
+        elif ":" in line:
+            key, value = line.split(":", 1)
+        else:
+            continue
+        if key.strip() == label:
+            return value.strip()
+    return ""
+
+
+def build_reader_experience_ledgers() -> None:
+    briefs = sorted((ROOT / "outline" / "chapter_briefs").glob("v*_c*.md"), key=lambda item: (item.stem[:3], chapter_number(item.stem)))
+    progression_entries: list[dict[str, Any]] = []
+    concept_entries: list[dict[str, Any]] = []
+    world_entries: list[dict[str, Any]] = []
+    suspense_threads: dict[str, dict[str, Any]] = {}
+    blockers: list[str] = []
+    warnings: list[str] = []
+    for path in briefs:
+        chapter = path.stem
+        sections = markdown_sections(read_text(path))
+        charm = section_body(sections, ("本章主角魅力合同", "Protagonist Charm Contract"))
+        concept = section_body(sections, ("本章名词预算", "Concept Budget"))
+        world = section_body(sections, ("本章世界观展示合同", "World Reveal Contract"))
+        suspense = section_body(sections, ("本章悬念推进合同", "Suspense Progression Contract"))
+        progression_entries.append(
+            {
+                "chapter": chapter,
+                "power_delta": labeled_value(charm, "金手指 / 特殊资源本章表现") or "none",
+                "status_delta": "unknown",
+                "knowledge_delta": labeled_value(charm, "能力、地位、认知或关系的刻度变化") or "none",
+                "relationship_delta": "unknown",
+                "goldfinger_delta": labeled_value(charm, "金手指 / 特殊资源本章表现") or "none",
+                "reader_reward": labeled_value(charm, "本章让读者喜欢主角的瞬间") or "",
+            }
+        )
+        concept_entries.append(
+            {
+                "chapter": chapter,
+                "core_term_limit": labeled_value(concept, "新核心名词上限") or "1",
+                "secondary_term_limit": labeled_value(concept, "新次要名词上限") or "2",
+                "must_reuse_terms": labeled_value(concept, "必须复用的旧名词"),
+                "cameo_terms": labeled_value(concept, "本章不解释、只露面的名词"),
+                "reader_rule": labeled_value(concept, "本章必须让读者看懂的规则"),
+            }
+        )
+        world_entries.append(
+            {
+                "chapter": chapter,
+                "core_terms": labeled_value(world, "本章允许新增核心名词"),
+                "secondary_terms": labeled_value(world, "本章允许新增次要名词"),
+                "scene_bound_reveal": labeled_value(world, "必须通过场景展示的设定"),
+                "forbidden_infodump": labeled_value(world, "禁止集中说明的设定"),
+                "external_view": labeled_value(world, "普通人 / 外部视角对照"),
+                "reader_rule": labeled_value(world, "读者本章必须理解的一条规则"),
+            }
+        )
+        old_question = labeled_value(suspense, "旧问题") or f"{chapter}_suspense"
+        status = labeled_value(suspense, "悬念状态") or "stalled"
+        thread_id = old_question if old_question.lower() not in {"none", "无"} else f"{chapter}_new_question"
+        item = suspense_threads.setdefault(
+            thread_id,
+            {
+                "thread_id": thread_id,
+                "question": old_question,
+                "opened_chapter": chapter,
+                "latest_status": status,
+                "last_progress_chapter": chapter if status in {"advanced", "partially_answered", "paid_off", "escalated", "opened"} else "",
+                "moves": [],
+            },
+        )
+        item["latest_status"] = status
+        if status in {"advanced", "partially_answered", "paid_off", "escalated", "opened"}:
+            item["last_progress_chapter"] = chapter
+        item["moves"].append(
+            {
+                "chapter": chapter,
+                "new_clue": labeled_value(suspense, "本章给出的新线索"),
+                "false_hope_broken": labeled_value(suspense, "本章打碎的错误希望"),
+                "partial_answer": labeled_value(suspense, "本章部分解答"),
+                "new_question": labeled_value(suspense, "本章新问题"),
+                "status": status,
+            }
+        )
+
+    for index in range(0, max(0, len(progression_entries) - 2)):
+        window = progression_entries[index : index + 3]
+        values = " ".join(str(item.get("knowledge_delta", "")) + " " + str(item.get("goldfinger_delta", "")) for item in window)
+        if "medium" not in values and "major" not in values and "upgraded" not in values and "backfired" not in values:
+            blockers.append(f"3 章窗口没有 medium+ 主角刻度变化: {window[0]['chapter']}..{window[-1]['chapter']}")
+
+    for thread in suspense_threads.values():
+        moves = thread.get("moves", [])
+        stalled_run: list[str] = []
+        for move in moves:
+            if move.get("status") in {"stalled", "opened"}:
+                stalled_run.append(move["chapter"])
+            else:
+                if len(stalled_run) >= 3:
+                    blockers.append(f"悬念连续 3 章无实质推进: {thread['thread_id']} {stalled_run[0]}..{stalled_run[-1]}")
+                stalled_run = []
+        if len(stalled_run) >= 3:
+            blockers.append(f"悬念连续 3 章无实质推进: {thread['thread_id']} {stalled_run[0]}..{stalled_run[-1]}")
+
+    write_text(
+        DERIVED / "protagonist_progression.json",
+        json.dumps(
+            {
+                "schema_version": 1,
+                "generated_at": now_iso(),
+                "entries": progression_entries,
+                "blockers": blockers,
+                "warnings": warnings,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+    )
+    write_text(DERIVED / "concept_index.json", json.dumps({"schema_version": 1, "generated_at": now_iso(), "entries": concept_entries}, ensure_ascii=False, indent=2) + "\n")
+    write_text(
+        DERIVED / "world_reveal_ledger.json",
+        json.dumps({"schema_version": 1, "generated_at": now_iso(), "entries": world_entries, "blockers": [], "warnings": []}, ensure_ascii=False, indent=2) + "\n",
+    )
+    write_text(
+        DERIVED / "suspense_ledger.json",
+        json.dumps({"schema_version": 1, "generated_at": now_iso(), "threads": list(suspense_threads.values()), "blockers": blockers, "warnings": warnings}, ensure_ascii=False, indent=2) + "\n",
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Build derived state from event ledger.")
     parser.add_argument("--ledger", default=str(LEDGER))
@@ -483,6 +694,8 @@ def main() -> int:
             "chapter_anchors": "state/derived/chapter_anchors/",
             "pacing": "state/derived/pacing/",
             "context_quality": "state/derived/context_quality/",
+            "personality": "state/derived/personality/",
+            "reader_experience": "state/derived/protagonist_progression.json, state/derived/suspense_ledger.json, state/derived/world_reveal_ledger.json",
         },
     }
 
@@ -499,6 +712,8 @@ def main() -> int:
     build_arcs(events)
     build_chapter_anchors(events)
     build_progress_and_aftermath()
+    build_personality_state(events)
+    build_reader_experience_ledgers()
 
     write_text(DERIVED / "current_state.yaml", dump_data(current_state))
     write_text(DERIVED / "latest_events.md", "\n".join(latest_events) + "\n")

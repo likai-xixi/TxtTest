@@ -71,8 +71,8 @@ DEFAULT_NEEDED = {
 }
 
 DEFAULT_ASSESSMENT = {
-    "A": None,
-    "B": None,
+    "A": "state/gates/gate_a_reader_experience.md",
+    "B": "state/gates/gate_b_reader_experience.md",
     "C": "state/gates/gate_c_assessment.md",
     "E": "state/gates/gate_e_300w_assessment.md",
     "F": "state/gates/gate_f_context_governance.md",

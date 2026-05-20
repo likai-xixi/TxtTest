@@ -41,6 +41,7 @@ def main() -> int:
     parser.add_argument("--anchor-carried-item", action="append", default=[])
     parser.add_argument("--anchor-unfinished-action", default="")
     parser.add_argument("--anchor-next-required-continuity", default="")
+    parser.add_argument("--personality-delta-json", default="")
     args = parser.parse_args()
 
     try:
@@ -70,6 +71,7 @@ def main() -> int:
         command.extend(["--tag", str(tag)])
     append_if(command, "--thread-id", args.thread_id)
     append_if(command, "--importance", args.importance or card.get("importance"))
+    append_if(command, "--personality-delta-json", args.personality_delta_json or card.get("personality_delta_json"))
     for value in args.anchor_present_character:
         command.extend(["--anchor-present-character", value])
     for value in args.anchor_carried_item:

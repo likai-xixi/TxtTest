@@ -10,7 +10,51 @@
     "selected_direction": { "enum": ["A", "B", "C", "Mixed"] },
     "human_approved": { "const": true },
     "verified_by": { "const": "human" },
-    "fields": { "type": "object" },
+    "fields": {
+      "type": "object",
+      "required": ["initial_personality"],
+      "properties": {
+        "initial_personality": {
+          "type": "object",
+          "required": [
+            "essence",
+            "opening_mask",
+            "true_inner_state",
+            "visible_traits",
+            "hidden_traits",
+            "default_strategy",
+            "stress_response",
+            "emotional_leak",
+            "speech_profile",
+            "relationship_modes",
+            "opening_flaw",
+            "opening_misbelief",
+            "opening_desire",
+            "opening_fear",
+            "first_three_chapter_limits",
+            "change_seeds"
+          ],
+          "properties": {
+            "essence": { "type": "string", "minLength": 1 },
+            "opening_mask": { "type": "string", "minLength": 1 },
+            "true_inner_state": { "type": "string", "minLength": 1 },
+            "visible_traits": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+            "hidden_traits": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+            "default_strategy": { "type": "string", "minLength": 1 },
+            "stress_response": { "type": "string", "minLength": 1 },
+            "emotional_leak": { "type": "string", "minLength": 1 },
+            "speech_profile": { "type": "object" },
+            "relationship_modes": { "type": "object" },
+            "opening_flaw": { "type": "string", "minLength": 1 },
+            "opening_misbelief": { "type": "string", "minLength": 1 },
+            "opening_desire": { "type": "string", "minLength": 1 },
+            "opening_fear": { "type": "string", "minLength": 1 },
+            "first_three_chapter_limits": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+            "change_seeds": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+          }
+        }
+      }
+    },
     "evidence": { "type": "object" },
     "writes_canon": { "const": false },
     "writes_chapters": { "const": false },

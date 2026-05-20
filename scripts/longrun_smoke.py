@@ -72,6 +72,31 @@ def seed(repo: Path, chapters: int) -> str:
         )
     write(repo / "state/event_ledger.jsonl", "\n".join(json.dumps(item, ensure_ascii=False) for item in events) + "\n")
     write(repo / "bible/rules.md", "# Rules\n\nNo placeholders in synthetic longrun smoke.\n")
+    reader_promise = {
+        "schema_version": 1,
+        "status": "READY",
+        "updated_at": "2000-01-01T00:00:00+00:00",
+        "primary_genre": "悬疑",
+        "secondary_genre": "成长",
+        "target_reader": "喜欢强钩子和角色推进的读者",
+        "platform_expectation": "前三章明确追读问题",
+        "core_hook": "每章用异常推进主角选择",
+        "main_reader_rewards": ["悬念推进", "主角主动改变局面"],
+        "non_promises": ["不承诺纯设定百科"],
+        "first_chapter_must_deliver": "异常和主角选择",
+        "second_chapter_must_escalate": "第一章问题升级",
+        "third_chapter_must_hook": "小兑现和更大问题",
+        "three_chapter_main_question": "异常从何而来",
+        "three_chapter_protagonist_specialness": "主角用独特策略改变局面",
+        "per_chapter_must_have": ["主动选择", "章末点击理由"],
+        "per_chapter_must_not_only_have": ["流程记录"],
+        "ending_hook_priority": ["新问题", "代价"],
+        "reward_mix": {"爽点": "中", "悬念": "高", "笑点": "低", "情绪点": "中"},
+        "genre_mismatch_red_lines": ["不得只有设定说明"],
+        "source_boundary": "instruction_only_not_fact_source",
+    }
+    write(repo / "state/project_reader_promise.json", json.dumps(reader_promise, ensure_ascii=False, indent=2) + "\n")
+    write(repo / "state/project_reader_promise.md", "# Project Reader Promise\n\nstatus: READY\nsource_boundary: instruction_only_not_fact_source\n")
     target = f"v01_c{chapters:03d}"
     pack = "# Context Pack\n\n" + "\n".join(item["event_id"] for item in events[:-2]) + "\n"
     pack_rel = f"state/context_pack/{target}.md"
@@ -103,6 +128,25 @@ def seed(repo: Path, chapters: int) -> str:
         },
         {"id": "authorized_elements_full", "body_chars": 20, "sources": [{"path": f"outline/chapter_briefs/{target}.md"}]},
         {"id": "rules_and_boundaries", "body_chars": 20, "sources": [{"path": "bible/rules.md"}]},
+        {
+            "id": "reader_promise",
+            "body_chars": 20,
+            "included_reason": "reader_promise_instruction_not_fact_source",
+            "sources": [
+                {"path": "state/project_reader_promise.json", "note": "instruction_not_fact_source"},
+                {"path": "state/project_reader_promise.md", "note": "instruction_not_fact_source"},
+            ],
+        },
+        {
+            "id": "reader_experience_state",
+            "body_chars": 20,
+            "sources": [
+                {"path": "state/derived/personality/protagonist.json"},
+                {"path": "state/derived/protagonist_progression.json"},
+                {"path": "state/derived/world_reveal_ledger.json"},
+                {"path": "state/derived/suspense_ledger.json"},
+            ],
+        },
         {"id": "recent_events", "body_chars": len(pack), "sources": [{"event_id": item["event_id"]} for item in events[:-2]]},
     ]
     manifest = {

@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from _common import ROOT
+from reader_personality_contracts import validate_personality_delta
 
 
 ALLOWED_TYPES = {
@@ -39,6 +40,7 @@ OPTIONAL = {
     "importance",
     "tags",
     "anchor",
+    "personality_delta",
 }
 IMPORTANCE_LEVELS = {"P0", "P1", "P2", "P3"}
 ANCHOR_REQUIRED = {
@@ -162,6 +164,10 @@ def validate(path: Path) -> list[str]:
                         errors.append(f"line {line_no}: anchor.{field} must be a list of non-empty strings")
         elif anchor is not None:
             errors.append(f"line {line_no}: anchor is only allowed on chapter_anchor events")
+
+        personality_delta = entry.get("personality_delta")
+        if personality_delta is not None:
+            errors.extend(f"line {line_no}: {item}" for item in validate_personality_delta(personality_delta, str(event_type)))
 
         quote = str(entry.get("evidence_quote", "")).strip()
         if chapter_valid and quote:

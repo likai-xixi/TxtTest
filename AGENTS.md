@@ -7,11 +7,13 @@
 1. 先跑 3 章轻量试点；3 章前不判断 300 万字可行性。
 2. 开正文前必须先完成 DeepSeek + `product_founder` + `technical_lead` + `qa_release` 的开书实验，并锁定核心设定冻结证据。
 3. 核心设定冻结至少固定：世界观核心规则、世界观硬边界、主角异常原因、主角家属/亲密关系、家属剧情功能与风险、前三章约束、不可违背红线、仍可开放的问题。
-4. AI 不靠记忆写长篇，只读 `state/context_pack/{chapter}.md` 和当章 brief。
-5. Codex 与 DeepSeek 可以同时生成候选稿；DeepSeek 直出稿经人类选择并由 Codex 记录 provenance 后，可作为正式章。
-6. Codex 与 DeepSeek 必须独立审查，互不读取对方报告。
-7. 新元素按 L0-L4 分级：L0 场景细节和 L1 一次性线索可自由出现；L2 只能作为伏笔或提案；L3 长期机制必须 brief 授权；L4 核心设定必须人类裁决。
-8. `chapters/`、`bible/canon.md`、`state/event_ledger.jsonl`、Gate 通过权，只能由 Codex 在规则内落盘，并由人类最终裁决。
+4. 核心设定冻结还必须固定主角 `initial_personality`。第 1 章之前，主角人格只来自核心冻结和 `bible/characters.yaml` 镜像；第 1 章之后，当前人格只能由人类确认的 `character_state_change + personality_delta` 改变。
+5. 开正文前必须落 `state/project_reader_promise.json` 为 `READY`。Reader Promise 是写作/审稿指令源，不是 canon，不进 event ledger。
+6. AI 不靠记忆写长篇，只读 `state/context_pack/{chapter}.md` 和当章 brief。
+7. Codex 与 DeepSeek 可以同时生成候选稿；DeepSeek 直出稿经人类选择并由 Codex 记录 provenance 后，可作为正式章。
+8. Codex 与 DeepSeek 必须独立审查，互不读取对方报告。
+9. 新元素按 L0-L4 分级：L0 场景细节和 L1 一次性线索可自由出现；L2 只能作为伏笔或提案；L3 长期机制必须 brief 授权；L4 核心设定必须人类裁决。
+10. `chapters/`、`bible/canon.md`、`state/event_ledger.jsonl`、Gate 通过权，只能由 Codex 在规则内落盘，并由人类最终裁决。
 
 ## 统一入口
 
@@ -53,6 +55,7 @@ python scripts/novel.py fact-card-check v01_c001
 - `收章 v01_c001`：Codex 自行执行候选选择记录、正式落章 provenance、Codex review manifest、DeepSeek review、continuity、model_disagreement、evidence 检查；缺人类裁决或 event ledger 事实时再问用户。
 - `总编台` / `下一步`：运行 `python scripts/novel.py desk`，只给用户一句当前卡点和可选口令。
 - `查状态`：运行 `python scripts/novel.py status`，用一句话告诉用户现在卡在哪里。
+- `锁读者承诺` / `读者承诺`：运行 `python scripts/novel.py reader-promise-start` 或 `reader-promise-check`，引导人类补全后用 `reader-promise-land --ready` 落为 READY。
 
 回复用户时优先使用这些口令，不要把完整脚本链条甩给用户。
 
@@ -89,7 +92,7 @@ python scripts/novel.py self-test
 
 ## 每章流程
 
-每章 brief 必须声明：`上章章末锚点`、`本章开场落点`、`场景承接说明`、`主线牵引档位`、`外部压力档位`、`本章继承变化`、`本章节奏用途`、`节奏说明`、`本章进展契约`、`本章代价与后果契约`、`本章解决边界`、`本章可用道具 IDs`、`本章可用技能 IDs`、`本章允许新增元素`、`本章禁止临场解决`。`brief_check` 硬查字段完整、场景承接、档位合法、进展契约、代价后果和解决边界；`pacing_check` 硬查跨章连续低推进、连续小事、高推进后无消化，并保留过热预警。`build_derived_state` 必须生成 `state/derived/pacing/progress_index.json` 和 `state/derived/pacing/aftermath_obligations.json`；`build_context_pack` 只能按这些 ID 拉取完整道具/技能条目，并带入上一章人类确认的章末锚点和当前后果承接债务；未授权的新道具、新能力或新规则不得成为本章破局钥匙。Ship evidence 必须核验 brief 承诺的 `最低落账事件` 已进入 `state/event_ledger.jsonl`。
+每章 brief 必须声明：`上章章末锚点`、`本章开场落点`、`场景承接说明`、`主线牵引档位`、`外部压力档位`、`本章继承变化`、`本章节奏用途`、`节奏说明`、`本章进展契约`、`本章代价与后果契约`、`本章解决边界`、`本章可用道具 IDs`、`本章可用技能 IDs`、`本章允许新增元素`、`本章禁止临场解决`、`本章留存合同`、`本章主角魅力合同`、`本章初始人格挑战合同`、`本章世界观展示合同`、`本章名词预算`、`本章悬念推进合同`、`本章语言记忆点`。`brief_check` 硬查字段完整、场景承接、档位合法、进展契约、代价后果、解决边界和读者体验合同；`pacing_check` 硬查跨章连续低推进、连续小事、高推进后无消化，并保留过热预警。`build_derived_state` 必须生成 `state/derived/pacing/progress_index.json`、`state/derived/pacing/aftermath_obligations.json`、`state/derived/personality/protagonist.json`、`state/derived/protagonist_progression.json`、`state/derived/world_reveal_ledger.json` 和 `state/derived/suspense_ledger.json`；`build_context_pack` 只能按这些 ID 拉取完整道具/技能条目，并带入上一章人类确认的章末锚点、当前后果承接债务、当前人格、读者承诺、悬念和世界观预算；未授权的新道具、新能力或新规则不得成为本章破局钥匙。Ship evidence 必须核验 brief 承诺的 `最低落账事件` 已进入 `state/event_ledger.jsonl`，且新增专项 review 不缺失、不 stale、不 BLOCKED。
 
 ```text
 1. python scripts/novel.py brief-precheck {chapter}
@@ -114,6 +117,7 @@ python scripts/novel.py self-test
 ```
 
 Ship close 必须具备：结构化候选选择、官方正文落章 provenance、Codex/DeepSeek 审查、review manifest、model_disagreement、无 P0/P1 continuity、辅助审查、`style-check` 与 post-warmup `series-style-check`；若直采 DeepSeek，必须证明人类已选择 DeepSeek 且 landing 记录为 `deepseek_direct_adoption`。
+Ship close 还必须具备：前三章 `opening_retention.md`，全章 `personality_drift.md`、`hook_retention.md`、`protagonist_charm.md`、`world_reveal.md`、`suspense_ladder.md`、`language_memorability.md`、`genre_fit.md`。状态只接受 `CLEAR` 或带当前 official chapter hash 的 `ACCEPTED_BY_HUMAN`；若正文发生人格变化，必须有 `character_state_change` 事件和合法 `personality_delta`。
 
 跨章文风与系列感：前三章是 warmup；第 4 章起必须有 `reviews/{chapter}/series_style.json`；第 4-5 章允许 `WARNING` 作为人工观察期，第 6 章起 Ship evidence 只接受 `READY` 或 `ACCEPTED_BY_HUMAN`。可选 DeepSeek 独立文风审查由 `deepseek-style-review` 生成，若本章使用 `series-style-check --require-deepseek`，缺失或过期的 DeepSeek 文风审查必须阻断收章。
 

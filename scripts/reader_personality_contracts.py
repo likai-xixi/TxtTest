@@ -1,0 +1,516 @@
+from __future__ import annotations
+
+import hashlib
+import json
+from pathlib import Path
+from typing import Any
+
+from _common import ROOT, chapter_number, now_iso, read_json, read_text, write_json, write_text
+
+try:
+    import yaml
+except ImportError:  # pragma: no cover
+    yaml = None
+
+
+PLACEHOLDER_MARKERS = ("待定", "待填", "待评", "待生成", "待人类裁决", "TODO", "TBD", "placeholder")
+
+INITIAL_PERSONALITY_REQUIRED_FIELDS = (
+    "essence",
+    "opening_mask",
+    "true_inner_state",
+    "visible_traits",
+    "hidden_traits",
+    "default_strategy",
+    "stress_response",
+    "emotional_leak",
+    "speech_profile",
+    "relationship_modes",
+    "opening_flaw",
+    "opening_misbelief",
+    "opening_desire",
+    "opening_fear",
+    "first_three_chapter_limits",
+    "change_seeds",
+)
+
+INITIAL_PERSONALITY_LIST_FIELDS = (
+    "visible_traits",
+    "hidden_traits",
+    "first_three_chapter_limits",
+    "change_seeds",
+)
+INITIAL_PERSONALITY_OBJECT_FIELDS = ("speech_profile", "relationship_modes")
+
+READER_PROMISE_JSON = ROOT / "state" / "project_reader_promise.json"
+READER_PROMISE_MD = ROOT / "state" / "project_reader_promise.md"
+READER_PROMISE_TEMPLATE = ROOT / "templates" / "reader_promise.md"
+
+READER_PROMISE_REQUIRED_FIELDS = (
+    "primary_genre",
+    "secondary_genre",
+    "target_reader",
+    "platform_expectation",
+    "core_hook",
+    "main_reader_rewards",
+    "non_promises",
+    "first_chapter_must_deliver",
+    "second_chapter_must_escalate",
+    "third_chapter_must_hook",
+    "three_chapter_main_question",
+    "three_chapter_protagonist_specialness",
+    "per_chapter_must_have",
+    "per_chapter_must_not_only_have",
+    "ending_hook_priority",
+    "reward_mix",
+    "genre_mismatch_red_lines",
+)
+
+READER_BRIEF_REQUIRED_SECTIONS = (
+    ("本章留存合同", "Reader Retention Contract"),
+    ("本章主角魅力合同", "Protagonist Charm Contract"),
+    ("本章初始人格挑战合同", "Initial Personality Challenge Contract"),
+    ("本章世界观展示合同", "World Reveal Contract"),
+    ("本章名词预算", "Concept Budget"),
+    ("本章悬念推进合同", "Suspense Progression Contract"),
+    ("本章语言记忆点", "Language Memorability Contract"),
+)
+READER_BRIEF_REQUIRED_LABELS = {
+    "本章留存合同": (
+        "第一屏钩子",
+        "本章核心问题",
+        "本章读者期待",
+        "本章中段反转 / 加压",
+        "本章小兑现",
+        "本章章末钩子",
+        "下一章点击理由",
+    ),
+    "本章主角魅力合同": (
+        "主角本章主动目标",
+        "主角本章过人之处",
+        "主角本章弱点 / 误判 / 上头点",
+        "金手指 / 特殊资源本章表现",
+        "能力、地位、认知或关系的刻度变化",
+        "本章让读者喜欢主角的瞬间",
+    ),
+    "本章初始人格挑战合同": (
+        "是否挑战初始人格",
+        "被挑战字段",
+        "挑战方式",
+        "本章是否形成人格变化",
+        "若 durable，最低落账事件",
+        "前三章限制确认",
+    ),
+    "本章世界观展示合同": (
+        "本章允许新增核心名词",
+        "本章允许新增次要名词",
+        "必须通过场景展示的设定",
+        "禁止集中说明的设定",
+        "普通人 / 外部视角对照",
+        "读者本章必须理解的一条规则",
+    ),
+    "本章名词预算": (
+        "新核心名词上限",
+        "新次要名词上限",
+        "必须复用的旧名词",
+        "本章不解释、只露面的名词",
+        "本章必须让读者看懂的规则",
+    ),
+    "本章悬念推进合同": (
+        "旧问题",
+        "本章给出的新线索",
+        "本章打碎的错误希望",
+        "本章部分解答",
+        "本章新问题",
+        "悬念状态",
+    ),
+    "本章语言记忆点": (
+        "本章金句",
+        "本章梗 / 反差笑点",
+        "角色口头禅或标志动作",
+        "可截图传播的句子",
+        "禁止使用的平铺语气",
+    ),
+}
+
+OPENING_RETENTION_REVIEW = "opening_retention.md"
+READER_EXPERIENCE_REVIEWS = (
+    "personality_drift.md",
+    "hook_retention.md",
+    "protagonist_charm.md",
+    "world_reveal.md",
+    "suspense_ladder.md",
+    "language_memorability.md",
+    "genre_fit.md",
+)
+ALL_READER_REVIEWS = (OPENING_RETENTION_REVIEW, *READER_EXPERIENCE_REVIEWS)
+ALLOWED_REVIEW_STATUSES = {"CLEAR", "BLOCKED", "ACCEPTED_BY_HUMAN"}
+
+PERSONALITY_DELTA_FIELDS = {
+    "opening_misbelief",
+    "default_strategy",
+    "stress_response",
+    "relationship_modes",
+    "visible_traits",
+    "hidden_traits",
+    "change_seeds",
+    "other",
+}
+
+
+def sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def rel(path: Path) -> str:
+    return path.relative_to(ROOT).as_posix()
+
+
+def file_ref(path: Path, role: str) -> dict[str, Any]:
+    item: dict[str, Any] = {"path": rel(path), "role": role, "exists": path.exists()}
+    if path.exists() and path.is_file():
+        item["sha256"] = sha256(path)
+    return item
+
+
+def has_placeholder(value: object) -> bool:
+    if isinstance(value, list):
+        return not value or any(has_placeholder(item) for item in value)
+    if isinstance(value, dict):
+        return not value or any(has_placeholder(item) for item in value.values())
+    text = str(value or "").strip()
+    return not text or any(marker.lower() in text.lower() for marker in PLACEHOLDER_MARKERS)
+
+
+def validate_initial_personality(value: object, *, prefix: str = "initial_personality") -> list[str]:
+    errors: list[str] = []
+    if not isinstance(value, dict):
+        return [f"{prefix} must be an object"]
+    for field in INITIAL_PERSONALITY_REQUIRED_FIELDS:
+        if field not in value:
+            errors.append(f"{prefix}.{field} is missing")
+            continue
+        field_value = value.get(field)
+        if field in INITIAL_PERSONALITY_LIST_FIELDS:
+            if not isinstance(field_value, list) or not field_value:
+                errors.append(f"{prefix}.{field} must be a non-empty list")
+            elif any(has_placeholder(item) for item in field_value):
+                errors.append(f"{prefix}.{field} has placeholder or empty items")
+        elif field in INITIAL_PERSONALITY_OBJECT_FIELDS:
+            if not isinstance(field_value, dict) or not field_value:
+                errors.append(f"{prefix}.{field} must be a non-empty object")
+            elif has_placeholder(field_value):
+                errors.append(f"{prefix}.{field} has placeholder text")
+        elif has_placeholder(field_value):
+            errors.append(f"{prefix}.{field} is empty or has placeholder text")
+    return errors
+
+
+def default_initial_personality() -> dict[str, Any]:
+    return {
+        "essence": "待定：用一句话说明主角人格本质。",
+        "opening_mask": "待定：主角开局给外界看的样子。",
+        "true_inner_state": "待定：主角真实内在状态。",
+        "visible_traits": ["待定：外显性格 1", "待定：外显性格 2"],
+        "hidden_traits": ["待定：被压住的欲望", "待定：不愿承认的恐惧"],
+        "default_strategy": "待定：遇事第一反应。",
+        "stress_response": "待定：压力下会怎么变形。",
+        "emotional_leak": "待定：情绪藏不住时会露在哪里。",
+        "speech_profile": {
+            "rhythm": "待定：说话节奏。",
+            "sharpness": "待定：毒舌 / 克制 / 绕弯 / 直给。",
+            "favorite_words": ["待定：常用词"],
+            "forbidden_tone": ["待定：不该突然出现的语气"],
+        },
+        "relationship_modes": {
+            "stranger": "待定：面对陌生人。",
+            "ally": "待定：面对同伴。",
+            "authority": "待定：面对强者或上级。",
+            "intimate": "待定：面对亲密关系。",
+        },
+        "opening_flaw": "待定：开局缺陷。",
+        "opening_misbelief": "待定：开局错误认知。",
+        "opening_desire": "待定：开局最想要什么。",
+        "opening_fear": "待定：开局最怕什么。",
+        "first_three_chapter_limits": [
+            "前三章不能突然完成核心成长。",
+            "前三章不能无事件推翻初始误信。",
+        ],
+        "change_seeds": ["待定：后续可能被事件撬动的性格点。"],
+    }
+
+
+def selected_freeze_path() -> Path | None:
+    selected = ROOT / "state" / "idea_lab" / "selected.json"
+    if not selected.exists():
+        return None
+    data = read_json(selected, {})
+    idea_id = data.get("idea_id")
+    if not idea_id:
+        return None
+    return ROOT / "state" / "idea_lab" / str(idea_id) / "core_setting_freeze.json"
+
+
+def initial_personality_from_freeze() -> tuple[dict[str, Any], Path | None]:
+    path = selected_freeze_path()
+    if path is None or not path.exists():
+        return {}, path
+    data = read_json(path, {})
+    fields = data.get("fields") if isinstance(data, dict) else {}
+    value = fields.get("initial_personality") if isinstance(fields, dict) else {}
+    return value if isinstance(value, dict) else {}, path
+
+
+def load_characters() -> list[dict[str, Any]]:
+    path = ROOT / "bible" / "characters.yaml"
+    if not path.exists() or yaml is None:
+        return []
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    if not isinstance(data, dict):
+        return []
+    items = data.get("characters", [])
+    return [item for item in items if isinstance(item, dict)]
+
+
+def known_character_ids() -> set[str]:
+    return {str(item.get("id")) for item in load_characters() if str(item.get("id", "")).strip()}
+
+
+def protagonist_initial_personality() -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    refs: list[dict[str, Any]] = []
+    freeze_personality, freeze_path = initial_personality_from_freeze()
+    if freeze_path is not None:
+        refs.append(file_ref(freeze_path, "core_setting_freeze"))
+    if freeze_personality:
+        return freeze_personality, refs
+    characters_path = ROOT / "bible" / "characters.yaml"
+    refs.append(file_ref(characters_path, "characters_yaml"))
+    for item in load_characters():
+        if item.get("id") == "protagonist" and isinstance(item.get("initial_personality"), dict):
+            return item["initial_personality"], refs
+    return {}, refs
+
+
+def default_reader_promise() -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "status": "DRAFT",
+        "updated_at": now_iso(),
+        "primary_genre": "待定",
+        "secondary_genre": "待定",
+        "target_reader": "待定",
+        "platform_expectation": "待定",
+        "core_hook": "待定",
+        "main_reader_rewards": ["待定"],
+        "non_promises": ["待定"],
+        "first_chapter_must_deliver": "待定",
+        "second_chapter_must_escalate": "待定",
+        "third_chapter_must_hook": "待定",
+        "three_chapter_main_question": "待定",
+        "three_chapter_protagonist_specialness": "待定",
+        "per_chapter_must_have": ["待定"],
+        "per_chapter_must_not_only_have": ["待定"],
+        "ending_hook_priority": ["待定"],
+        "reward_mix": {
+            "爽点": "待定",
+            "悬念": "待定",
+            "笑点": "待定",
+            "情绪点": "待定",
+        },
+        "genre_mismatch_red_lines": ["待定"],
+        "source_boundary": "instruction_only_not_fact_source",
+    }
+
+
+def validate_reader_promise(data: object, *, require_ready: bool = False) -> list[str]:
+    errors: list[str] = []
+    if not isinstance(data, dict):
+        return ["reader promise must be a JSON object"]
+    if data.get("status") not in {"DRAFT", "READY"}:
+        errors.append("reader promise status must be DRAFT or READY")
+    if require_ready and data.get("status") != "READY":
+        errors.append(f"reader promise status must be READY, got {data.get('status', 'MISSING')}")
+    for field in READER_PROMISE_REQUIRED_FIELDS:
+        if field not in data:
+            errors.append(f"reader promise missing field: {field}")
+        elif data.get("status") == "READY" and has_placeholder(data.get(field)):
+            errors.append(f"reader promise field is empty or placeholder: {field}")
+    if data.get("source_boundary") != "instruction_only_not_fact_source":
+        errors.append("reader promise source_boundary must be instruction_only_not_fact_source")
+    return errors
+
+
+def ensure_reader_promise_file() -> None:
+    if not READER_PROMISE_JSON.exists():
+        write_json(READER_PROMISE_JSON, default_reader_promise())
+    if not READER_PROMISE_MD.exists():
+        write_text(READER_PROMISE_MD, render_reader_promise_markdown(default_reader_promise()))
+
+
+def load_reader_promise() -> dict[str, Any]:
+    ensure_reader_promise_file()
+    return read_json(READER_PROMISE_JSON, default_reader_promise())
+
+
+def render_reader_promise_markdown(data: dict[str, Any]) -> str:
+    lines = [
+        "# Project Reader Promise",
+        "",
+        f"status: {data.get('status', 'DRAFT')}",
+        "source_boundary: instruction_only_not_fact_source",
+        "",
+        "## 类型定位",
+        "",
+        f"- 主类型：{data.get('primary_genre', '')}",
+        f"- 副类型：{data.get('secondary_genre', '')}",
+        f"- 目标读者：{data.get('target_reader', '')}",
+        f"- 平台预期：{data.get('platform_expectation', '')}",
+        f"- 本书核心卖点：{data.get('core_hook', '')}",
+        "- 本书主要快感来源：" + "、".join(map(str, data.get("main_reader_rewards", []))),
+        "- 本书不承诺什么：" + "、".join(map(str, data.get("non_promises", []))),
+        "",
+        "## 前三章承诺",
+        "",
+        f"- 第一章必须兑现：{data.get('first_chapter_must_deliver', '')}",
+        f"- 第二章必须升级：{data.get('second_chapter_must_escalate', '')}",
+        f"- 第三章必须给出的上头点：{data.get('third_chapter_must_hook', '')}",
+        f"- 三章内必须让读者确认的主线问题：{data.get('three_chapter_main_question', '')}",
+        f"- 三章内必须展示的主角特殊性：{data.get('three_chapter_protagonist_specialness', '')}",
+        "",
+        "## 单章阅读承诺",
+        "",
+        "- 每章必须有：" + "、".join(map(str, data.get("per_chapter_must_have", []))),
+        "- 每章禁止只有：" + "、".join(map(str, data.get("per_chapter_must_not_only_have", []))),
+        "- 章末钩子类型优先级：" + "、".join(map(str, data.get("ending_hook_priority", []))),
+        "- 爽点 / 悬念 / 笑点 / 情绪点比例：" + json.dumps(data.get("reward_mix", {}), ensure_ascii=False),
+        "- 类型错位红线：" + "、".join(map(str, data.get("genre_mismatch_red_lines", []))),
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def review_status(text: str) -> str | None:
+    for line in text.splitlines():
+        if line.lower().startswith("status:"):
+            return line.split(":", 1)[1].strip()
+    return None
+
+
+def metadata_value(text: str, key: str) -> str:
+    for line in text.splitlines():
+        stripped = line.strip().lstrip("-*+ ").strip()
+        if not stripped:
+            continue
+        if ":" in stripped:
+            label, value = stripped.split(":", 1)
+        elif "：" in stripped:
+            label, value = stripped.split("：", 1)
+        else:
+            continue
+        if label.strip() == key:
+            return value.strip()
+    return ""
+
+
+def review_bound_to_current_chapter(text: str, official_path: Path) -> bool:
+    if not official_path.exists():
+        return False
+    return metadata_value(text, "official_chapter_sha256") == sha256(official_path)
+
+
+def accepted_by_human_is_current(text: str, review_path: Path, official_path: Path) -> bool:
+    if review_status(text) != "ACCEPTED_BY_HUMAN":
+        return False
+    if metadata_value(text, "accepted_by") != "human":
+        return False
+    if not metadata_value(text, "accepted_at"):
+        return False
+    if not metadata_value(text, "reason"):
+        return False
+    return review_bound_to_current_chapter(text, official_path)
+
+
+def required_reviews_for_chapter(chapter: str) -> tuple[str, ...]:
+    if chapter_number(chapter) <= 3:
+        return ALL_READER_REVIEWS
+    return READER_EXPERIENCE_REVIEWS
+
+
+def write_default_review_template(path: Path, chapter: str, title: str) -> None:
+    body = f"""# {title}: {chapter}
+
+status: 待评
+
+official_chapter_sha256:
+review_sha256:
+
+## Contract Checked
+
+- 待读取 reader promise、brief、context pack、official chapter 后填写。
+
+## Findings
+
+- 待评。
+
+## Evidence Quotes
+
+- 待填：BLOCKED 或 ACCEPTED_BY_HUMAN 必须引用正文短句。
+
+## Required Outcome
+
+将 `status` 改为 `CLEAR`、`BLOCKED` 或 `ACCEPTED_BY_HUMAN`。
+若为 `ACCEPTED_BY_HUMAN`，必须填写：
+
+- accepted_at:
+- accepted_by: human
+- reason:
+- official_chapter_sha256:
+- review_sha256:
+"""
+    write_text(path, body)
+
+
+def parse_personality_delta_json(raw: str) -> dict[str, Any] | None:
+    value = raw.strip()
+    if not value:
+        return None
+    data = json.loads(value)
+    if not isinstance(data, dict):
+        raise ValueError("personality_delta JSON must be an object")
+    return data
+
+
+def validate_personality_delta(delta: object, event_type: str = "character_state_change") -> list[str]:
+    errors: list[str] = []
+    if delta is None:
+        return []
+    if event_type != "character_state_change":
+        return ["personality_delta is only allowed on character_state_change events"]
+    if not isinstance(delta, dict):
+        return ["personality_delta must be an object"]
+    target = delta.get("target_entity")
+    ids = known_character_ids() | {"protagonist"}
+    if target not in ids:
+        errors.append(f"personality_delta.target_entity must be a known character id, got {target!r}")
+    if delta.get("durability") not in {"temporary", "durable"}:
+        errors.append("personality_delta.durability must be temporary or durable")
+    if delta.get("does_not_rewrite_initial_personality") is not True:
+        errors.append("personality_delta.does_not_rewrite_initial_personality must be true")
+    fields = delta.get("changed_fields")
+    if not isinstance(fields, list) or not fields:
+        errors.append("personality_delta.changed_fields must be a non-empty list")
+        return errors
+    for index, item in enumerate(fields):
+        if not isinstance(item, dict):
+            errors.append(f"personality_delta.changed_fields[{index}] must be an object")
+            continue
+        if item.get("field") not in PERSONALITY_DELTA_FIELDS:
+            errors.append(f"personality_delta.changed_fields[{index}].field is invalid")
+        for key in ("from", "to", "trigger_event", "evidence_quote"):
+            if has_placeholder(item.get(key)):
+                errors.append(f"personality_delta.changed_fields[{index}].{key} is empty or placeholder")
+    return errors
+
+
+def official_chapter_path(chapter: str) -> Path:
+    return ROOT / "chapters" / chapter[:3] / f"c{chapter[-3:]}.md"

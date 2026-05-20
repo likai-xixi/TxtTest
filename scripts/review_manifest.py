@@ -24,6 +24,12 @@ def allowed_inputs(chapter: str, reviewer: str) -> set[Path]:
         (ROOT / "chapters" / volume / chapter_file).absolute(),
         (ROOT / "drafts" / "codex" / f"{chapter}.md").absolute(),
         (ROOT / "drafts" / "deepseek" / f"{chapter}.md").absolute(),
+        (ROOT / "state" / "project_reader_promise.json").absolute(),
+        (ROOT / "state" / "project_reader_promise.md").absolute(),
+        (ROOT / "state" / "derived" / "personality" / "protagonist.json").absolute(),
+        (ROOT / "state" / "derived" / "protagonist_progression.json").absolute(),
+        (ROOT / "state" / "derived" / "world_reveal_ledger.json").absolute(),
+        (ROOT / "state" / "derived" / "suspense_ledger.json").absolute(),
     }
     if reviewer == "codex":
         # Codex review must not depend on DeepSeek review; candidate drafts are

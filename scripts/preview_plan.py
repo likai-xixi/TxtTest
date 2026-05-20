@@ -160,6 +160,10 @@ def event_plan(args: Namespace) -> dict[str, Any]:
         missing = [name for name in required if not getattr(args, name, None)]
         if missing:
             plan["issues"].append(issue("MISSING", "chapter_anchor is missing anchor fields: " + ", ".join(missing)))
+    if getattr(args, "personality_delta_json", ""):
+        plan["guardrails"].append("personality_delta preview requires type=character_state_change and human-confirmed evidence quote")
+        if args.type != "character_state_change":
+            plan["issues"].append(issue("POLICY", "personality_delta_json is only allowed with type=character_state_change"))
     return plan
 
 

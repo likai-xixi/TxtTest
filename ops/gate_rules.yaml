@@ -5,7 +5,16 @@ gate_a_3_chapters:
   reader_synthesis: reader_tests/gate_a_synthesis.md
   reader_response_dir: reader_tests/responses/gate_a
   min_reader_responses: 3
-  assessment_sections: []
+  required_assessment: state/gates/gate_a_reader_experience.md
+  assessment_sections:
+    - 三章 reader promise 兑现
+    - 三章 opening retention
+    - 主角主动性
+    - 初始人格稳定且被压迫
+    - 人格无证据突变
+    - 世界观场景化展示
+    - P0/P1 悬念推进
+    - 真实读者反馈
   questions:
     - 是否愿意写第 4 章
     - 流程是否让写作更轻
@@ -23,7 +32,13 @@ gate_b_10_chapters:
   reader_synthesis: reader_tests/gate_b_synthesis.md
   reader_response_dir: reader_tests/responses/gate_b
   min_reader_responses: 3
-  assessment_sections: []
+  required_assessment: state/gates/gate_b_reader_experience.md
+  assessment_sections:
+    - 每 3 章爽点 / 悬念 / 主角刻度复盘
+    - 主角欲望稳定性
+    - 类型承诺漂移
+    - reader promise 兑现
+    - 悬念与世界观债务
   questions:
     - 主角欲望稳定性
     - 主要阻力稳定性
@@ -85,6 +100,9 @@ gate_f_200_chapters:
   assessment_sections:
     - 状态索引可靠性
     - 伏笔账本可靠性
+    - suspense ledger 长线未兑现债
+    - concept/world reveal 设定膨胀
+    - protagonist progression 长线停滞
     - context quality 趋势
     - 预算压力
   questions:
@@ -102,6 +120,9 @@ gate_g_500_chapters:
   assessment_sections:
     - 重复套路
     - 设定债务
+    - suspense ledger 长线未兑现债
+    - concept/world reveal 设定膨胀
+    - protagonist progression 长线停滞
     - 长线兑现计划
     - arc chunk 覆盖
   questions:
@@ -119,6 +140,9 @@ gate_h_800_chapters:
   assessment_sections:
     - 终局治理
     - 新长期机制限制
+    - suspense ledger 长线未兑现债
+    - concept/world reveal 设定膨胀
+    - protagonist progression 长线停滞
     - 兑现计划
     - 读者承诺
   questions:

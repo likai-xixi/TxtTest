@@ -41,6 +41,18 @@ def evaluate(to_chapter: str | None = None) -> dict[str, Any]:
         risks.append("setting_debt_growing")
     if counts["thread_opened"] > counts["thread_paid_off"] + 8:
         risks.append("payoff_backlog")
+    reader_ledgers: dict[str, Any] = {}
+    for key, rel_path in {
+        "protagonist_progression": "state/derived/protagonist_progression.json",
+        "world_reveal": "state/derived/world_reveal_ledger.json",
+        "suspense": "state/derived/suspense_ledger.json",
+    }.items():
+        path = ROOT / rel_path
+        data = read_json(path, {}) if path.exists() else {}
+        blockers = data.get("blockers", []) if isinstance(data, dict) else []
+        reader_ledgers[key] = {"path": rel_path, "exists": path.exists(), "blockers": blockers}
+        if blockers:
+            risks.append(f"{key}_blocker")
     return {
         "schema_version": 1,
         "generated_at": now_iso(),
@@ -54,6 +66,7 @@ def evaluate(to_chapter: str | None = None) -> dict[str, Any]:
         "agency_density": agency_density,
         "setting_debt_index": setting_debt,
         "gate_risks": gate_risks(max_chapter),
+        "reader_experience_ledgers": reader_ledgers,
         "risk_flags": risks,
     }
 
@@ -76,6 +89,10 @@ def render_markdown(report: dict[str, Any]) -> str:
     lines.extend(f"- {item}" for item in report["risk_flags"]) if report["risk_flags"] else lines.append("- none")
     lines.extend(["", "## Gate Risks", ""])
     lines.extend(f"- {item}" for item in report["gate_risks"]) if report["gate_risks"] else lines.append("- none")
+    lines.extend(["", "## Reader Experience Ledgers", ""])
+    for key, item in report.get("reader_experience_ledgers", {}).items():
+        blockers = item.get("blockers") or []
+        lines.append(f"- {key}: {'blockers=' + str(len(blockers)) if blockers else 'clear'} ({item.get('path')})")
     lines.extend(["", "## Counts", ""])
     lines.extend(f"- {key}: {value}" for key, value in report["counts_by_type"].items()) if report["counts_by_type"] else lines.append("- none")
     return "\n".join(lines).rstrip() + "\n"

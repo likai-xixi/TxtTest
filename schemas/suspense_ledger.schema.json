@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SuspenseLedger",
+  "type": "object",
+  "required": ["schema_version", "generated_at", "threads"],
+  "properties": {
+    "schema_version": { "type": "integer" },
+    "generated_at": { "type": "string" },
+    "threads": { "type": "array", "items": { "type": "object" } },
+    "blockers": { "type": "array", "items": { "type": "string" } },
+    "warnings": { "type": "array", "items": { "type": "string" } }
+  }
+}

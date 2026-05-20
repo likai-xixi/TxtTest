@@ -18,12 +18,23 @@ REQUIRED_SECTIONS = {
     "active_aftermath_obligations",
     "book_outline_contract",
     "style_instruction",
+    "reader_promise",
+    "reader_experience_state",
     "authorized_elements_full",
     "rules_and_boundaries",
 }
 PLACEHOLDER_MARKERS = ("待定", "待填", "待生成", "TODO", "TBD", "寰呭畾", "寰呭～", "寰呯敓")
 CRITICAL_CONTEXT_SOURCE_SUFFIXES = ("bible/rules.md",)
 WARNING_CONTEXT_SOURCE_SUFFIXES = ("bible/style_guide.md", "bible/canon.md")
+READER_DERIVED_SUFFIXES = (
+    "state/project_reader_promise.json",
+    "state/project_reader_promise.md",
+    "state/derived/personality/protagonist.json",
+    "state/derived/protagonist_progression.json",
+    "state/derived/concept_index.json",
+    "state/derived/world_reveal_ledger.json",
+    "state/derived/suspense_ledger.json",
+)
 
 
 def has_placeholder(text: str) -> bool:
@@ -156,6 +167,10 @@ def planning_source_role_failures(manifest: dict[str, Any]) -> list[str]:
                 failures.append(f"book outline source is not marked strategic_plan_not_fact_source: {path}")
             if path in {"state/project_style_contract.json", "state/project_style_contract.md", "bible/style_guide.md", "state/derived/style_profile.json"} and "style" not in reason + note:
                 failures.append(f"style source is not marked style_instruction_not_fact_source: {path}")
+            if path in {"state/project_reader_promise.json", "state/project_reader_promise.md"} and "reader_promise_instruction_not_fact_source" not in reason + note:
+                failures.append(f"reader promise source is not marked reader_promise_instruction_not_fact_source: {path}")
+            if path in READER_DERIVED_SUFFIXES and not (ROOT / path).exists():
+                failures.append(f"reader/personality derived source missing: {path}")
     return failures
 
 

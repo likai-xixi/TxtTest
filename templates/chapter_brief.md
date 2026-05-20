@@ -116,6 +116,68 @@ TODO：说明为什么本章不会空转，也不会为了过检强行加速。
 - reader_question：TODO：读者继续阅读的具体问题
 - next_required_continuity：TODO：下一章必须承接的状态
 
+## 本章留存合同
+
+- 第一屏钩子：TODO：异常 / 冲突 / 危险 / 反常信息 / 强人物动作。
+- 本章核心问题：TODO：读者本章追的具体问题。
+- 本章读者期待：TODO：本章承诺给读者的快感或答案。
+- 本章中段反转 / 加压：TODO：中段必须发生的变化点。
+- 本章小兑现：TODO：本章至少兑现什么。
+- 本章章末钩子：TODO：章末让读者点下一章的具体问题。
+- 下一章点击理由：TODO：一句话说明为什么必须看下一章。
+
+## 本章主角魅力合同
+
+- 主角本章主动目标：TODO：可行动、可失败。
+- 主角本章过人之处：TODO：认知、能力、胆识、关系或代价承受。
+- 主角本章弱点 / 误判 / 上头点：TODO：必须制造压力或麻烦。
+- 金手指 / 特殊资源本章表现：TODO：none / revealed / used / upgraded / backfired。
+- 能力、地位、认知或关系的刻度变化：TODO：none / small / medium / major，并说明。
+- 本章让读者喜欢主角的瞬间：TODO：具体场面或选择。
+
+## 本章初始人格挑战合同
+
+- 是否挑战初始人格：TODO：none / pressure / contradiction / choice / change_seed / durable_change。
+- 被挑战字段：TODO：opening_flaw / opening_misbelief / default_strategy / stress_response / change_seeds / other。
+- 挑战方式：TODO：通过事件怎样压迫初始人格。
+- 本章是否形成人格变化：TODO：no_durable_change / temporary / durable。
+- 若 durable，最低落账事件：TODO：character_state_change，并在 Ship 前写入 personality_delta。
+- 前三章限制确认：TODO：前三章不得无重大事件完成核心成长。
+
+## 本章世界观展示合同
+
+- 本章允许新增核心名词：TODO：最多 1 个；没有则写 none。
+- 本章允许新增次要名词：TODO：最多 2 个；没有则写 none。
+- 必须通过场景展示的设定：TODO：绑定场景压力、人物选择或普通人反应。
+- 禁止集中说明的设定：TODO：列出不能百科式解释的内容。
+- 普通人 / 外部视角对照：TODO：读者通过谁看懂规则压力。
+- 读者本章必须理解的一条规则：TODO：只写 1 条。
+
+## 本章名词预算
+
+- 新核心名词上限：1
+- 新次要名词上限：2
+- 必须复用的旧名词：TODO：没有则写 none。
+- 本章不解释、只露面的名词：TODO：没有则写 none。
+- 本章必须让读者看懂的规则：TODO：只写 1 条。
+
+## 本章悬念推进合同
+
+- 旧问题：TODO：没有则写 none。
+- 本章给出的新线索：TODO：没有则写 none。
+- 本章打碎的错误希望：TODO：没有则写 none。
+- 本章部分解答：TODO：没有则写 none。
+- 本章新问题：TODO：没有则写 none。
+- 悬念状态：TODO：opened / advanced / partially_answered / paid_off / escalated。
+
+## 本章语言记忆点
+
+- 本章金句：TODO：没有则写 none，并说明人工接受理由。
+- 本章梗 / 反差笑点：TODO：没有则写 none。
+- 角色口头禅或标志动作：TODO：没有则写 none。
+- 可截图传播的句子：TODO：没有则写 none。
+- 禁止使用的平铺语气：TODO：列出本章不该出现的泛泛语气。
+
 ## 本章使用设定
 
 待定。

@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "status": "DRAFT",
+  "updated_at": "2026-05-20T00:00:00+00:00",
+  "primary_genre": "待定",
+  "secondary_genre": "待定",
+  "target_reader": "待定",
+  "platform_expectation": "待定",
+  "core_hook": "待定",
+  "main_reader_rewards": [
+    "待定"
+  ],
+  "non_promises": [
+    "待定"
+  ],
+  "first_chapter_must_deliver": "待定",
+  "second_chapter_must_escalate": "待定",
+  "third_chapter_must_hook": "待定",
+  "three_chapter_main_question": "待定",
+  "three_chapter_protagonist_specialness": "待定",
+  "per_chapter_must_have": [
+    "待定"
+  ],
+  "per_chapter_must_not_only_have": [
+    "待定"
+  ],
+  "ending_hook_priority": [
+    "待定"
+  ],
+  "reward_mix": {
+    "爽点": "待定",
+    "悬念": "待定",
+    "笑点": "待定",
+    "情绪点": "待定"
+  },
+  "genre_mismatch_red_lines": [
+    "待定"
+  ],
+  "source_boundary": "instruction_only_not_fact_source"
+}
+

@@ -103,6 +103,48 @@
         "unfinished_action": { "type": "string", "minLength": 1 },
         "next_required_continuity": { "type": "string", "minLength": 1 }
       }
+    },
+    "personality_delta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "target_entity",
+        "durability",
+        "changed_fields",
+        "does_not_rewrite_initial_personality"
+      ],
+      "properties": {
+        "target_entity": { "type": "string", "minLength": 1 },
+        "durability": { "enum": ["temporary", "durable"] },
+        "changed_fields": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["field", "from", "to", "trigger_event", "evidence_quote"],
+            "properties": {
+              "field": {
+                "enum": [
+                  "opening_misbelief",
+                  "default_strategy",
+                  "stress_response",
+                  "relationship_modes",
+                  "visible_traits",
+                  "hidden_traits",
+                  "change_seeds",
+                  "other"
+                ]
+              },
+              "from": { "type": "string", "minLength": 1 },
+              "to": { "type": "string", "minLength": 1 },
+              "trigger_event": { "type": "string", "minLength": 1 },
+              "evidence_quote": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "does_not_rewrite_initial_personality": { "const": true }
+      }
     }
   }
 }

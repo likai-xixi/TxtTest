@@ -11,6 +11,7 @@ from pathlib import Path
 
 from _common import ROOT, chapter_parts, write_blocked_by_locks
 from validate_event_ledger import ALLOWED_TYPES, IMPORTANCE_LEVELS, validate
+from reader_personality_contracts import parse_personality_delta_json, validate_personality_delta
 
 
 EVENT_RE = re.compile(r"^v\d{2}_c\d{3}_e(?P<num>\d{3})$")
@@ -116,6 +117,7 @@ def main() -> int:
     parser.add_argument("--anchor-carried-item", action="append", default=[], help="For chapter_anchor: carried item or evidence; may be repeated.")
     parser.add_argument("--anchor-unfinished-action", default="", help="For chapter_anchor: unfinished action at chapter end.")
     parser.add_argument("--anchor-next-required-continuity", default="", help="For chapter_anchor: continuity the next chapter must address.")
+    parser.add_argument("--personality-delta-json", default="", help="For character_state_change: JSON personality_delta object.")
     args = parser.parse_args()
 
     if write_blocked_by_locks("event ledger append"):
@@ -126,8 +128,15 @@ def main() -> int:
     ledger.parent.mkdir(parents=True, exist_ok=True)
     try:
         anchor = build_anchor(args)
+        personality_delta = parse_personality_delta_json(args.personality_delta_json)
+        delta_errors = validate_personality_delta(personality_delta, args.type)
+        if delta_errors:
+            raise ValueError("; ".join(delta_errors))
     except ValueError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+    except json.JSONDecodeError as exc:
+        print(f"ERROR: invalid --personality-delta-json: {exc}", file=sys.stderr)
         return 1
 
     try:
@@ -152,6 +161,8 @@ def main() -> int:
                 entry["tags"] = args.tag
             if anchor is not None:
                 entry["anchor"] = anchor
+            if personality_delta is not None:
+                entry["personality_delta"] = personality_delta
             proposed_line = json.dumps(entry, ensure_ascii=False, separators=(",", ":")) + "\n"
             proposed = current + proposed_line
             with tempfile.NamedTemporaryFile(

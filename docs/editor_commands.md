@@ -37,6 +37,13 @@ python scripts/novel.py workflow-smoke
 python scripts/novel.py audit
 python scripts/novel.py audit --write-report
 python scripts/novel.py ci
+python scripts/novel.py reader-promise-start
+python scripts/novel.py reader-promise-check
+python scripts/novel.py reader-experience-check v01_c001
+python scripts/novel.py personality-check
+python scripts/novel.py suspense-check
+python scripts/novel.py world-reveal-check
+python scripts/novel.py protagonist-progression-check
 python scripts/novel.py idea-form --commercial --id idea_xxx
 python scripts/novel.py market-scan --id idea_xxx
 python scripts/novel.py table-build
@@ -57,11 +64,20 @@ python scripts/novel.py polish-start v01_c001
 - 前三章约束
 - 不可违背红线
 - 仍可开放的问题
+- 主角初始人格合同 `initial_personality`
 
 检查：
 
 ```bash
 python scripts/novel.py core-freeze-check
+```
+
+核心冻结通过后，开正文前还必须把读者体验合同落为 READY：
+
+```bash
+python scripts/novel.py reader-promise-start
+python scripts/novel.py reader-promise-land --ready
+python scripts/novel.py reader-promise-check --require-ready
 ```
 
 三类 agent 审查完成后，先逐条记录结构化运行证据，再生成 manifest：
@@ -124,6 +140,12 @@ python scripts/novel.py start v01_c001
 - `本章可用技能 IDs`：只列本章允许使用的 `bible/abilities.yaml` ID。
 - `本章允许新增元素`：按 L0/L1/L2/L3/L4 标明哪些新元素可出现。
 - `本章禁止临场解决`：禁止靠未授权新道具、新能力或新规则解决本章核心问题。
+- `本章留存合同`：钩子、核心问题、中段加压、小兑现、章末钩子和点击理由。
+- `本章主角魅力合同`：主动目标、过人之处、弱点误判、特殊资源、刻度变化和喜欢主角的瞬间。
+- `本章初始人格挑战合同`：压迫哪些 initial_personality 字段，是否需要人格变化落账。
+- `本章世界观展示合同` / `本章名词预算`：控制新名词，要求场景化展示。
+- `本章悬念推进合同`：旧问题、新线索、部分解答、新问题和悬念状态。
+- `本章语言记忆点`：金句、梗/反差句、标志动作和禁止语气。
 
 `brief-precheck` 在生成候选 brief 前检查核心冻结、上一章锚点、Gate、stop lock、后果债务和关键源占位；`brief-check` 做正式 brief 的单章硬检查；`pacing-check` 会硬拦连续小事、高推进无消化和缺少进展契约的窗口，可用 `--write` 归档节奏证据。`pacing-dashboard` 汇总最近 5 章节奏和 active/overdue/resolved 后果债务，给总编复盘用，不替代 `pacing-check`。收章时用 `chapter_anchor` 事件确认章末锚点，并用 brief 中的 `最低落账事件` 约束 `state/event_ledger.jsonl`；下一章 brief pack 和 context pack 会自动带入章末锚点与后果承接债务。
 
@@ -177,3 +199,4 @@ Series-style policy:
 - `deepseek-style-review` is optional by default, but `series-style-check --require-deepseek` can make the external style review a required input.
 
 `start` and `write` are blocked until `core_setting_freeze`, `outline/book_outline.json`, and `state/project_style_contract.json` are READY. `context_pack` may include the book outline only as `strategic_plan_not_fact_source`, and style assets only as `style_instruction_not_fact_source`.
+`start` and `write` are also blocked until `state/project_reader_promise.json` is `READY`. Reader promise is an instruction source only; it is included in context pack as `reader_promise_instruction_not_fact_source`, while initial/current personality and reader experience ledgers are derived state.

@@ -23,6 +23,7 @@ SCHEMA_KEYWORDS = {
     "const",
     "additionalProperties",
     "minLength",
+    "minItems",
     "pattern",
 }
 
@@ -121,6 +122,9 @@ def validate_instance(instance: Any, schema: dict[str, Any], path: str = "$") ->
                 errors.append(f"{path}: unexpected additional property {key!r}")
 
     if isinstance(instance, list):
+        min_items = schema.get("minItems")
+        if isinstance(min_items, int) and len(instance) < min_items:
+            errors.append(f"{path}: array shorter than minItems {min_items}")
         items = schema.get("items")
         if isinstance(items, dict):
             for index, value in enumerate(instance):
@@ -225,4 +229,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

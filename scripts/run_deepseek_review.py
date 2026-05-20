@@ -50,7 +50,17 @@ def write_manifest(chapter: str, chapter_path: Path) -> None:
     if manifest_path.exists():
         current = json.loads(manifest_path.read_text(encoding="utf-8"))
     inputs = []
-    for path in (context_path.resolve(), chapter_path.resolve()):
+    for path in (
+        context_path.resolve(),
+        chapter_path.resolve(),
+        (ROOT / "state" / "project_reader_promise.json").resolve(),
+        (ROOT / "state" / "derived" / "personality" / "protagonist.json").resolve(),
+        (ROOT / "state" / "derived" / "protagonist_progression.json").resolve(),
+        (ROOT / "state" / "derived" / "world_reveal_ledger.json").resolve(),
+        (ROOT / "state" / "derived" / "suspense_ledger.json").resolve(),
+    ):
+        if not path.exists():
+            continue
         inputs.append(
             {
                 "path": path.relative_to(ROOT).as_posix(),
@@ -115,6 +125,9 @@ def main() -> int:
 5. 是否有明显撞梗 / 换皮风险
 6. 是否用未授权的新道具、新能力或新规则解决本章核心问题
 7. 正文中的 L2/L3/L4 新元素是否有 brief/context 授权和后续归档需求
+8. 是否兑现 Project Reader Promise、留存合同和章末点击理由
+9. 是否尊重主角初始人格合同，若发生人格变化是否需要 character_state_change
+10. 世界观名词是否超预算，悬念是否推进，语言是否有记忆点
 
 输出：
 - 关键结论

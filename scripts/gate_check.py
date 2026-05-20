@@ -9,6 +9,7 @@ from _common import ROOT, read_text
 from chapter_evidence import chapter_evidence_failures
 from context_governance import context_quality_path
 from gate_config import load_gate_configs
+from reader_personality_contracts import load_reader_promise, validate_reader_promise
 from reader_test import GATE_QUESTIONS
 
 
@@ -217,6 +218,54 @@ def check_context_governance(gate: str, config: dict, failures: list[str]) -> No
         failures.append(f"context governance missing context quality reports, first missing: {', '.join(missing_quality)}")
 
 
+def check_reader_experience_governance(gate: str, config: dict, failures: list[str]) -> None:
+    if gate not in {"A", "B", "F", "G", "H"}:
+        return
+    for error in validate_reader_promise(load_reader_promise(), require_ready=True):
+        failures.append(f"reader promise not ready: {error}")
+
+    required = [
+        "state/derived/personality/protagonist.json",
+        "state/derived/protagonist_progression.json",
+        "state/derived/concept_index.json",
+        "state/derived/world_reveal_ledger.json",
+        "state/derived/suspense_ledger.json",
+    ]
+    ledger_path = ROOT / "state" / "event_ledger.jsonl"
+    expected_chapters = {chapter_id(number) for number in range(1, int(config["needed"]) + 1)}
+    for item in required:
+        path = ROOT / item
+        if not path.exists():
+            failures.append(f"reader experience missing derived ledger: {item}")
+            continue
+        if ledger_path.exists() and path.stat().st_mtime + 0.001 < ledger_path.stat().st_mtime:
+            failures.append(f"reader experience derived ledger is stale: {item}")
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            failures.append(f"reader experience ledger invalid JSON {item}: {exc}")
+            continue
+        blockers = data.get("blockers", []) if isinstance(data, dict) else ["malformed ledger"]
+        if blockers:
+            failures.append(f"reader experience ledger has blockers: {item}: {', '.join(map(str, blockers[:5]))}")
+        if item.endswith("protagonist_progression.json") or item.endswith("world_reveal_ledger.json"):
+            chapters = {str(entry.get("chapter")) for entry in data.get("entries", []) if isinstance(entry, dict)}
+            missing = sorted(expected_chapters - chapters)
+            if missing:
+                failures.append(f"reader experience ledger missing chapter coverage {item}: {', '.join(missing[:5])}")
+        if item.endswith("suspense_ledger.json"):
+            chapters: set[str] = set()
+            for thread in data.get("threads", []) if isinstance(data, dict) else []:
+                if not isinstance(thread, dict):
+                    continue
+                for move in thread.get("moves", []) or []:
+                    if isinstance(move, dict) and move.get("chapter"):
+                        chapters.add(str(move["chapter"]))
+            missing = sorted(expected_chapters - chapters)
+            if missing:
+                failures.append(f"suspense ledger missing chapter coverage: {', '.join(missing[:5])}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Check machine-verifiable evidence before a human gate decision.")
     parser.add_argument("--gate", required=True, choices=sorted(GATES))
@@ -229,6 +278,7 @@ def main() -> int:
 
     check_assessment(config, failures)
     check_context_governance(gate, config, failures)
+    check_reader_experience_governance(gate, config, failures)
     for number in range(1, config["needed"] + 1):
         check_chapter(chapter_id(number), chapters_with_events, failures)
     check_reader_synthesis(config["reader_synthesis"], failures)

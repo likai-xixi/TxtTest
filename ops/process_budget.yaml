@@ -2,7 +2,7 @@ context_pack:
   hard_max_chars: 48000
   tiers:
     - max_chapter: 3
-      limit_chars: 12000
+      limit_chars: 18000
     - max_chapter: 10
       limit_chars: 16000
     - max_chapter: 50
@@ -20,6 +20,8 @@ context_pack:
     active_aftermath_obligations: 1800
     book_outline_contract: 1800
     style_instruction: 1800
+    reader_promise: 1400
+    reader_experience_state: 1800
     authorized_elements_full: 8000
     active_entity_cards: 7000
     open_threads: 5000
@@ -31,7 +33,7 @@ pilot:
   chapters: 3
   chapter_brief_chars:
     min: 300
-    max: 1800
+    max: 3200
   revisions_per_chapter: 1
   deepseek:
     generation_model: deepseek-v4-pro

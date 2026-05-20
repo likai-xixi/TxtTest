@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from _common import ROOT, read_json, read_text
+from reader_personality_contracts import load_characters, validate_initial_personality
 
 
 FREEZE_JSON = "core_setting_freeze.json"
@@ -32,6 +33,7 @@ REQUIRED_FIELDS = {
     "first_three_chapter_constraints": "前三章约束",
     "forbidden_changes": "不可违背红线",
     "open_questions_allowed": "仍可开放的问题",
+    "initial_personality": "主角初始人格合同",
 }
 REQUIRED_EVIDENCE_KEYS = (
     "original_idea",
@@ -117,6 +119,11 @@ def validate_freeze(idea_id: str | None = None) -> list[str]:
     for key, label in REQUIRED_FIELDS.items():
         if has_placeholder(fields.get(key)):
             errors.append(f"core setting freeze field `{key}` ({label}) is empty or has placeholder text")
+    if "initial_personality" in fields:
+        errors.extend(validate_initial_personality(fields.get("initial_personality"), prefix="core setting freeze initial_personality"))
+        protagonists = [item for item in load_characters() if item.get("id") == "protagonist"]
+        if protagonists and protagonists[0].get("initial_personality") != fields.get("initial_personality"):
+            errors.append("bible/characters.yaml protagonist initial_personality does not match core setting freeze")
 
     evidence = data.get("evidence")
     if not isinstance(evidence, dict):

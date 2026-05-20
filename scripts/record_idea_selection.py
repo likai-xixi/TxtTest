@@ -10,6 +10,12 @@ from pathlib import Path
 
 from _common import ROOT, now_iso, read_text, write_text
 from core_setting_freeze import FREEZE_JSON, FREEZE_MD, REQUIRED_FIELDS, sha256
+from reader_personality_contracts import validate_initial_personality
+
+try:
+    import yaml
+except ImportError:  # pragma: no cover
+    yaml = None
 
 
 IDEA_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
@@ -47,6 +53,7 @@ REQUIRED_DIRECTION_FIELDS = [
     "适合继续的信号",
     "不适合继续的信号",
 ]
+CORE_TEXT_FIELDS = {key: value for key, value in REQUIRED_FIELDS.items() if key != "initial_personality"}
 
 
 def validate_idea_id(value: str) -> str:
@@ -118,15 +125,31 @@ def freeze_source_for_choice(args: argparse.Namespace, contents: dict[str, str])
 
 def core_fields(args: argparse.Namespace, contents: dict[str, str]) -> dict[str, str]:
     source = freeze_source_for_choice(args, contents)
-    return {key: field_value(source, label) for key, label in REQUIRED_FIELDS.items()}
+    fields: dict[str, object] = {key: field_value(source, label) for key, label in CORE_TEXT_FIELDS.items()}
+    fields["initial_personality"] = initial_personality_fields(source, fields)
+    return fields
+
+
+def initial_personality_fields(source: str, fields: dict[str, object]) -> dict:
+    raw = field_value(source, "主角初始人格合同")
+    if raw:
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, dict) and not validate_initial_personality(parsed):
+                return parsed
+            raise ValueError("主角初始人格合同 JSON is missing required fields or contains placeholders")
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"主角初始人格合同 must be valid JSON: {exc}") from exc
+    raise ValueError("主角初始人格合同 must be explicit structured JSON in the selected direction")
 
 
 def validate_core_fields(fields: dict[str, str]) -> list[str]:
     errors: list[str] = []
-    for key, label in REQUIRED_FIELDS.items():
+    for key, label in CORE_TEXT_FIELDS.items():
         value = fields.get(key, "").strip()
         if not value or has_placeholder(value):
             errors.append(f"core setting freeze missing field {key} ({label})")
+    errors.extend(validate_initial_personality(fields.get("initial_personality"), prefix="core setting freeze initial_personality"))
     return errors
 
 
@@ -351,8 +374,10 @@ def build_core_freeze_md(idea_id: str, data: dict) -> str:
         "本文件是开书前定盘证据，不是 canon。正文出现并由人类确认后，事实才可进入 bible/canon.md。",
         "",
     ]
-    for key, label in REQUIRED_FIELDS.items():
+    for key, label in CORE_TEXT_FIELDS.items():
         lines.extend([f"## {label}", "", fields[key], ""])
+    lines.extend(["## 主角初始人格合同", "", "```json", json.dumps(fields["initial_personality"], ensure_ascii=False, indent=2), ""])
+    lines.append("```")
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -449,6 +474,7 @@ selected_at: {now_iso()}
 - 前三章约束：{fields["first_three_chapter_constraints"]}
 - 不可违背红线：{fields["forbidden_changes"]}
 - 仍可开放的问题：{fields["open_questions_allowed"]}
+- 主角初始人格合同：见 core_setting_freeze.fields.initial_personality
 
 ## 选择理由
 
@@ -507,7 +533,18 @@ def yaml_quote(value: str) -> str:
     return json.dumps(value, ensure_ascii=False)
 
 
+def yaml_dump_initial_personality(value: object, indent: int = 4) -> str:
+    if yaml is not None:
+        dumped = yaml.safe_dump(value, allow_unicode=True, sort_keys=False).rstrip().splitlines()
+        prefix = " " * indent
+        return "\n".join(prefix + line for line in dumped)
+    text = json.dumps(value, ensure_ascii=False, indent=2).splitlines()
+    prefix = " " * indent
+    return "\n".join(prefix + line for line in text)
+
+
 def build_characters_seed(idea_id: str, args: argparse.Namespace, fields: dict[str, str]) -> str:
+    initial_personality = yaml_dump_initial_personality(fields["initial_personality"], 4)
     return f"""characters:
   - id: protagonist
     name: {yaml_quote("主角")}
@@ -516,6 +553,8 @@ def build_characters_seed(idea_id: str, args: argparse.Namespace, fields: dict[s
     selected_direction: {yaml_quote(args.choice)}
     anomaly_cause: {yaml_quote(fields["protagonist_anomaly_cause"])}
     current_state: {yaml_quote("前三章试点期由章节 brief 和正文证据逐步确认。")}
+    initial_personality:
+{initial_personality}
     relationships:
       - family_anchor
     forbidden_changes:
@@ -751,6 +790,68 @@ TODO：按 L0/L1/L2/L3/L4 标明本章可新增内容；没有则写 none。
 ## 本章禁止临场解决
 
 TODO：列明不得靠未授权新道具、新能力或新规则解决的核心问题。
+
+## 本章留存合同
+
+- 第一屏钩子：TODO：300 字内必须出现异常、冲突、危险、反常信息或强人物动作。
+- 本章核心问题：TODO：第一章读者必须追问的问题。
+- 本章读者期待：TODO：本章承诺兑现的阅读快感。
+- 本章中段反转 / 加压：TODO：中段必须出现计划外变化。
+- 本章小兑现：TODO：本章至少兑现一个信息、情绪或行动结果。
+- 本章章末钩子：TODO：明确下一章问题。
+- 下一章点击理由：TODO：为什么读者会点下一章。
+
+## 本章主角魅力合同
+
+- 主角本章主动目标：TODO：必须可行动、可失败。
+- 主角本章过人之处：TODO：能力、判断、胆量、嘴硬或特殊资源中的一项。
+- 主角本章弱点 / 误判 / 上头点：TODO：必须来自 initial_personality。
+- 金手指 / 特殊资源本章表现：TODO：展示能力、限制、反噬、升级或误导；没有则解释本章不用的原因。
+- 能力、地位、认知或关系的刻度变化：TODO：power/status/knowledge/relationship 至少一项。
+- 本章让读者喜欢主角的瞬间：TODO：具体场面。
+
+## 本章初始人格挑战合同
+
+- 是否挑战初始人格：TODO：none / pressure / contradiction / choice / change_seed / durable_change。
+- 被挑战字段：TODO：opening_flaw / opening_misbelief / default_strategy / stress_response / change_seeds / other。
+- 挑战方式：TODO：通过事件怎样压迫初始人格。
+- 本章是否形成人格变化：TODO：no_durable_change / temporary / durable。
+- 若 durable，最低落账事件：TODO：character_state_change，并在 Ship 前写入 personality_delta。
+- 前三章限制确认：TODO：前三章不得无重大事件完成核心成长。
+
+## 本章世界观展示合同
+
+- 本章允许新增核心名词：TODO：最多 1 个，默认 none。
+- 本章允许新增次要名词：TODO：最多 2 个，默认 none。
+- 必须通过场景展示的设定：TODO：绑定压力、选择或普通人反应。
+- 禁止集中说明的设定：TODO：列出不能百科式展开的内容。
+- 普通人 / 外部视角对照：TODO：读者通过谁的反应理解规则。
+- 读者本章必须理解的一条规则：TODO：只解释一条。
+
+## 本章名词预算
+
+- 新核心名词上限：1
+- 新次要名词上限：2
+- 必须复用的旧名词：TODO：没有则写 none。
+- 本章不解释、只露面的名词：TODO：没有则写 none。
+- 本章必须让读者看懂的规则：TODO：只写一条。
+
+## 本章悬念推进合同
+
+- 旧问题：TODO：首章写 none，非首章写上一章遗留问题。
+- 本章给出的新线索：TODO：必须具体。
+- 本章打碎的错误希望：TODO：没有则说明为什么没有。
+- 本章部分解答：TODO：至少小范围解答或确认一个边界。
+- 本章新问题：TODO：章末带出的新问题或新代价。
+- 悬念状态：TODO：opened / advanced / partially_answered / paid_off / escalated
+
+## 本章语言记忆点
+
+- 本章金句：TODO：一句能截图传播或体现人物的句子。
+- 本章梗 / 反差笑点：TODO：没有则写情绪反差句。
+- 角色口头禅或标志动作：TODO：来自 initial_personality.speech_profile 或 emotional_leak。
+- 可截图传播的句子：TODO：具体文本。
+- 禁止使用的平铺语气：TODO：列出本章不能滑向的说明书语气。
 
 ## 伏笔：新开 / 推进 / 回收
 

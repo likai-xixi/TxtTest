@@ -24,6 +24,7 @@ from element_context import (
     selected_yaml_section,
 )
 from style_contract import CONTRACT_JSON, CONTRACT_MD, STYLE_GUIDE, STYLE_PROFILE, ensure_ready as ensure_style_contract
+from reader_personality_contracts import READER_PROMISE_JSON, READER_PROMISE_MD, load_reader_promise, validate_reader_promise
 
 
 LEGACY_OBJECT_TITLE = "本章可用道具完整条目"
@@ -332,6 +333,47 @@ def style_sources() -> list[SourceRef]:
     ]
 
 
+def reader_promise_body() -> str:
+    return "\n\n".join(
+        [
+            "### Instruction Boundary\n\nReader promise guides retention, genre fit, and review expectations. It is not canon, event ledger, or a fact source.",
+            "### Project Reader Promise JSON\n\n" + file_body(READER_PROMISE_JSON),
+            "### Project Reader Promise Markdown\n\n" + file_body(READER_PROMISE_MD),
+        ]
+    )
+
+
+def reader_promise_sources() -> list[SourceRef]:
+    return [
+        SourceRef(READER_PROMISE_JSON, note="reader_promise_instruction_not_fact_source"),
+        SourceRef(READER_PROMISE_MD, note="reader_promise_instruction_not_fact_source"),
+    ]
+
+
+def derived_reader_body() -> str:
+    paths = [
+        ROOT / "state" / "derived" / "personality" / "protagonist.json",
+        ROOT / "state" / "derived" / "protagonist_progression.json",
+        ROOT / "state" / "derived" / "concept_index.json",
+        ROOT / "state" / "derived" / "world_reveal_ledger.json",
+        ROOT / "state" / "derived" / "suspense_ledger.json",
+    ]
+    parts = []
+    for path in paths:
+        parts.append(f"### {path.name}\n\n```json\n{file_body(path)}\n```")
+    return "\n\n".join(parts)
+
+
+def derived_reader_sources() -> list[SourceRef]:
+    return [
+        SourceRef(ROOT / "state" / "derived" / "personality" / "protagonist.json"),
+        SourceRef(ROOT / "state" / "derived" / "protagonist_progression.json"),
+        SourceRef(ROOT / "state" / "derived" / "concept_index.json"),
+        SourceRef(ROOT / "state" / "derived" / "world_reveal_ledger.json"),
+        SourceRef(ROOT / "state" / "derived" / "suspense_ledger.json"),
+    ]
+
+
 def build_sections(chapter: str, brief_text: str, object_ids: list[str], ability_ids: list[str], allowed_new: str, prohibited_solutions: str) -> tuple[list[Section], list[str]]:
     budgets = section_budgets()
     freeze_path = freeze_markdown_path() or ROOT / "state" / "idea_lab" / "missing.md"
@@ -405,6 +447,8 @@ def build_sections(chapter: str, brief_text: str, object_ids: list[str], ability
         Section("active_aftermath_obligations", "Active Aftermath Obligations", aftermath_body, budgets.get("active_aftermath_obligations", 900), aftermath_sources, "unresolved_cost_and_consequence_debt", 4),
         Section("book_outline_contract", "Book Outline Strategic Map", book_outline_body(), budgets.get("book_outline_contract", 1800), [SourceRef(BOOK_JSON, note="strategic_plan_not_fact_source"), SourceRef(BOOK_MD, note="strategic_plan_not_fact_source")], "strategic_plan_not_fact_source", 5),
         Section("style_instruction", "Style Instruction", style_instruction_body(), budgets.get("style_instruction", 1800), style_sources(), "style_instruction_not_fact_source", 6),
+        Section("reader_promise", "Project Reader Promise", reader_promise_body(), budgets.get("reader_promise", 1400), reader_promise_sources(), "reader_promise_instruction_not_fact_source", 6),
+        Section("reader_experience_state", "Reader Experience And Personality State", derived_reader_body(), budgets.get("reader_experience_state", 1800), derived_reader_sources(), "derived_reader_experience_state", 6),
         Section("authorized_elements_full", "本章元素授权", authorization, budgets["authorized_elements_full"], [SourceRef(ROOT / "outline" / "chapter_briefs" / f"{chapter}.md"), SourceRef(object_path), SourceRef(ability_path)], "brief_authorized_ids", 5),
         Section("active_entity_cards", "本章相关实体状态卡", entity_cards, budgets["active_entity_cards"], entity_sources, "brief_and_authorized_entity_recall", 6),
         Section("open_threads", "Active / Open Threads", thread_body(), budgets["open_threads"], thread_sources(), "active_or_open_threads", 7),
@@ -445,6 +489,11 @@ def main() -> int:
     if not ensure_book_outline():
         return 1
     if not ensure_style_contract():
+        return 1
+    reader_errors = validate_reader_promise(load_reader_promise(), require_ready=True)
+    if reader_errors:
+        for error in reader_errors:
+            print(f"ERROR: {error}", file=sys.stderr)
         return 1
     limit = context_pack_budget(chapter, args.limit)
 

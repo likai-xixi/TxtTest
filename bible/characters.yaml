@@ -10,6 +10,39 @@ characters: []
 #   misbelief: 待定
 #   secret: 待定
 #   current_state: 待定
+#   initial_personality:
+#     essence: 待定：一句话本质，比如“怕失控，所以用规则保护自己”。
+#     opening_mask: 待定：主角开局给外界看的样子。
+#     true_inner_state: 待定：主角真实内在状态。
+#     visible_traits:
+#       - 待定：外显性格 1
+#       - 待定：外显性格 2
+#     hidden_traits:
+#       - 待定：被压住的欲望
+#       - 待定：不愿承认的恐惧
+#     default_strategy: 待定：遇事第一反应。
+#     stress_response: 待定：压力下会怎么变形。
+#     emotional_leak: 待定：情绪藏不住时会露在哪里。
+#     speech_profile:
+#       rhythm: 待定：说话节奏。
+#       sharpness: 待定：毒舌 / 克制 / 绕弯 / 直给。
+#       favorite_words:
+#         - 待定：常用词。
+#       forbidden_tone:
+#         - 待定：不该突然出现的语气。
+#     relationship_modes:
+#       stranger: 待定：面对陌生人。
+#       ally: 待定：面对同伴。
+#       authority: 待定：面对强者或上级。
+#       intimate: 待定：面对亲密关系。
+#     opening_flaw: 待定：开局缺陷。
+#     opening_misbelief: 待定：开局错误认知。
+#     opening_desire: 待定：开局最想要什么。
+#     opening_fear: 待定：开局最怕什么。
+#     first_three_chapter_limits:
+#       - 前三章不能突然完成核心成长。
+#       - 前三章不能无事件推翻初始误信。
+#     change_seeds:
+#       - 待定：后续可能被事件撬动的性格点。
 #   forbidden_changes:
 #     - 三章试点期禁止自动决定人物命运。
-

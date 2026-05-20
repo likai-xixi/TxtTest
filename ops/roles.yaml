@@ -37,6 +37,14 @@ review:
     - reviews/{chapter}/codex_integrated_review.md
     - reviews/{chapter}/deepseek_integrated_review.md
     - reviews/{chapter}/review_manifest.json
+    - reviews/{chapter}/opening_retention.md
+    - reviews/{chapter}/personality_drift.md
+    - reviews/{chapter}/hook_retention.md
+    - reviews/{chapter}/protagonist_charm.md
+    - reviews/{chapter}/world_reveal.md
+    - reviews/{chapter}/suspense_ladder.md
+    - reviews/{chapter}/language_memorability.md
+    - reviews/{chapter}/genre_fit.md
 
 continuity:
   allow:
@@ -73,6 +81,9 @@ state:
   allow:
     - state/event_ledger.jsonl
     - state/derived/**
+    - state/project_reader_promise.json
+    - state/project_reader_promise.md
+    - state/reader_promise/**
     - bible/objects.yaml
     - bible/abilities.yaml
     - state/context_pack/{chapter}.md
@@ -125,7 +136,40 @@ maintenance:
     - schemas/**
     - reader_tests/**
     - reviews/**
+    - state/project_reader_promise.json
+    - state/project_reader_promise.md
+    - state/reader_promise/**
     - state/gates/**
     - state/idea_lab/**
     - state/selections/**
     - state/stops/**
+
+reader_promise:
+  allow:
+    - templates/reader_promise.md
+    - state/project_reader_promise.json
+    - state/project_reader_promise.md
+    - state/reader_promise/**
+    - schemas/reader_promise.schema.json
+
+personality:
+  allow:
+    - schemas/personality.schema.json
+    - schemas/character.schema.json
+    - schemas/core_setting_freeze.schema.json
+    - bible/characters.yaml
+    - state/derived/personality/**
+    - state/derived/protagonist_progression.json
+    - state/derived/progression/**
+
+evidence:
+  allow:
+    - reviews/{chapter}/**
+    - state/derived/personality/**
+    - state/derived/suspense/**
+    - state/derived/world_reveal/**
+    - state/derived/progression/**
+    - state/derived/protagonist_progression.json
+    - state/derived/concept_index.json
+    - state/derived/world_reveal_ledger.json
+    - state/derived/suspense_ledger.json

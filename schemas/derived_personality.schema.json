@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DerivedPersonalityState",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "generated_at",
+    "status",
+    "initial_personality",
+    "current_personality",
+    "personality_delta_events",
+    "source_refs",
+    "blockers"
+  ],
+  "properties": {
+    "schema_version": { "type": "integer" },
+    "generated_at": { "type": "string" },
+    "status": { "type": "string" },
+    "initial_personality": { "type": "object" },
+    "current_personality": { "type": "object" },
+    "personality_delta_events": { "type": "array", "items": { "type": "object" } },
+    "source_refs": { "type": "array", "items": { "type": "object" } },
+    "blockers": { "type": "array", "items": { "type": "string" } }
+  }
+}

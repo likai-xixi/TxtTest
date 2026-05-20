@@ -11,6 +11,7 @@ from core_setting_freeze import ensure_ready as ensure_core_setting_freeze, free
 from element_context import yaml_id_index
 from gate_policy import gate_errors_for_chapter
 from style_contract import CONTRACT_JSON, CONTRACT_MD, STYLE_GUIDE, STYLE_PROFILE, ensure_ready as ensure_style_contract
+from reader_personality_contracts import READER_PROMISE_JSON, READER_PROMISE_MD, load_reader_promise, validate_reader_promise
 
 
 def file_section(title: str, path: Path, limit: int) -> str:
@@ -68,7 +69,7 @@ def gate_ready(chapter: str) -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Build the allowed source pack for Codex/DeepSeek brief candidates.")
     parser.add_argument("--chapter", required=True)
-    parser.add_argument("--limit", type=int, default=9500)
+    parser.add_argument("--limit", type=int, default=14000)
     args = parser.parse_args()
 
     if write_blocked_by_locks("brief candidate pack build"):
@@ -87,6 +88,11 @@ def main() -> int:
     if not ensure_book_outline():
         return 1
     if not ensure_style_contract():
+        return 1
+    reader_errors = validate_reader_promise(load_reader_promise(), require_ready=True)
+    if reader_errors:
+        for error in reader_errors:
+            print(f"ERROR: {error}", file=sys.stderr)
         return 1
     anchor_text, anchor_errors = previous_anchor_section(args.chapter)
     if anchor_errors:
@@ -119,6 +125,12 @@ def main() -> int:
         file_section("Project Style Machine Contract", CONTRACT_JSON, 700),
         file_section("Style Guide", STYLE_GUIDE, 700),
         file_section("Derived Style Profile", STYLE_PROFILE, 500),
+        file_section("Project Reader Promise", READER_PROMISE_MD, 700),
+        file_section("Project Reader Promise Machine Contract", READER_PROMISE_JSON, 700),
+        file_section("Current Personality Snapshot", ROOT / "state" / "derived" / "personality" / "protagonist.json", 900),
+        file_section("Protagonist Progression", ROOT / "state" / "derived" / "protagonist_progression.json", 600),
+        file_section("World Reveal Ledger", ROOT / "state" / "derived" / "world_reveal_ledger.json", 600),
+        file_section("Suspense Ledger", ROOT / "state" / "derived" / "suspense_ledger.json", 600),
         file_section("开书前核心设定冻结", freeze_markdown_path() or ROOT / "state" / "idea_lab" / "missing.md", 1400),
         file_section("一句话卖点与主角核心", ROOT / "outline" / "premise.md", 900),
         file_section("当前卷目标", ROOT / "outline" / "volume_01.md", 700),

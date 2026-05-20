@@ -10,6 +10,7 @@ from typing import Any
 
 from _common import ROOT, chapter_number, chapter_parts, now_iso, read_json, read_text, write_json
 from style_contract import REQUIRED_FIELDS, validate_contract
+from reader_personality_contracts import READER_PROMISE_JSON, READER_PROMISE_MD, load_reader_promise, validate_reader_promise
 
 
 HEADER = "# Candidate Style Requirements"
@@ -17,6 +18,17 @@ CONTRACT_JSON = ROOT / "state" / "project_style_contract.json"
 CONTRACT_MD = ROOT / "state" / "project_style_contract.md"
 STYLE_GUIDE = ROOT / "bible" / "style_guide.md"
 STYLE_PROFILE = ROOT / "state" / "derived" / "style_profile.json"
+DERIVED_PERSONALITY = ROOT / "state" / "derived" / "personality" / "protagonist.json"
+PROTAGONIST_PROGRESSION = ROOT / "state" / "derived" / "protagonist_progression.json"
+WORLD_REVEAL_LEDGER = ROOT / "state" / "derived" / "world_reveal_ledger.json"
+SUSPENSE_LEDGER = ROOT / "state" / "derived" / "suspense_ledger.json"
+PROMPT_RECORDED_BUT_POST_CHAPTER_MUTABLE_ROLES = {
+    "derived_personality",
+    "derived_current_personality",
+    "protagonist_progression",
+    "world_reveal_ledger",
+    "suspense_ledger",
+}
 
 
 PLACEHOLDERS = ("TODO", "TBD", "待定", "待填", "待评", "placeholder")
@@ -122,6 +134,16 @@ def source_refs(include_profile: bool) -> list[dict[str, Any]]:
     ]
     if include_profile:
         refs.append(file_ref(STYLE_PROFILE, "derived_style_profile"))
+    refs.extend(
+        [
+            file_ref(READER_PROMISE_JSON, "project_reader_promise_json"),
+            file_ref(READER_PROMISE_MD, "project_reader_promise_markdown"),
+            file_ref(DERIVED_PERSONALITY, "derived_current_personality"),
+            file_ref(PROTAGONIST_PROGRESSION, "protagonist_progression"),
+            file_ref(WORLD_REVEAL_LEDGER, "world_reveal_ledger"),
+            file_ref(SUSPENSE_LEDGER, "suspense_ledger"),
+        ]
+    )
     return refs
 
 
@@ -140,6 +162,8 @@ def render_requirements(chapter: str) -> dict[str, Any]:
     warnings: list[str] = []
     contract, contract_errors = load_contract()
     blockers.extend(contract_errors)
+    reader_promise = load_reader_promise()
+    blockers.extend(validate_reader_promise(reader_promise, require_ready=True))
 
     md_text = read_text(CONTRACT_MD)
     guide_text = read_text(STYLE_GUIDE)
@@ -195,6 +219,43 @@ def render_requirements(chapter: str) -> dict[str, Any]:
         lines.append(f"- allowed_ranges: {render_value(profile.get('allowed_ranges'))}")
     lines.extend(
         [
+            "",
+            "## Reader Retention Requirements",
+            "",
+            "- 开篇必须从扰动、压力、异常、冲突或强人物动作开始，禁止先写日常流水账。",
+            "- 每章必须有一个中段变化点，不能从头到尾按计划推进。",
+            "- 章末必须给出下一章点击理由，不能只写等待、归档、沉默、继续观察。",
+            "- 流程、表格、回函、检测、记录只能作为冲突工具，不能成为叙事主体。",
+            "- 主角每章必须主动改变局面，哪怕改变带来更大麻烦。",
+            "- 金手指必须定期展示能力、限制、反噬、升级或误导，不能长期只是发热和提示。",
+            "- 世界观信息必须通过场景压力、人物选择或普通人反应展示。",
+            "- 每章至少保留一句有传播力的台词、吐槽、反差句或情绪句。",
+            "",
+            "## Project Reader Promise",
+            "",
+            render_value(reader_promise, limit=1200),
+            "",
+            "## Protagonist Initial Personality Contract",
+            "",
+            "- 第 1 章前主角人格来自 core_setting_freeze / characters.yaml；第 1 章后变化只能来自 character_state_change。",
+            "- 不得无事件推翻 opening_misbelief、default_strategy 或 stress_response。",
+            "",
+            "## Current Personality Snapshot",
+            "",
+            read_text(DERIVED_PERSONALITY, "missing derived personality; rebuild derived state"),
+            "",
+            "## World Reveal Budget",
+            "",
+            read_text(WORLD_REVEAL_LEDGER, "missing world reveal ledger; rebuild derived state"),
+            "",
+            "## Suspense Ladder Requirements",
+            "",
+            read_text(SUSPENSE_LEDGER, "missing suspense ledger; rebuild derived state"),
+            "",
+            "## Language Memorability Requirements",
+            "",
+            "- 本章必须规划金句、梗、反差笑点、角色口头禅、标志动作或可截图传播句之一。",
+            "- 禁止整章只有平铺解释、流程复述和无压迫的观察。",
             "",
             "## Source Trace",
             "",
@@ -336,7 +397,7 @@ def validate_prompt_manifest(chapter: str, provider: str, *, require_candidate_w
             source_path = ROOT / source_rel
             if not source_path.exists():
                 failures.append(f"{chapter}: {label} style source missing on disk {source_rel}")
-            elif sha256(source_path) != expected_sha:
+            elif sha256(source_path) != expected_sha and item.get("role") not in PROMPT_RECORDED_BUT_POST_CHAPTER_MUTABLE_ROLES:
                 failures.append(f"{chapter}: {label} style source hash is stale for {source_rel}")
 
     if require_candidate_written and data.get("candidate_written") is not True:

@@ -62,6 +62,7 @@ from brief_contract import (
     scene_continuity_note_is_concrete,
     scene_continuity_type,
 )
+from reader_personality_contracts import READER_BRIEF_REQUIRED_LABELS, READER_BRIEF_REQUIRED_SECTIONS, metadata_value
 
 
 REQUIRED_SECTIONS = BASE_REQUIRED_SECTIONS
@@ -129,6 +130,27 @@ def check_required_anchor_fields(body: str, fields: tuple[str, ...], label: str)
             failures.append(f"{label} missing field: {field}")
         elif has_placeholder(value) or is_none_body(value):
             failures.append(f"{label} field is not ready: {field}")
+    return failures
+
+
+def check_reader_contract_sections(parsed: dict[str, str]) -> list[str]:
+    failures: list[str] = []
+    for aliases in READER_BRIEF_REQUIRED_SECTIONS:
+        label = aliases[0]
+        if missing_section(parsed, aliases):
+            failures.append(f"missing required reader contract section: {label}")
+            continue
+        body = section_body(parsed, aliases)
+        if not body:
+            failures.append(f"empty required reader contract section: {label}")
+        elif has_placeholder(body):
+            failures.append(f"reader contract section still has placeholder text: {label}")
+        for field in READER_BRIEF_REQUIRED_LABELS.get(label, ()):
+            value = metadata_value(body, field)
+            if not value:
+                failures.append(f"reader contract section {label} missing field: {field}")
+            elif has_placeholder(value):
+                failures.append(f"reader contract section {label} field is not ready: {field}")
     return failures
 
 
@@ -315,6 +337,7 @@ def check_brief(path: Path) -> list[str]:
     failures.extend(check_pacing_sections(parsed))
     failures.extend(check_scene_continuity_sections(path.stem, parsed))
     failures.extend(check_progress_contract_sections(parsed))
+    failures.extend(check_reader_contract_sections(parsed))
 
     object_ids = declared_ids(section_body(parsed, USABLE_OBJECT_ID_SECTIONS))
     ability_ids = declared_ids(section_body(parsed, USABLE_ABILITY_ID_SECTIONS))

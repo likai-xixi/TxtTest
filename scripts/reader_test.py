@@ -32,10 +32,15 @@ def response_dir(gate: str) -> Path:
 
 def validate_answers(gate: str, answers: dict) -> list[str]:
     errors: list[str] = []
+    normalized_answers: list[str] = []
     for question in GATE_QUESTIONS[gate]:
         answer = str(answers.get(question, "")).strip()
         if not answer or answer in {"待填", "待定", "TODO"}:
             errors.append(f"missing answer for: {question}")
+        normalized_answers.append(answer)
+    nonempty = [answer for answer in normalized_answers if answer and answer not in {"待填", "待定", "TODO"}]
+    if nonempty and len(set(nonempty)) == 1 and len(nonempty[0]) <= 6 and len(nonempty) == len(GATE_QUESTIONS[gate]):
+        errors.append("reader answers look like a repeated placeholder; provide real answers or use --allow-incomplete")
     return errors
 
 

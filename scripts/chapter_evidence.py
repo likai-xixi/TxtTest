@@ -25,6 +25,14 @@ from context_governance import context_manifest_path, context_quality_path
 from element_context import markdown_sections, missing_section, section_body
 from element_usage import evaluate as evaluate_element_usage
 from fact_cards import evaluate as evaluate_fact_cards
+from reader_personality_contracts import (
+    OPENING_RETENTION_REVIEW,
+    READER_EXPERIENCE_REVIEWS,
+    accepted_by_human_is_current,
+    official_chapter_path,
+    required_reviews_for_chapter,
+    review_bound_to_current_chapter,
+)
 
 
 PLACEHOLDERS = (
@@ -55,6 +63,7 @@ AUXILIARY_REVIEWS = (
     "retention_risk.md",
     "originality.md",
     "similarity_risk.md",
+    *READER_EXPERIENCE_REVIEWS,
 )
 ALLOWED_AUXILIARY_STATUS = {"CLEAR", "ACCEPTED_BY_HUMAN"}
 END_STATE_CHANGE_SECTIONS = ("章末状态变化", "End State Change")
@@ -124,6 +133,12 @@ def validate_manifest_entry(chapter: str, reviewer: str, manifest: dict) -> list
         f"chapters/{volume}/{chapter_file}",
         f"drafts/codex/{chapter}.md",
         f"drafts/deepseek/{chapter}.md",
+        "state/project_reader_promise.json",
+        "state/project_reader_promise.md",
+        "state/derived/personality/protagonist.json",
+        "state/derived/protagonist_progression.json",
+        "state/derived/world_reveal_ledger.json",
+        "state/derived/suspense_ledger.json",
     }
     failures: list[str] = []
 
@@ -609,6 +624,10 @@ def validate_auxiliary_review(chapter: str, name: str) -> list[str]:
             f"{chapter}: auxiliary review {name} status is {status or 'MISSING'}; "
             f"expected one of {sorted(ALLOWED_AUXILIARY_STATUS)}"
         )
+    if status == "CLEAR" and name in required_reviews_for_chapter(chapter) and not review_bound_to_current_chapter(text, official_chapter_path(chapter)):
+        failures.append(f"{chapter}: auxiliary review {name} official chapter hash is missing or stale")
+    if status == "ACCEPTED_BY_HUMAN" and not accepted_by_human_is_current(text, path, official_chapter_path(chapter)):
+        failures.append(f"{chapter}: auxiliary review {name} human acceptance is missing or stale")
     if name == "originality.md":
         required_terms = ("撞梗", "换皮", "设定名词", "人物关系", "句式", "对白节奏", "标志性表达")
         for term in required_terms:
@@ -816,7 +835,11 @@ def chapter_evidence_failures(chapter: str) -> list[str]:
     failures.extend(validate_manifest_entry(chapter, "deepseek", manifest))
     failures.extend(validate_model_disagreement(chapter))
     failures.extend(validate_continuity(chapter))
-    for name in AUXILIARY_REVIEWS:
+    review_names = list(AUXILIARY_REVIEWS)
+    for name in required_reviews_for_chapter(chapter):
+        if name not in review_names:
+            review_names.append(name)
+    for name in review_names:
         failures.extend(validate_auxiliary_review(chapter, name))
 
     if continuity_has_blocker(chapter):

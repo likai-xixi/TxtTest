@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 
 from element_context import NONE_MARKERS
+from reader_personality_contracts import READER_BRIEF_REQUIRED_SECTIONS
 
 
 PLACEHOLDER_MARKERS = ("待定", "待填", "待人类确认", "TODO", "寰呭畾", "寰呭～")
@@ -92,6 +93,7 @@ REQUIRED_BRIEF_FIELDS = (
     "本章禁止新增",
     "本章禁止解决",
     "禁止新增 / 禁止解决 / 禁止模仿",
+    *[aliases[0] for aliases in READER_BRIEF_REQUIRED_SECTIONS],
 )
 
 S_LEVELS = {f"S{index}" for index in range(5)}

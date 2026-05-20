@@ -20,6 +20,7 @@ from record_idea_selection import (
     validate_output_freshness,
 )
 from style_contract import CONTRACT_JSON, STYLE_PROFILE, validate_contract as validate_style_contract
+from reader_personality_contracts import load_reader_promise, validate_reader_promise
 
 
 PLACEHOLDERS = ("待定", "待填", "待评", "待生成", "待人类裁决", "寰呭畾", "寰呭～", "寰呰瘎", "TODO")
@@ -612,6 +613,7 @@ def contract_snapshot() -> dict[str, str]:
     style_data, style_error = _safe_json(CONTRACT_JSON)
     profile_data, _profile_error = _safe_json(STYLE_PROFILE)
     volume_data, volume_error = _safe_json(volume_json_path("v01"))
+    reader_data = load_reader_promise()
 
     book_errors = validate_book_outline_contract(book_data or {}, official=True)
     style_errors = validate_style_contract(style_data or {}, official=True)
@@ -638,6 +640,7 @@ def contract_snapshot() -> dict[str, str]:
     target = str((book_data or {}).get("target_word_count") or "unset") if isinstance(book_data, dict) else "unset"
     genre = "clear" if isinstance(book_data, dict) and not has_placeholders(BOOK_JSON) and (book_data or {}).get("genre_lane") else "missing"
     ending = "clear" if isinstance(book_data, dict) and not has_placeholders(BOOK_JSON) and (book_data or {}).get("ending_direction") else "missing"
+    reader_errors = validate_reader_promise(reader_data, require_ready=True)
     return {
         "book_outline": book_status,
         "volume_outline": volume_status,
@@ -646,6 +649,7 @@ def contract_snapshot() -> dict[str, str]:
         "ending_direction": ending,
         "style_contract": style_status,
         "style_profile": profile_status,
+        "reader_promise": "ready" if not reader_errors else "not_ready",
     }
 
 
@@ -721,6 +725,9 @@ def next_prompt(chapter: str | None = None) -> str:
     style_contract_errors = validate_style_contract(_safe_json(CONTRACT_JSON)[0] or {}, official=True)
     if style_contract_errors:
         return "定风格：运行 style-contract-start / style-contract-land，先把写作风格契约落为 READY，再进入 brief 候选。"
+    reader_errors = validate_reader_promise(load_reader_promise(), require_ready=True)
+    if reader_errors:
+        return "锁读者承诺：运行 reader-promise-start，补全本书类型承诺和每章追读快感后，用 reader-promise-land --ready 落盘。"
     if has_placeholders(ROOT / "outline" / "premise.md"):
         return "我想开一本新书。先判断应该走开书实验还是启动问卷，并给我下一步提示词。"
     return prompt_for_chapter(chapter or first_unshipped())
@@ -731,6 +738,7 @@ def dashboard(chapter: str | None = None) -> dict[str, Any]:
     freeze_errors = validate_freeze()
     book_outline_errors = validate_book_outline_contract(_safe_json(BOOK_JSON)[0] or {}, official=True)
     style_contract_errors = validate_style_contract(_safe_json(CONTRACT_JSON)[0] or {}, official=True)
+    reader_promise_errors = validate_reader_promise(load_reader_promise(), require_ready=True) if not freeze_errors else []
     idea = analyze_idea_lab()
     paths = chapter_paths(chapter)
     locks = unresolved_locks()
@@ -756,6 +764,11 @@ def dashboard(chapter: str | None = None) -> dict[str, Any]:
         blocker = "style contract is not ready"
         why = "; ".join(style_contract_errors[:3])
         command = "定风格 / style-contract-land"
+    elif reader_promise_errors:
+        phase_id = "reader_promise"
+        blocker = "reader promise is not ready"
+        why = "; ".join(reader_promise_errors[:3])
+        command = "reader-promise-start / reader-promise-land"
     elif gate:
         phase_id = "gate_review"
         blocker = f"Gate {gate} 等待总编裁决"
@@ -781,7 +794,7 @@ def dashboard(chapter: str | None = None) -> dict[str, Any]:
     if not os.environ.get("DEEPSEEK_API_KEY"):
         env_blockers.append("DEEPSEEK_API_KEY is missing")
     template = template_readiness()
-    story_ready = phase_id == "draft_or_close" and not locks and not freeze_errors and not book_outline_errors and not style_contract_errors and not gate
+    story_ready = phase_id == "draft_or_close" and not locks and not freeze_errors and not book_outline_errors and not style_contract_errors and not reader_promise_errors and not gate
     readiness = {
         "env_status": "ENV_READY" if not env_blockers else "ENV_NOT_READY",
         "template_status": template["status"],
@@ -811,6 +824,8 @@ def dashboard(chapter: str | None = None) -> dict[str, Any]:
         risk_flags.append("book_outline_not_ready")
     if style_contract_errors:
         risk_flags.append("style_contract_not_ready")
+    if reader_promise_errors:
+        risk_flags.append("reader_promise_not_ready")
     if has_placeholders(ROOT / "outline" / "premise.md"):
         risk_flags.append("premise_placeholders")
     if has_placeholders(ROOT / "outline" / "chapter_briefs" / "v01_c001.md"):
@@ -881,6 +896,8 @@ def dashboard(chapter: str | None = None) -> dict[str, Any]:
         "book_outline_errors": book_outline_errors,
         "style_contract_ready": not style_contract_errors,
         "style_contract_errors": style_contract_errors,
+        "reader_promise_ready": not reader_promise_errors,
+        "reader_promise_errors": reader_promise_errors,
         "idea": idea,
         "locks": locks,
         "gates": {

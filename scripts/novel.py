@@ -354,6 +354,10 @@ def command_go(args: argparse.Namespace) -> int:
         print()
         print("next: run `python scripts/novel.py style-contract-start --id idea_xxx`, then `python scripts/novel.py style-contract-land --id idea_xxx --source selected`.")
         return 1
+    if run_script_text("reader_promise.py", "check", "--require-ready") != 0:
+        print()
+        print("next: run `python scripts/novel.py reader-promise-start`, edit the promise, then `python scripts/novel.py reader-promise-land --ready`.")
+        return 1
 
     answers = Path(args.answers)
     if not answers.is_absolute():
@@ -881,6 +885,8 @@ def command_event(args: argparse.Namespace) -> int:
         script_args.extend(["--importance", args.importance])
     for tag in args.tag or []:
         script_args.extend(["--tag", tag])
+    if args.personality_delta_json:
+        script_args.extend(["--personality-delta-json", args.personality_delta_json])
     if args.anchor_end_time:
         script_args.extend(["--anchor-end-time", args.anchor_end_time])
     if args.anchor_end_location:
@@ -1007,6 +1013,28 @@ def command_reader_test(args: argparse.Namespace) -> int:
             script_args.extend(["--recommendation", args.recommendation])
     run_script("reader_test.py", *script_args)
     return 0
+
+
+def command_reader_promise(args: argparse.Namespace) -> int:
+    ensure_no_open_locks()
+    script_args = [args.reader_promise_command]
+    if args.reader_promise_command == "start" and args.force:
+        script_args.append("--force")
+    if args.reader_promise_command == "check" and args.require_ready:
+        script_args.append("--require-ready")
+    if args.reader_promise_command == "land":
+        if args.source:
+            script_args.extend(["--source", args.source])
+        if args.ready:
+            script_args.append("--ready")
+    return run_script("reader_promise.py", *script_args, check=False)
+
+
+def command_reader_experience_check(args: argparse.Namespace) -> int:
+    script_args = [args.kind]
+    if args.chapter:
+        script_args.append(args.chapter)
+    return run_script("reader_experience_checks.py", *script_args, check=False)
 
 
 def command_stop_check(args: argparse.Namespace) -> int:
@@ -1842,6 +1870,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--anchor-carried-item", action="append", default=[])
     p.add_argument("--anchor-unfinished-action", default="")
     p.add_argument("--anchor-next-required-continuity", default="")
+    p.add_argument("--personality-delta-json", default="", help="For character_state_change: JSON personality_delta object.")
     p.add_argument("--no-rebuild", dest="rebuild", action="store_false")
     p.add_argument("--preview", action="store_true", help="Print planned writes and prerequisite checks without mutating files.")
     p.set_defaults(func=command_event, rebuild=True)
@@ -1895,6 +1924,31 @@ def build_parser() -> argparse.ArgumentParser:
     rp.add_argument("--risk", default="")
     rp.add_argument("--recommendation", default="")
     rp.set_defaults(func=command_reader_test)
+
+    p = sub.add_parser("reader-promise-start", help="Create project reader promise draft files.")
+    p.add_argument("--force", action="store_true")
+    p.set_defaults(func=command_reader_promise, reader_promise_command="start", require_ready=False, ready=False, source="")
+
+    p = sub.add_parser("reader-promise-check", help="Check project reader promise readiness.")
+    p.add_argument("--require-ready", action="store_true")
+    p.set_defaults(func=command_reader_promise, reader_promise_command="check", force=False, ready=False, source="")
+
+    p = sub.add_parser("reader-promise-land", help="Land project reader promise JSON/Markdown.")
+    p.add_argument("--source", default="")
+    p.add_argument("--ready", action="store_true")
+    p.set_defaults(func=command_reader_promise, reader_promise_command="land", force=False, require_ready=False)
+
+    for command_name, kind in [
+        ("opening-retention-check", "opening-retention"),
+        ("personality-check", "personality"),
+        ("suspense-check", "suspense"),
+        ("world-reveal-check", "world-reveal"),
+        ("protagonist-progression-check", "protagonist-progression"),
+        ("reader-experience-check", "reader-experience"),
+    ]:
+        p = sub.add_parser(command_name, help=f"Run {kind} governance check.")
+        p.add_argument("chapter", nargs="?")
+        p.set_defaults(func=command_reader_experience_check, kind=kind)
 
     p = sub.add_parser("stop-check", help="Evaluate machine-checkable stop rules.")
     p.add_argument("chapter")

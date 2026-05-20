@@ -19,6 +19,11 @@ STYLE_INPUTS = (
     "state/project_style_contract.md",
     "bible/style_guide.md",
     "state/derived/style_profile.json",
+    "state/project_reader_promise.json",
+    "state/derived/personality/protagonist.json",
+    "state/derived/protagonist_progression.json",
+    "state/derived/world_reveal_ledger.json",
+    "state/derived/suspense_ledger.json",
 )
 
 
@@ -71,6 +76,14 @@ def prompt_for(chapter: str) -> tuple[str, str, list[Path]]:
             "# Human Style Contract\n\n" + file_body(ROOT / "state" / "project_style_contract.md", 3000),
             "# Style Guide\n\n" + file_body(ROOT / "bible" / "style_guide.md", 3000),
             "# Derived Style Profile\n\n" + file_body(ROOT / "state" / "derived" / "style_profile.json", 5000),
+            "# Reader Promise\n\n" + file_body(ROOT / "state" / "project_reader_promise.json", 3000),
+            "# Current Personality\n\n" + file_body(ROOT / "state" / "derived" / "personality" / "protagonist.json", 3000),
+            "# Reader Experience Ledgers\n\n"
+            + file_body(ROOT / "state" / "derived" / "protagonist_progression.json", 2500)
+            + "\n"
+            + file_body(ROOT / "state" / "derived" / "world_reveal_ledger.json", 2500)
+            + "\n"
+            + file_body(ROOT / "state" / "derived" / "suspense_ledger.json", 2500),
             "# Recent Series Style Reports\n\n" + "\n\n".join(file_body(path, 2000) for path in recent),
         ]
     )

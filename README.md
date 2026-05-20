@@ -90,6 +90,7 @@ python scripts/novel.py idea-select --id idea_xxx --choice A --reason "商业钩
 ```
 
 选择后会生成开正文前的核心设定冻结：`state/idea_lab/{idea_id}/core_setting_freeze.json` 和 `.md`。它必须固定世界观核心规则、世界观硬边界、主角异常原因、主角家属/亲密关系、家属剧情功能与风险、前三章约束、不可违背红线、仍可开放的问题。
+冻结里还必须包含 `fields.initial_personality`，并镜像到 `bible/characters.yaml` 的 protagonist。第 1 章之前，主角人格只来自这个初始人格合同；第 1 章之后，只有人类确认的 `character_state_change + personality_delta` 能改变当前人格。
 
 同时只会生成试点资产：`outline/premise.md`、`bible/open_questions.md`、`outline/gate_a_3_chapters.md`、`outline/chapter_briefs/v01_c001.md`。不会写 canon、正文或 event ledger。
 
@@ -97,6 +98,14 @@ python scripts/novel.py idea-select --id idea_xxx --choice A --reason "商业钩
 
 ```bash
 python scripts/novel.py core-freeze-check
+```
+
+开正文前还要锁定读者体验合同。它是写作/审稿指令源，不是 canon，也不进 event ledger：
+
+```bash
+python scripts/novel.py reader-promise-start
+python scripts/novel.py reader-promise-check
+python scripts/novel.py reader-promise-land --ready
 ```
 
 如果不想一句话输入，可先生成短表单：
@@ -172,6 +181,12 @@ python scripts/novel.py desk
 - `本章可用技能 IDs`：只列本章允许使用的 `bible/abilities.yaml` ID。
 - `本章允许新增元素`：L0 场景细节、L1 一次性线索、L2 伏笔、L3 长期机制、L4 核心设定分别说明。
 - `本章禁止临场解决`：禁止靠未授权新道具、新能力或新规则解决本章核心问题。
+- `本章留存合同`：第一屏钩子、核心问题、中段加压、小兑现、章末钩子和下一章点击理由。
+- `本章主角魅力合同`：主动目标、过人之处、弱点误判、金手指/特殊资源、刻度变化和读者喜欢主角的瞬间。
+- `本章初始人格挑战合同`：声明本章压迫哪些初始人格字段，若真实改变必须走 `personality_delta`。
+- `本章世界观展示合同` / `本章名词预算`：限制新名词，并要求规则通过场景、冲突或人物反应展示。
+- `本章悬念推进合同`：旧问题、新线索、部分解答、新问题和状态。
+- `本章语言记忆点`：金句、梗/反差句、口头禅或标志动作，以及禁止的平铺语气。
 
 `python scripts/novel.py brief-precheck {chapter}` 是生成候选 brief 前的智能预检，会检查核心冻结、上一章锚点、Gate、stop lock、关键源占位和后果承接债务；`python scripts/novel.py brief-check {chapter}` 是正式 brief 的单章硬门禁；`python scripts/novel.py pacing-check {chapter} --write` 是跨章硬门禁加预警：连续 3 章都是 `C0/C1` 会 BLOCK，高推进或 payoff 后没有在消化窗口内承接也会 BLOCK。`python scripts/novel.py pacing-dashboard {chapter} --write` 会生成节奏与 aftermath 人读报告，不替代硬门禁。
 
@@ -220,6 +235,8 @@ Ship 前 `python scripts/novel.py evidence {chapter}` 必须 READY。它会检�
 - review artifact 必须晚于对应 manifest。
 - model_disagreement、continuity、辅助审查齐全。
 - `ai_taste.md`、`web_satisfaction.md`、`retention_risk.md`、`originality.md` 的 `status` 必须是 `CLEAR` 或 `ACCEPTED_BY_HUMAN`。
+- `opening_retention.md`（前三章）、`personality_drift.md`、`hook_retention.md`、`protagonist_charm.md`、`world_reveal.md`、`suspense_ladder.md`、`language_memorability.md`、`genre_fit.md` 必须是 `CLEAR` 或带当前 official chapter hash 的 `ACCEPTED_BY_HUMAN`。
+- 人格变化必须有 `character_state_change + personality_delta`；世界观名词超预算、P0/P1 悬念长期不推进、主角成长刻度长期停滞都会阻断 Ship 或 Gate。
 
 Style and series-feel evidence:
 
@@ -236,7 +253,7 @@ python scripts/novel.py gate A
 python scripts/novel.py gate-close A --decision continue --reason "..." --next-limits "..." --continue-to v01_c010 --budget "..." --primary-model Codex --must-fix "..." --stop-trigger "..."
 ```
 
-Gate A/B 需要章节证据、读者反馈和 synthesis。Gate C 还需要 `state/gates/gate_c_assessment.md`；Gate E 还需要 `state/gates/gate_e_300w_assessment.md`。Gate 命令只检查证据和记录人类裁决，不会自动通过。
+Gate A/B 需要章节证据、reader promise 兑现、主角主动性、初始人格稳定性、悬念推进、世界观场景化展示、读者反馈和 synthesis。Gate F/G/H 还会复盘 suspense ledger、world reveal/concept ledger 和 protagonist progression 的长线债务。Gate 命令只检查证据和记录人类裁决，不会自动通过。
 
 ## DeepSeek 边界
 
