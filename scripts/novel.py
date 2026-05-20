@@ -415,7 +415,7 @@ def command_go(args: argparse.Namespace) -> int:
         return 0
 
     print(f"ready: `{display_path(context)}`")
-    print(f"next: ask Codex to write `drafts/codex/{args.chapter}.md` from the context pack.")
+    print(f"next: ask Codex to write `drafts/codex/{args.chapter}.md` from the context pack, including its Style Instruction section.")
     if os.environ.get("DEEPSEEK_API_KEY"):
         print(f"optional: run `python scripts/novel.py deepseek-generate {args.chapter}` for a DeepSeek candidate.")
     else:
@@ -662,6 +662,17 @@ def command_deepseek_generate(args: argparse.Namespace) -> int:
     if args.dry_run:
         script_args.append("--dry-run")
     run_script("run_deepseek_generate.py", *script_args)
+    return 0
+
+
+def command_deepseek_style_review(args: argparse.Namespace) -> int:
+    ensure_no_open_locks()
+    script_args = ["--chapter", args.chapter]
+    if args.model:
+        script_args.extend(["--model", args.model])
+    if args.dry_run:
+        script_args.append("--dry-run")
+    run_script("run_deepseek_style_review.py", *script_args)
     return 0
 
 
@@ -1100,6 +1111,19 @@ def command_style_check(args: argparse.Namespace) -> int:
     if args.chapter:
         script_args.append(args.chapter)
     return run_script("style_contract.py", *script_args, check=False)
+
+
+def command_series_style_check(args: argparse.Namespace) -> int:
+    script_args = [args.chapter]
+    if args.json:
+        script_args.append("--json")
+    if args.accept:
+        script_args.append("--accept")
+    if args.reason:
+        script_args.extend(["--reason", args.reason])
+    if args.require_deepseek:
+        script_args.append("--require-deepseek")
+    return run_script("series_style.py", *script_args, check=False)
 
 
 def command_style_drift_report(_args: argparse.Namespace) -> int:
@@ -1700,6 +1724,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--dry-run", action="store_true")
     p.set_defaults(func=command_deepseek_generate)
 
+    p = sub.add_parser("deepseek-style-review", help="Ask DeepSeek for an independent series-style review.")
+    p.add_argument("chapter")
+    p.add_argument("--model", default=model_for("deepseek_style_review"))
+    p.add_argument("--dry-run", action="store_true")
+    p.set_defaults(func=command_deepseek_style_review)
+
     p = sub.add_parser("brief-candidates", help="Prepare Codex/DeepSeek brief candidates before official brief landing.")
     p.add_argument("chapter")
     p.add_argument("--deepseek", action="store_true", help="Call DeepSeek brief generation after the brief pack is built.")
@@ -1939,6 +1969,14 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("style-check", help="Check project or chapter style consistency.")
     p.add_argument("chapter", nargs="?")
     p.set_defaults(func=command_style_check)
+
+    p = sub.add_parser("series-style-check", help="Check cross-chapter style consistency and series feel.")
+    p.add_argument("chapter")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--accept", action="store_true", help="Record a human acceptance for non-infrastructure style drift.")
+    p.add_argument("--reason", default="")
+    p.add_argument("--require-deepseek", action="store_true")
+    p.set_defaults(func=command_series_style_check)
 
     p = sub.add_parser("style-drift-report", help="Show style drift/profile status.")
     p.set_defaults(func=command_style_drift_report)

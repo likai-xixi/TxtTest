@@ -899,6 +899,69 @@ def write_style_metrics(repo: Path, chapter: str) -> None:
     write(repo, f"reviews/{chapter}/style_consistency.md", f"# Style Consistency: {chapter}\n\nstatus: READY\n")
 
 
+def write_style_profile(repo: Path) -> None:
+    report = {
+        "schema_version": 1,
+        "status": "READY",
+        "generated_at": "2000-01-01T00:00:00+00:00",
+        "generated_from_chapters": ["v01_c001", "v01_c002", "v01_c003"],
+        "baseline_policy": "synthetic test baseline",
+        "series_dimensions": ["sentence_rhythm", "dialogue_ratio", "protagonist_voice"],
+        "per_chapter_metrics": [],
+        "metrics": {
+            "chapter_count": 3,
+            "average_sentence_chars": {"mean": 40, "stddev": 5, "min": 35, "max": 45},
+            "dialogue_line_ratio": {"mean": 0.2, "stddev": 0.05, "min": 0.15, "max": 0.25},
+        },
+        "allowed_ranges": {
+            "average_sentence_chars": {"min": 20, "max": 80, "tolerance": 20},
+            "dialogue_line_ratio": {"min": 0.0, "max": 0.6, "tolerance": 0.4},
+            "short_paragraph_ratio": {"min": 0.0, "max": 1.0, "tolerance": 1.0},
+        },
+        "warnings": [],
+        "blockers": [],
+    }
+    write(repo, "state/derived/style_profile.json", json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+
+
+def write_series_style_report(repo: Path, chapter: str, status: str = "READY") -> None:
+    volume = chapter[:3]
+    chapter_file = f"c{int(chapter[-3:]):03d}.md"
+    chapter_rel = f"chapters/{volume}/{chapter_file}"
+    metrics_rel = f"reviews/{chapter}/style_metrics.json"
+    profile_rel = "state/derived/style_profile.json"
+    number = int(chapter[-3:])
+    report = {
+        "schema_version": 1,
+        "chapter": chapter,
+        "generated_at": "2000-01-01T00:00:00+00:00",
+        "status": status,
+        "gate_mode": "ADVISORY" if number < 6 else "HARD",
+        "official_chapter": {"path": chapter_rel, "sha256": file_sha(repo, chapter_rel)},
+        "inputs": {
+            "style_profile": {"path": profile_rel, "exists": True, "sha256": file_sha(repo, profile_rel), "status": "READY"},
+            "style_metrics": {"path": metrics_rel, "exists": True, "sha256": file_sha(repo, metrics_rel), "status": "READY"},
+            "recent_style_metrics": [],
+        },
+        "window": {"baseline_chapters": ["v01_c001", "v01_c002", "v01_c003"], "recent_chapters": []},
+        "current_metrics": {"char_count": len((repo / chapter_rel).read_text(encoding="utf-8"))},
+        "signals": {"metric_outlier_count": 0, "marker_blocker_count": 0, "marker_warning_count": 0, "deepseek_style_review": "missing"},
+        "findings": [],
+        "blockers": [],
+        "warnings": ["synthetic advisory warning"] if status == "WARNING" else [],
+        "human_acceptance": None,
+    }
+    if status == "ACCEPTED_BY_HUMAN":
+        report["warnings"] = ["synthetic accepted drift"]
+        report["human_acceptance"] = {
+            "accepted_at": "2000-01-01T00:00:00+00:00",
+            "reason": "human accepted intentional style variation",
+            "official_chapter_sha256": file_sha(repo, chapter_rel),
+        }
+    write(repo, f"reviews/{chapter}/series_style.json", json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+    write(repo, f"reviews/{chapter}/series_style.md", f"# Series Style: {chapter}\n\nstatus: {status}\n")
+
+
 def write_complete_chapter_evidence(repo: Path, chapter: str, number: int) -> None:
     volume = chapter[:3]
     chapter_file = f"c{number:03d}.md"
@@ -989,6 +1052,9 @@ def write_complete_chapter_evidence(repo: Path, chapter: str, number: int) -> No
     write(repo, f"reviews/{chapter}/decision.md", "# Decision\n\ndecision: Ship\n")
     write_auxiliary_reviews(repo, chapter)
     write_style_metrics(repo, chapter)
+    if number >= 4:
+        write_style_profile(repo)
+        write_series_style_report(repo, chapter)
     write_element_usage_report(repo, chapter)
     write_fact_cards_report(repo, chapter)
 
@@ -1166,6 +1232,80 @@ class WorkflowGuardTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("status: NOT_READY", result.stdout)
 
+    def test_chapter_evidence_requires_series_style_after_warmup(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_complete_chapter_evidence(repo, "v01_c006", 6)
+            (repo / "reviews/v01_c006/series_style.json").unlink()
+
+            result = run(repo, "scripts/novel.py", "evidence", "v01_c006")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("missing series style check artifact", result.stdout)
+
+    def test_chapter_evidence_allows_advisory_series_warning(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_complete_chapter_evidence(repo, "v01_c004", 4)
+            write_series_style_report(repo, "v01_c004", "WARNING")
+
+            result = run(repo, "scripts/novel.py", "evidence", "v01_c004")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_chapter_evidence_rejects_hard_series_warning(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_complete_chapter_evidence(repo, "v01_c006", 6)
+            write_series_style_report(repo, "v01_c006", "WARNING")
+
+            result = run(repo, "scripts/novel.py", "evidence", "v01_c006")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("series style status is WARNING", result.stdout)
+
+    def test_chapter_evidence_accepts_human_series_override(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_complete_chapter_evidence(repo, "v01_c006", 6)
+            write_series_style_report(repo, "v01_c006", "ACCEPTED_BY_HUMAN")
+
+            result = run(repo, "scripts/novel.py", "evidence", "v01_c006")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_chapter_evidence_rejects_stale_series_style_hash(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_complete_chapter_evidence(repo, "v01_c006", 6)
+            write(repo, "chapters/v01/c006.md", "Official chapter v01_c006 changed after series report.\n")
+
+            result = run(repo, "scripts/novel.py", "evidence", "v01_c006")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("series style official chapter hash is stale", result.stdout)
+
+    def test_series_style_check_generates_advisory_and_blocks_hard_drift(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_style_profile(repo)
+            write(repo, "chapters/v01/c004.md", "A compact official chapter with stable voice.\n")
+            write_style_metrics(repo, "v01_c004")
+
+            advisory = run(repo, "scripts/novel.py", "series-style-check", "v01_c004")
+            self.assertEqual(advisory.returncode, 0, advisory.stdout + advisory.stderr)
+            advisory_report = json.loads((repo / "reviews/v01_c004/series_style.json").read_text(encoding="utf-8"))
+            self.assertEqual(advisory_report["gate_mode"], "ADVISORY")
+
+            write(repo, "chapters/v01/c006.md", "A hard-gate chapter. [series-drift:voice]\n")
+            write_style_metrics(repo, "v01_c006")
+            hard = run(repo, "scripts/novel.py", "series-style-check", "v01_c006")
+
+            self.assertNotEqual(hard.returncode, 0)
+            hard_report = json.loads((repo / "reviews/v01_c006/series_style.json").read_text(encoding="utf-8"))
+            self.assertEqual(hard_report["gate_mode"], "HARD")
+            self.assertEqual(hard_report["status"], "NOT_READY")
+
     def test_novel_new_wrapper_commands_are_available(self) -> None:
         with copy_repo() as temp:
             repo = temp
@@ -1194,7 +1334,9 @@ class WorkflowGuardTests(unittest.TestCase):
                 "style-profile-build",
                 "style-profile-check",
                 "style-check",
+                "series-style-check",
                 "style-drift-report",
+                "deepseek-style-review",
                 "idea",
                 "idea-form",
                 "idea-select",
@@ -1598,6 +1740,18 @@ class WorkflowGuardTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("core setting freeze", result.stderr)
             self.assertFalse((repo / "external_runs/deepseek/v01_c001/generate.prompt.md").exists())
+
+    def test_deepseek_generate_blocks_post_warmup_without_ready_style_profile(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_core_setting_freeze(repo)
+            write(repo, "state/context_pack/v01_c004.md", "context\n")
+
+            result = run(repo, "scripts/run_deepseek_generate.py", "--chapter", "v01_c004", "--dry-run")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("READY style profile", result.stderr)
+            self.assertFalse((repo / "external_runs/deepseek/v01_c004/generate.prompt.md").exists())
 
     def test_deepseek_brief_dry_run_blocks_without_core_setting_freeze(self) -> None:
         with copy_repo() as temp:
@@ -2440,6 +2594,26 @@ print("OK: stub deepseek idea")
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertEqual((repo / "drafts/deepseek/v01_c001.md").read_text(encoding="utf-8"), "candidate text\n")
             self.assertTrue((repo / "external_runs/deepseek/v01_c001/generate.raw.json").exists())
+
+    def test_deepseek_style_review_valid_response_writes_structured_report(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write(repo, "chapters/v01/c001.md", "Official chapter with stable series voice.\n")
+            write_style_profile(repo)
+            write_style_metrics(repo, "v01_c001")
+
+            result = run_deepseek_module_with_response(
+                repo,
+                "run_deepseek_style_review",
+                "{'choices': [{'message': {'content': '{\"status\":\"CLEAR\",\"action\":\"Ship\",\"findings\":[\"stable voice\"],\"warnings\":[],\"blockers\":[],\"summary\":\"ok\"}'}}]}",
+                "--chapter",
+                "v01_c001",
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            data = json.loads((repo / "reviews/v01_c001/deepseek_style_review.json").read_text(encoding="utf-8"))
+            self.assertEqual(data["status"], "CLEAR")
+            self.assertTrue((repo / "external_runs/deepseek/v01_c001/style_review.raw.json").exists())
 
     def test_deepseek_brief_valid_response_writes_candidate_and_raw_json(self) -> None:
         with copy_repo() as temp:

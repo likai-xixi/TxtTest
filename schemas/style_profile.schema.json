@@ -8,7 +8,11 @@
     "status": { "enum": ["UNBUILT", "WARMUP", "READY", "NOT_READY"] },
     "generated_at": { "type": "string" },
     "generated_from_chapters": { "type": "array", "items": { "type": "string" } },
+    "baseline_policy": { "type": "string" },
+    "series_dimensions": { "type": "array", "items": { "type": "string" } },
+    "per_chapter_metrics": { "type": "array", "items": { "type": "object" } },
     "metrics": { "type": "object" },
+    "allowed_ranges": { "type": "object" },
     "warnings": { "type": "array", "items": { "type": "string" } },
     "blockers": { "type": "array", "items": { "type": "string" } }
   }

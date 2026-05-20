@@ -7,7 +7,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from _common import ROOT, chapter_parts, read_json, read_text
+from _common import ROOT, chapter_number, chapter_parts, read_json, read_text
 from brief_contract import (
     COST_CONSEQUENCE_CONTRACT_SECTIONS,
     HIGH_IMPACT_SCALES,
@@ -429,6 +429,116 @@ def validate_style_check(chapter: str) -> list[str]:
     return failures
 
 
+def validate_input_ref(chapter: str, item: object, label: str, *, required: bool = True) -> list[str]:
+    if not isinstance(item, dict):
+        return [f"{chapter}: series style input {label} is malformed"]
+    rel_path = str(item.get("path", "")).strip()
+    expected_sha = str(item.get("sha256", "")).strip()
+    if not rel_path:
+        return [f"{chapter}: series style input {label} missing path"]
+    path = ROOT / rel_path
+    if not path.exists():
+        if required or item.get("exists") is True:
+            return [f"{chapter}: series style input missing on disk {rel_path}"]
+        return []
+    if not expected_sha:
+        return [f"{chapter}: series style input {rel_path} missing sha256"]
+    if sha256(path) != expected_sha:
+        return [f"{chapter}: series style input hash mismatch for {rel_path}"]
+    return []
+
+
+def validate_series_style_inputs(chapter: str, inputs: object) -> list[str]:
+    if not isinstance(inputs, dict):
+        return [f"{chapter}: series style report missing inputs"]
+    failures: list[str] = []
+    failures.extend(validate_input_ref(chapter, inputs.get("style_profile"), "style_profile"))
+    failures.extend(validate_input_ref(chapter, inputs.get("style_metrics"), "style_metrics"))
+    recent = inputs.get("recent_style_metrics", [])
+    if recent is None:
+        recent = []
+    if not isinstance(recent, list):
+        failures.append(f"{chapter}: series style recent_style_metrics is malformed")
+    else:
+        for index, item in enumerate(recent):
+            failures.extend(validate_input_ref(chapter, item, f"recent_style_metrics[{index}]", required=False))
+    if "deepseek_style_review" in inputs:
+        failures.extend(validate_input_ref(chapter, inputs.get("deepseek_style_review"), "deepseek_style_review", required=False))
+    return failures
+
+
+def validate_series_style_check(chapter: str) -> list[str]:
+    number = chapter_number(chapter)
+    if number < 4:
+        return []
+    path = ROOT / "reviews" / chapter / "series_style.json"
+    if not path.exists():
+        return [f"{chapter}: missing series style check artifact {path.relative_to(ROOT)}"]
+
+    data = read_json(path, {})
+    failures: list[str] = []
+    if data.get("chapter") != chapter:
+        failures.append(f"{chapter}: series style report chapter mismatch")
+
+    expected_mode = "ADVISORY" if number < 6 else "HARD"
+    if data.get("gate_mode") != expected_mode:
+        failures.append(f"{chapter}: series style gate_mode is {data.get('gate_mode', 'MISSING')}; expected {expected_mode}")
+
+    official = data.get("official_chapter")
+    if not isinstance(official, dict):
+        failures.append(f"{chapter}: series style report missing official_chapter")
+    else:
+        rel_path = str(official.get("path", "")).strip()
+        expected_sha = str(official.get("sha256", "")).strip()
+        official_path = ROOT / rel_path
+        if not rel_path or not expected_sha:
+            failures.append(f"{chapter}: series style official_chapter missing path/sha256")
+        elif not official_path.exists():
+            failures.append(f"{chapter}: series style official chapter missing on disk")
+        elif sha256(official_path) != expected_sha:
+            failures.append(f"{chapter}: series style official chapter hash is stale")
+
+    status = data.get("status")
+    inputs = data.get("inputs")
+    failures.extend(validate_series_style_inputs(chapter, inputs))
+    if isinstance(inputs, dict) and isinstance(inputs.get("deepseek_style_review"), dict):
+        deepseek_rel = str(inputs["deepseek_style_review"].get("path", "")).strip()
+        deepseek_path = ROOT / deepseek_rel
+        if deepseek_path.exists():
+            deepseek_data = read_json(deepseek_path, {})
+            deepseek_official = deepseek_data.get("official_chapter") if isinstance(deepseek_data, dict) else {}
+            official_sha = official.get("sha256") if isinstance(official, dict) else ""
+            if not isinstance(deepseek_official, dict) or deepseek_official.get("sha256") != official_sha:
+                failures.append(f"{chapter}: DeepSeek series style review is stale")
+            if number >= 6 and deepseek_data.get("status") in {"BLOCKED", "NOT_READY"} and status != "ACCEPTED_BY_HUMAN":
+                failures.append(f"{chapter}: DeepSeek series style review reports blocking drift")
+
+    if number < 6:
+        allowed = {"READY", "WARNING", "ACCEPTED_BY_HUMAN"}
+    else:
+        allowed = {"READY", "ACCEPTED_BY_HUMAN"}
+    if status not in allowed:
+        failures.append(f"{chapter}: series style status is {status or 'MISSING'}; expected one of {sorted(allowed)}")
+
+    blockers = data.get("blockers", [])
+    if blockers and status != "ACCEPTED_BY_HUMAN":
+        failures.append(f"{chapter}: series style report has unresolved blockers")
+
+    if status == "ACCEPTED_BY_HUMAN":
+        acceptance = data.get("human_acceptance")
+        if not isinstance(acceptance, dict):
+            failures.append(f"{chapter}: series style human acceptance missing")
+        else:
+            if not str(acceptance.get("accepted_at", "")).strip():
+                failures.append(f"{chapter}: series style human acceptance missing accepted_at")
+            if not str(acceptance.get("reason", "")).strip():
+                failures.append(f"{chapter}: series style human acceptance missing reason")
+            official_sha = official.get("sha256") if isinstance(official, dict) else ""
+            if acceptance.get("official_chapter_sha256") != official_sha:
+                failures.append(f"{chapter}: series style human acceptance hash mismatch")
+    return failures
+
+
 def validate_auxiliary_review(chapter: str, name: str) -> list[str]:
     path = ROOT / "reviews" / chapter / name
     if not path.exists() or not read_text(path).strip():
@@ -628,6 +738,7 @@ def chapter_evidence_failures(chapter: str) -> list[str]:
     failures.extend(validate_fact_cards(chapter))
     failures.extend(validate_end_state_change(chapter))
     failures.extend(validate_style_check(chapter))
+    failures.extend(validate_series_style_check(chapter))
 
     required_reviews = [
         "codex_integrated_review.md",

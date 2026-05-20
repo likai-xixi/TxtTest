@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "StyleMetrics",
+  "type": "object",
+  "required": ["schema_version", "chapter", "generated_at", "status", "official_chapter", "metrics", "blockers", "warnings"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "chapter": { "type": "string", "pattern": "^v[0-9]{2}_c[0-9]{3}$" },
+    "generated_at": { "type": "string" },
+    "status": { "enum": ["READY", "NOT_READY"] },
+    "official_chapter": {
+      "type": "object",
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "type": "string" },
+        "sha256": { "type": "string" }
+      }
+    },
+    "style_contract": { "type": "object" },
+    "style_profile": { "type": "object" },
+    "metrics": { "type": "object" },
+    "blockers": { "type": "array", "items": { "type": "string" } },
+    "warnings": { "type": "array", "items": { "type": "string" } }
+  }
+}

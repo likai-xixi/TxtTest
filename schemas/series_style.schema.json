@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SeriesStyle",
+  "type": "object",
+  "required": ["schema_version", "chapter", "generated_at", "status", "gate_mode", "official_chapter", "inputs", "window", "current_metrics", "signals", "findings", "blockers", "warnings"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "chapter": { "type": "string", "pattern": "^v[0-9]{2}_c[0-9]{3}$" },
+    "generated_at": { "type": "string" },
+    "status": { "enum": ["READY", "WARNING", "NOT_READY", "ACCEPTED_BY_HUMAN"] },
+    "gate_mode": { "enum": ["WARMUP", "ADVISORY", "HARD"] },
+    "official_chapter": {
+      "type": "object",
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "type": "string" },
+        "sha256": { "type": "string" }
+      }
+    },
+    "inputs": { "type": "object" },
+    "window": { "type": "object" },
+    "current_metrics": { "type": "object" },
+    "signals": { "type": "object" },
+    "findings": { "type": "array", "items": { "type": "object" } },
+    "blockers": { "type": "array", "items": { "type": "string" } },
+    "warnings": { "type": "array", "items": { "type": "string" } },
+    "human_acceptance": { "type": ["object", "null"] }
+  }
+}

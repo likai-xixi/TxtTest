@@ -43,6 +43,17 @@ models:
       - external_runs/deepseek/{chapter}/review.prompt.md
       - external_runs/deepseek/{chapter}/review.raw.json
 
+  deepseek_style_review:
+    provider: deepseek
+    model: deepseek-v4-pro
+    mode: independent_series_style_review
+    api_model_can_modify_files: false
+    local_wrapper_writes:
+      - reviews/{chapter}/deepseek_style_review.json
+      - reviews/{chapter}/deepseek_style_review.md
+      - external_runs/deepseek/{chapter}/style_review.prompt.md
+      - external_runs/deepseek/{chapter}/style_review.raw.json
+
   deepseek_preflight:
     provider: deepseek
     model: deepseek-v4-pro

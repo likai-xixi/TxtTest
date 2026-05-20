@@ -5,7 +5,7 @@ from argparse import Namespace
 from pathlib import Path
 from typing import Any
 
-from _common import ROOT, chapter_parts
+from _common import ROOT, chapter_number, chapter_parts
 from workflow_errors import issue
 
 
@@ -123,6 +123,8 @@ def close_plan(args: Namespace) -> dict[str, Any]:
                 _exists(f"reviews/{chapter}/chapter_landing.json"),
                 _exists(f"reviews/{chapter}/model_disagreement.md"),
                 _exists(f"reviews/{chapter}/continuity.md"),
+                _exists(f"reviews/{chapter}/style_metrics.json"),
+                _exists(f"reviews/{chapter}/series_style.json", required=chapter_number(chapter) >= 4),
                 _exists(f"reviews/{chapter}/codex_review_manifest.json"),
                 _exists(f"reviews/{chapter}/deepseek_review.md"),
             ]

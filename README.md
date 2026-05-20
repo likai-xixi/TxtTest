@@ -221,6 +221,13 @@ Ship 前 `python scripts/novel.py evidence {chapter}` 必须 READY。它会检�
 - model_disagreement、continuity、辅助审查齐全。
 - `ai_taste.md`、`web_satisfaction.md`、`retention_risk.md`、`originality.md` 的 `status` 必须是 `CLEAR` 或 `ACCEPTED_BY_HUMAN`。
 
+Style and series-feel evidence:
+
+- `python scripts/novel.py style-check {chapter}` writes `reviews/{chapter}/style_metrics.json`.
+- `python scripts/novel.py series-style-check {chapter}` writes `reviews/{chapter}/series_style.json`.
+- Chapters 1-3 are warmup. From chapter 4 the series-style report is required; chapters 4-5 allow `WARNING`; chapter 6+ requires `READY` or `ACCEPTED_BY_HUMAN`.
+- Optional DeepSeek style review: `python scripts/novel.py deepseek-style-review {chapter}` writes `reviews/{chapter}/deepseek_style_review.json`; `series-style-check --require-deepseek` can make it a required input.
+
 ## Gate
 
 ```bash
@@ -252,6 +259,7 @@ python scripts/novel.py export --volume v01
 python scripts/novel.py backup --label release-smoke
 python scripts/run_deepseek_generate.py --chapter v01_c001 --dry-run
 python scripts/run_deepseek_review.py --chapter v01_c001 --dry-run
+python scripts/run_deepseek_style_review.py --chapter v01_c001 --dry-run
 ```
 
 `evidence`、`gate-check` 和 `export` 在未完成项目里应返回 NOT_READY 或拒绝导出；这说明守卫在工作。

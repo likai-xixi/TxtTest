@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import statistics
@@ -332,6 +333,22 @@ def dialogue_line_ratio(text: str) -> float:
     return len(dialogue) / len(lines)
 
 
+def marker_density(text: str, markers: tuple[str, ...]) -> float:
+    compact = "".join(text.split())
+    if not compact:
+        return 0.0
+    count = sum(compact.count(marker) for marker in markers)
+    return round(count / len(compact) * 1000, 3)
+
+
+def line_start_ratio(text: str, markers: tuple[str, ...]) -> float:
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if not lines:
+        return 0.0
+    count = sum(1 for line in lines if line.startswith(markers))
+    return round(count / len(lines), 3)
+
+
 def metrics_for_text(text: str) -> dict[str, Any]:
     lengths = sentence_lengths(text)
     paras = paragraph_lengths(text)
@@ -339,9 +356,74 @@ def metrics_for_text(text: str) -> dict[str, Any]:
         "char_count": len(text),
         "paragraph_count": len(paras),
         "average_paragraph_chars": round(statistics.mean(paras), 2) if paras else 0,
+        "paragraph_chars_stddev": round(statistics.pstdev(paras), 2) if len(paras) > 1 else 0,
         "average_sentence_chars": round(statistics.mean(lengths), 2) if lengths else 0,
+        "sentence_chars_stddev": round(statistics.pstdev(lengths), 2) if len(lengths) > 1 else 0,
         "dialogue_line_ratio": round(dialogue_line_ratio(text), 3),
+        "interiority_marker_density": marker_density(
+            text,
+            ("想", "觉得", "意识到", "明白", "记得", "害怕", "怀疑", "心里", "脑子", "念头", "不安"),
+        ),
+        "exposition_marker_density": marker_density(
+            text,
+            ("因为", "所以", "意味着", "规则", "机制", "解释", "说明", "原来", "事实上", "换句话说"),
+        ),
+        "scene_motion_marker_density": marker_density(
+            text,
+            ("走", "跑", "推", "拉", "看", "抬", "转", "停", "抓", "开", "关", "退", "靠近"),
+        ),
+        "hook_marker_density": marker_density(
+            "\n".join(paragraph_lengths_text(text)[-2:]),
+            ("？", "吗", "怎么", "为什么", "忽然", "突然", "却", "只剩", "没想到"),
+        ),
+        "short_paragraph_ratio": round(sum(1 for item in paras if item <= 80) / len(paras), 3) if paras else 0,
+        "dialogue_start_ratio": line_start_ratio(text, ("“", "\"", "'", "「", "『", "- ")),
     }
+
+
+def paragraph_lengths_text(text: str) -> list[str]:
+    return [part.strip() for part in re.split(r"\n\s*\n", text) if part.strip()]
+
+
+def numeric_metric_keys(metrics: list[dict[str, Any]]) -> list[str]:
+    keys: set[str] = set()
+    for item in metrics:
+        for key, value in item.items():
+            if isinstance(value, (int, float)) and key not in {"char_count", "paragraph_count"}:
+                keys.add(key)
+    return sorted(keys)
+
+
+def range_floor(key: str) -> float:
+    if key.endswith("_ratio"):
+        return 0.12
+    if key.endswith("_density"):
+        return 2.0
+    return 8.0
+
+
+def build_metric_summary(metrics: list[dict[str, Any]]) -> tuple[dict[str, Any], dict[str, dict[str, float]]]:
+    summary: dict[str, Any] = {"chapter_count": len(metrics)}
+    allowed_ranges: dict[str, dict[str, float]] = {}
+    for key in numeric_metric_keys(metrics):
+        values = [float(item[key]) for item in metrics if isinstance(item.get(key), (int, float))]
+        if not values:
+            continue
+        mean = round(statistics.mean(values), 3)
+        stddev = round(statistics.pstdev(values), 3) if len(values) > 1 else 0.0
+        tolerance = max(stddev * 2.0, range_floor(key))
+        summary[key] = {
+            "mean": mean,
+            "stddev": stddev,
+            "min": round(min(values), 3),
+            "max": round(max(values), 3),
+        }
+        allowed_ranges[key] = {
+            "min": round(mean - tolerance, 3),
+            "max": round(mean + tolerance, 3),
+            "tolerance": round(tolerance, 3),
+        }
+    return summary, allowed_ranges
 
 
 def shipped_chapters() -> list[str]:
@@ -360,20 +442,39 @@ def command_profile_build(_args: argparse.Namespace) -> int:
         path = chapter_path(chapter)
         if not path.exists():
             continue
+        chapter_metrics = metrics_for_text(read_text(path))
         chapters.append(chapter)
-        metrics.append(metrics_for_text(read_text(path)))
+        metrics.append(
+            {
+                "chapter": chapter,
+                "official_chapter": {"path": rel(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()},
+                "metrics": chapter_metrics,
+            }
+        )
     status = "READY" if len(chapters) >= 3 else "WARMUP"
+    metric_values = [item["metrics"] for item in metrics]
+    summary, allowed_ranges = build_metric_summary(metric_values)
     profile = {
         "schema_version": 1,
         "status": status,
         "generated_at": now_iso(),
         "generated_from_chapters": chapters,
-        "metrics": {
-            "chapter_count": len(chapters),
-            "average_paragraph_chars": round(statistics.mean(item["average_paragraph_chars"] for item in metrics), 2) if metrics else 0,
-            "average_sentence_chars": round(statistics.mean(item["average_sentence_chars"] for item in metrics), 2) if metrics else 0,
-            "average_dialogue_line_ratio": round(statistics.mean(item["dialogue_line_ratio"] for item in metrics), 3) if metrics else 0,
-        },
+        "baseline_policy": "first three shipped chapters plus later rebuilds approved by the editor",
+        "series_dimensions": [
+            "narration_person",
+            "narration_distance",
+            "sentence_rhythm",
+            "paragraph_density",
+            "dialogue_ratio",
+            "interiority_ratio",
+            "exposition_policy",
+            "scene_motion",
+            "chapter_hook_shape",
+            "protagonist_voice",
+        ],
+        "per_chapter_metrics": metrics,
+        "metrics": summary,
+        "allowed_ranges": allowed_ranges,
         "warnings": [] if status == "READY" else ["style profile needs three shipped chapters before it becomes READY"],
         "blockers": [],
     }

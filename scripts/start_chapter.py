@@ -5,7 +5,7 @@ import hashlib
 import subprocess
 import sys
 
-from _common import ROOT, chapter_parts, non_ws_count, read_json, read_text, unresolved_locks
+from _common import ROOT, chapter_number, chapter_parts, non_ws_count, read_json, read_text, unresolved_locks
 from context_governance import load_process_budget
 from book_outline import ensure_ready as ensure_book_outline
 from core_setting_freeze import ensure_ready as ensure_core_setting_freeze
@@ -14,6 +14,7 @@ from style_contract import ensure_ready as ensure_style_contract
 
 
 PLACEHOLDERS = ("待定", "待填", "TODO")
+STYLE_PROFILE = ROOT / "state" / "derived" / "style_profile.json"
 
 
 def run(args: list[str]) -> int:
@@ -74,6 +75,17 @@ def validate_brief_landing(chapter: str) -> list[str]:
     return errors
 
 
+def validate_style_profile(chapter: str) -> list[str]:
+    if chapter_number(chapter) < 4:
+        return []
+    if not STYLE_PROFILE.exists():
+        return [f"post-warmup chapter requires READY style profile: {STYLE_PROFILE.relative_to(ROOT)}; run style-profile-build"]
+    data = read_json(STYLE_PROFILE, {})
+    if data.get("status") != "READY":
+        return [f"post-warmup chapter requires READY style profile, got {data.get('status', 'MISSING')}; run style-profile-build"]
+    return []
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Prepare a chapter for drafting.")
     parser.add_argument("--chapter", required=True)
@@ -99,6 +111,11 @@ def main() -> int:
     if not ensure_book_outline():
         return 1
     if not ensure_style_contract():
+        return 1
+    profile_errors = validate_style_profile(args.chapter)
+    if profile_errors:
+        for error in profile_errors:
+            print(f"ERROR: {error}", file=sys.stderr)
         return 1
 
     errors = validate_brief(args.chapter, args.allow_placeholders)

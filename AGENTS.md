@@ -113,13 +113,16 @@ python scripts/novel.py self-test
 19. python scripts/novel.py close {chapter} --decision Ship
 ```
 
-Ship close 必须具备：结构化候选选择、官方正文落章 provenance、Codex/DeepSeek 审查、review manifest、model_disagreement、无 P0/P1 continuity、辅助审查；若直采 DeepSeek，必须证明人类已选择 DeepSeek 且 landing 记录为 `deepseek_direct_adoption`。
+Ship close 必须具备：结构化候选选择、官方正文落章 provenance、Codex/DeepSeek 审查、review manifest、model_disagreement、无 P0/P1 continuity、辅助审查、`style-check` 与 post-warmup `series-style-check`；若直采 DeepSeek，必须证明人类已选择 DeepSeek 且 landing 记录为 `deepseek_direct_adoption`。
+
+跨章文风与系列感：前三章是 warmup；第 4 章起必须有 `reviews/{chapter}/series_style.json`；第 4-5 章允许 `WARNING` 作为人工观察期，第 6 章起 Ship evidence 只接受 `READY` 或 `ACCEPTED_BY_HUMAN`。可选 DeepSeek 独立文风审查由 `deepseek-style-review` 生成，若本章使用 `series-style-check --require-deepseek`，缺失或过期的 DeepSeek 文风审查必须阻断收章。
 
 ## DeepSeek 边界
 
 - 默认模型名：`deepseek-v4-pro`。
 - 环境变量：`DEEPSEEK_API_KEY`。
 - DeepSeek 只能写候选输出目录、独立审查文件和 `external_runs/deepseek/`。
+- DeepSeek 文风审查只能通过 Codex wrapper 写 `reviews/{chapter}/deepseek_style_review.json`、`.md` 和 `external_runs/deepseek/{chapter}/style_review.*`，不得写正文、canon 或 event ledger。
 - DeepSeek brief 只能写 `drafts/deepseek/{chapter}_brief.md` 和 `external_runs/deepseek/{chapter}/brief.*`；不能直接写 `outline/chapter_briefs/`。
 - DeepSeek 不能直接改 `chapters/`、`bible/`、`state/event_ledger.jsonl`；但被人类选择的 DeepSeek 候选稿可由 Codex 原样落入 `chapters/` 并记录为正式章来源。
 - dry-run 只生成 prompt，不触网。

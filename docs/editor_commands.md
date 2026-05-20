@@ -149,7 +149,16 @@ python scripts/novel.py style-contract-check --id idea_xxx
 python scripts/novel.py style-contract-land --id idea_xxx --source selected
 python scripts/novel.py style-profile-build
 python scripts/novel.py style-check v01_c001
+python scripts/novel.py series-style-check v01_c004
+python scripts/novel.py deepseek-style-review v01_c004 --dry-run
 python scripts/novel.py style-drift-report
 ```
+
+Series-style policy:
+
+- Chapters 1-3 are style warmup and are used to build `state/derived/style_profile.json`.
+- From chapter 4, run `series-style-check` after `style-check`; the report is required by Ship evidence.
+- Chapters 4-5 can Ship with `WARNING`; chapter 6+ must be `READY` or explicitly `ACCEPTED_BY_HUMAN`.
+- `deepseek-style-review` is optional by default, but `series-style-check --require-deepseek` can make the external style review a required input.
 
 `start` and `write` are blocked until `core_setting_freeze`, `outline/book_outline.json`, and `state/project_style_contract.json` are READY. `context_pack` may include the book outline only as `strategic_plan_not_fact_source`, and style assets only as `style_instruction_not_fact_source`.

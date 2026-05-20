@@ -463,6 +463,8 @@ def chapter_paths(chapter: str) -> dict[str, Path]:
         "deepseek_draft": ROOT / "drafts" / "deepseek" / f"{chapter}.md",
         "selection": ROOT / "state" / "selections" / f"{chapter}.json",
         "official": ROOT / "chapters" / volume / chapter_file,
+        "style_metrics": ROOT / "reviews" / chapter / "style_metrics.json",
+        "series_style": ROOT / "reviews" / chapter / "series_style.json",
         "decision": ROOT / "reviews" / chapter / "decision.md",
     }
 
@@ -582,12 +584,22 @@ def advisory_snapshot(chapter: str, idea_id: str | None) -> dict[str, str]:
     else:
         polish = "无"
 
+    series_report = ROOT / "reviews" / chapter / "series_style.json"
+    if series_report.exists():
+        series_data = _json_or_none(series_report) or {}
+        series_style = str(series_data.get("status", "unknown")).lower()
+    elif chapter_number(chapter) >= 4:
+        series_style = "missing"
+    else:
+        series_style = "warmup"
+
     return {
         "commercial_positioning": commercial,
         "market_scan": market,
         "chapter_structure": structure,
         "end_state_change": end_state_status,
         "polish": polish,
+        "series_style": series_style,
     }
 
 
@@ -806,6 +818,10 @@ def dashboard(chapter: str | None = None) -> dict[str, Any]:
         evidence_paths.append(rel(paths["context_pack"]))
     if paths["context_quality"].exists():
         evidence_paths.append(rel(paths["context_quality"]))
+    if paths["style_metrics"].exists():
+        evidence_paths.append(rel(paths["style_metrics"]))
+    if paths["series_style"].exists():
+        evidence_paths.append(rel(paths["series_style"]))
     idea_id = idea.get("idea_id")
     advisory = advisory_snapshot(chapter, idea_id)
     contracts = contract_snapshot()
