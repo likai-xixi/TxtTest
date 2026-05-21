@@ -35,6 +35,10 @@ candidate:
 review:
   allow:
     - reviews/{chapter}/codex_integrated_review.md
+    - reviews/{chapter}/codex_anti_ai_review.md
+    - reviews/{chapter}/codex_anti_ai_review.json
+    - reviews/{chapter}/codex_anti_ai_review_prompt.md
+    - reviews/{chapter}/codex_anti_ai_review_manifest.json
     - reviews/{chapter}/deepseek_integrated_review.md
     - reviews/{chapter}/review_manifest.json
     - reviews/{chapter}/opening_retention.md
@@ -87,6 +91,8 @@ state:
     - bible/objects.yaml
     - bible/abilities.yaml
     - state/context_pack/{chapter}.md
+    - state/context_pack/{chapter}_review_context.md
+    - state/context_pack/{chapter}_review_context.json
     - state/context_pack/{chapter}_brief.md
     - state/snapshots/{chapter}_*
     - state/gates/**
@@ -112,6 +118,8 @@ chapter:
     - state/event_ledger.jsonl
     - state/derived/**
     - state/context_pack/{chapter}.md
+    - state/context_pack/{chapter}_review_context.md
+    - state/context_pack/{chapter}_review_context.json
     - state/context_pack/{chapter}_brief.md
     - state/snapshots/{chapter}_*
     - state/stops/**

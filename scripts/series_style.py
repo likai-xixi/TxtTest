@@ -370,8 +370,9 @@ def command_check(args: argparse.Namespace) -> int:
     report = evaluate(args.chapter, accept=args.accept, reason=args.reason or "", require_deepseek=args.require_deepseek)
     out_json = series_style_path(args.chapter)
     out_md = ROOT / "reviews" / args.chapter / "series_style.md"
-    write_json(out_json, report)
-    write_text(out_md, render_markdown(report))
+    if not args.no_write:
+        write_json(out_json, report)
+        write_text(out_md, render_markdown(report))
 
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2))
@@ -380,7 +381,8 @@ def command_check(args: argparse.Namespace) -> int:
         print()
         print(f"status: {report['status']}")
         print(f"gate_mode: {report['gate_mode']}")
-        print(f"path: {rel(out_json)}")
+        if not args.no_write:
+            print(f"path: {rel(out_json)}")
         for item in report.get("blockers", []):
             print(f"- {item}")
         if report.get("status") in {"WARNING", "ACCEPTED_BY_HUMAN"}:
@@ -397,6 +399,7 @@ def main() -> int:
     parser.add_argument("--accept", action="store_true", help="Record a human acceptance for non-infrastructure style drift.")
     parser.add_argument("--reason", default="", help="Required with --accept.")
     parser.add_argument("--require-deepseek", action="store_true", help="Require reviews/{chapter}/deepseek_style_review.json as an input.")
+    parser.add_argument("--no-write", action="store_true")
     args = parser.parse_args()
     return command_check(args)
 

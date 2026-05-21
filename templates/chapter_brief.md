@@ -2,7 +2,7 @@
 
 ## 章节标题
 
-TODO：给出工作标题；标题只做总编辅助，不作为硬门禁。
+TODO：给出非占位章节标题；正式 brief 和 official chapter 都必须有标题。
 
 ## 章节简介
 
@@ -71,6 +71,9 @@ TODO：说明为什么本章不会空转，也不会为了过检强行加速。
 ## 本章进展契约
 
 - 进展类型：TODO：setup / reveal / decision / thread_advance / payoff / digest / cost_payment / transition
+- 有效推进类型：TODO：risk_escalation / relationship_change / information_reversal / cost_landed / choice_completed / power_shift / goal_advanced / false_hope_broken / payoff / digest
+- 有效推进单位：TODO：before -> after，写清本章结束时读者可感变化。
+- 有效推进证据目标：TODO：正文中应该能匹配到的证据句或场面描述。
 - 推进对象：TODO：写 thread_id / entity_id / 主线核心问题。
 - 起始状态依据：TODO：写上章锚点、open thread 或上一事件 id。
 - 结束状态变化：TODO：写本章结束时不可忽略的状态变化。
@@ -121,6 +124,16 @@ TODO：说明为什么本章不会空转，也不会为了过检强行加速。
 - 第一屏钩子：TODO：异常 / 冲突 / 危险 / 反常信息 / 强人物动作。
 - 本章核心问题：TODO：读者本章追的具体问题。
 - 本章读者期待：TODO：本章承诺给读者的快感或答案。
+- reader_reward_intensity：TODO：R0 / R1 / R2 / R3 / R4，必须与 reader promise 手动策略一致。
+- reader_reward_type：TODO：爽点 / 悬念 / 笑点 / 情绪 / 信息 / 关系 / 权力 / 审美 / 恐惧 / 治愈 / 代价，可多选。
+- reader_reward_delivery：TODO：本章实际交付给读者的回报。
+- reader_reward_timing：TODO：opening / midpoint / ending / full_chapter / next_chapter_setup。
+- reward_evidence_requirement：TODO：正文中必须能匹配到的回报证据句；R2+ 不得写 none。
+- 低戏剧载体：TODO：none / waiting / archive / report / travel / research / daily_repeat / emotional_silence / explanation / meeting / training / procedure / dialogue / investigation。
+- 低戏剧载体承载的推进类型：TODO：none / risk_escalation / relationship_change / information_reversal / cost_landed / choice_completed / power_shift / goal_advanced / false_hope_broken / payoff / digest。
+- 核心机制是否出现：TODO：used / limited / backfired / upgraded / misled / intentionally_absent / silent。
+- 若未出现，当前沉默计数：TODO：0 / 1 / 2 / 3...
+- 等待结尾债务：TODO：none / waiting_ending / resolved_waiting / next_chapter_must_resolve。
 - 本章中段反转 / 加压：TODO：中段必须发生的变化点。
 - 本章小兑现：TODO：本章至少兑现什么。
 - 本章章末钩子：TODO：章末让读者点下一章的具体问题。
@@ -177,6 +190,54 @@ TODO：说明为什么本章不会空转，也不会为了过检强行加速。
 - 角色口头禅或标志动作：TODO：没有则写 none。
 - 可截图传播的句子：TODO：没有则写 none。
 - 禁止使用的平铺语气：TODO：列出本章不该出现的泛泛语气。
+
+## 本章防 AI 味合同
+
+- 场景压力：TODO：本章哪一处压力必须靠行动、误判、沉默或代价展示。
+- 具体细节锚点：TODO：列出 1-3 个有叙事功能的细节；只为真实感存在的细节不得重描。
+- 解释预算：TODO：本章允许直接解释的内容上限；没有则写 none。
+- 禁止总结腔：TODO：列出禁止旁白替读者总结的主题或句式。
+- 必须用场景证明的判断：TODO：写明哪些判断必须靠事件、对白或后果证明。
+- 允许读者暂时误解的点：TODO：没有则写 none。
+
+## 本章情绪越界合同
+
+- 不体面的真实冲动：TODO：嫉妒 / 怨气 / 迁怒 / 恐惧 / 贪念 / 羞耻 / 控制欲 / 报复心 / none。
+- 对外表现与内在冲动的错位：TODO：写角色表面行为和真实冲动的差异。
+- 本章允许出现的负面情绪：TODO：至少列出一个，若 none 必须说明类型理由。
+- 不允许被旁白洗白的位置：TODO：列出角色使坏、软弱或自私时不能被立刻解释成正确的段落。
+
+## 本章角色私心与使坏合同
+
+- 谁有私心：TODO：角色 id 或称呼；没有则写 none 并说明。
+- 私心目标：TODO：角色想赢、想躲、想报复、想占有或想证明什么。
+- 使用手段：TODO：隐瞒 / 试探 / 误导 / 胁迫 / 借刀 / 放任 / 背刺 / 小报复 / none。
+- 伤害或牺牲了谁：TODO：没有则写 none。
+- 本章即时后果：TODO：收益、损失或关系压力。
+- 后续追讨窗口：TODO：本章 / 下一章 / 2章内 / 3章内 / none。
+
+## 本章对白功能合同
+
+- 关键对白场景：TODO：列出要抽查的对白场景；没有对白则说明为什么。
+- 角色目标冲突：TODO：每个主要说话者想要什么。
+- 对话信息增量：TODO：对话结束后读者知道了什么新信息。
+- 潜台词 / 权力变化：TODO：谁占上风、谁退让、谁隐藏了什么。
+- 哪一句不能像作者总结：TODO：列出风险句或风险主题。
+- 对话后果：TODO：这场对白改变了行动、关系、风险或误解中的哪一项。
+
+## 本章句式破整合同
+
+- 叙述节奏：TODO：紧 / 松 / 断裂 / 压抑 / 混乱 / 克制。
+- 禁止连续使用的句式：TODO：例如“不是 A，是 B”、连续短句排比、连续总结句。
+- 必须保留的毛边：TODO：短句、残句、口语断裂、动作打断或沉默。
+- 禁止排比总结的位置：TODO：列出场景或段落；没有则写 none。
+
+## 本章细节经济合同
+
+- 必写细节及功能：TODO：压力 / 线索 / 误导 / 关系 / 情绪泄漏 / 后果。
+- 删除型细节：TODO：只为真实感存在、不能改变读者判断的细节。
+- 细节密度上限：TODO：低 / 中 / 高，并说明为什么。
+- 细节必须回收或转化的位置：TODO：本章 / 下一章 / 2章内 / 3章内 / none。
 
 ## 本章使用设定
 

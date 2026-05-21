@@ -10,7 +10,11 @@
     "secondary_genre",
     "target_reader",
     "platform_expectation",
+    "genre_profile",
     "core_hook",
+    "core_sell_point",
+    "core_mechanism_name",
+    "allowed_low_drama_carriers",
     "main_reader_rewards",
     "non_promises",
     "first_chapter_must_deliver",
@@ -22,6 +26,7 @@
     "per_chapter_must_not_only_have",
     "ending_hook_priority",
     "reward_mix",
+    "reader_reward_intensity_policy",
     "genre_mismatch_red_lines",
     "source_boundary"
   ],
@@ -32,7 +37,11 @@
     "secondary_genre": { "type": "string" },
     "target_reader": { "type": "string" },
     "platform_expectation": { "type": "string" },
+    "genre_profile": { "type": "string" },
     "core_hook": { "type": "string" },
+    "core_sell_point": { "type": "string" },
+    "core_mechanism_name": { "type": "string" },
+    "allowed_low_drama_carriers": { "type": "array", "items": { "type": "string" } },
     "main_reader_rewards": { "type": "array", "items": { "type": "string" } },
     "non_promises": { "type": "array", "items": { "type": "string" } },
     "first_chapter_must_deliver": { "type": "string" },
@@ -44,8 +53,27 @@
     "per_chapter_must_not_only_have": { "type": "array", "items": { "type": "string" } },
     "ending_hook_priority": { "type": "array", "items": { "type": "string" } },
     "reward_mix": { "type": "object" },
+    "reader_reward_intensity_policy": {
+      "type": "object",
+      "required": [
+        "opening_chapter_count",
+        "opening_intensity_by_chapter",
+        "default_chapter_intensity",
+        "allowed_chapter_overrides",
+        "rationale"
+      ],
+      "properties": {
+        "opening_chapter_count": { "type": "integer" },
+        "opening_intensity_by_chapter": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "default_chapter_intensity": { "type": "string" },
+        "allowed_chapter_overrides": { "type": ["object", "array"] },
+        "rationale": { "type": "string" }
+      }
+    },
     "genre_mismatch_red_lines": { "type": "array", "items": { "type": "string" } },
     "source_boundary": { "const": "instruction_only_not_fact_source" }
   }
 }
-

@@ -21,6 +21,9 @@
     "forbidden_styles",
     "reference_style_policy",
     "imitation_policy",
+    "anti_ai_policy",
+    "ai_taste_thresholds",
+    "dialogue_function_policy",
     "writes_canon",
     "writes_chapters",
     "writes_event_ledger"
@@ -48,6 +51,20 @@
     "forbidden_styles": { "type": "array", "items": { "type": "string" } },
     "reference_style_policy": { "type": "object" },
     "imitation_policy": { "type": "string" },
+    "anti_ai_policy": { "type": "string" },
+    "ai_taste_thresholds": {
+      "type": "object",
+      "properties": {
+        "exposition_connector_density_block": { "type": "number" },
+        "summary_voice_density_block": { "type": "number" },
+        "abstract_emotion_density_warn": { "type": "number" },
+        "concrete_scene_anchor_density_min": { "type": "number" },
+        "uniform_sentence_run_ratio_warn": { "type": "number" },
+        "uniform_sentence_run_ratio_block": { "type": "number" },
+        "dialogue_explanation_density_block": { "type": "number" }
+      }
+    },
+    "dialogue_function_policy": { "type": "string" },
     "style_profile_policy": { "type": "string" },
     "writes_canon": { "const": false },
     "writes_chapters": { "const": false },

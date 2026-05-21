@@ -27,6 +27,7 @@ from reader_personality_contracts import (
     protagonist_initial_personality,
     validate_initial_personality,
 )
+from reader_reward_index import build_index as build_reader_reward_index
 
 try:
     import yaml
@@ -712,6 +713,7 @@ def main() -> int:
     build_arcs(events)
     build_chapter_anchors(events)
     build_progress_and_aftermath()
+    write_text(DERIVED / "pacing" / "reader_reward_index.json", json.dumps(build_reader_reward_index(), ensure_ascii=False, indent=2) + "\n")
     build_personality_state(events)
     build_reader_experience_ledgers()
 

@@ -210,6 +210,7 @@ Codex 写正式正文到 `chapters/v01/c001.md` 后；若人类选择 DeepSeek�
 
 ```bash
 python scripts/novel.py land v01_c001 --selected-direction DeepSeek --attestation "Human selected the DeepSeek draft as the official chapter; Codex recorded provenance before review."
+python scripts/novel.py review-context v01_c001 --write
 python scripts/novel.py codex-review-start v01_c001
 ```
 
@@ -217,6 +218,10 @@ python scripts/novel.py codex-review-start v01_c001
 
 ```bash
 python scripts/novel.py review v01_c001 --deepseek
+python scripts/novel.py ai-taste-check v01_c001
+python scripts/novel.py dialogue-function-check v01_c001
+python scripts/novel.py codex-anti-ai-review-start v01_c001
+python scripts/novel.py deepseek-anti-ai-review v01_c001
 python scripts/novel.py evidence v01_c001
 python scripts/novel.py decision v01_c001 --decision "Ship" --keep "..." --change "..." --next-verify "..." --setting-boundary "..." --failure-condition "..."
 python scripts/novel.py event v01_c001 --type chapter_anchor --fact "v01_c001 章末锚点已确认" --evidence-quote "..." --consequence "下一章必须承接..." --importance P1 --tag chapter_anchor --anchor-end-time "深夜" --anchor-end-location "办公室" --anchor-present-character protagonist --anchor-protagonist-state "紧张但清醒" --anchor-carried-item "旧硬盘" --anchor-unfinished-action "还没决定是否离开办公室" --anchor-next-required-continuity "下一章必须交代主角是否离开办公室以及硬盘去向"
@@ -234,16 +239,51 @@ Ship 前 `python scripts/novel.py evidence {chapter}` 必须 READY。它会检�
 - Codex/DeepSeek review manifest 的输入 hash 与禁止互读。
 - review artifact 必须晚于对应 manifest。
 - model_disagreement、continuity、辅助审查齐全。
-- `ai_taste.md`、`web_satisfaction.md`、`retention_risk.md`、`originality.md` 的 `status` 必须是 `CLEAR` 或 `ACCEPTED_BY_HUMAN`。
-- `opening_retention.md`（前三章）、`personality_drift.md`、`hook_retention.md`、`protagonist_charm.md`、`world_reveal.md`、`suspense_ladder.md`、`language_memorability.md`、`genre_fit.md` 必须是 `CLEAR` 或带当前 official chapter hash 的 `ACCEPTED_BY_HUMAN`。
+- `ai_taste.md/json`、`dialogue_function.md/json`、`codex_anti_ai_review.md/json`、`deepseek_anti_ai_review.md/json`、`web_satisfaction.md`、`retention_risk.md`、`originality.md`、`similarity_risk.md` 的 `status` 必须是 `CLEAR` 或 `ACCEPTED_BY_HUMAN`。
+- `opening_retention.md`（前三章）、`personality_drift.md`、`hook_retention.md`、`protagonist_charm.md`、`world_reveal.md`、`suspense_ladder.md`、`language_memorability.md`、`genre_fit.md` 必须是 `CLEAR` 或带当前 official chapter hash、review hash 和人工理由的 `ACCEPTED_BY_HUMAN`；`CLEAR` 必须带可匹配正文的 `Evidence Quotes`。
 - 人格变化必须有 `character_state_change + personality_delta`；世界观名词超预算、P0/P1 悬念长期不推进、主角成长刻度长期停滞都会阻断 Ship 或 Gate。
+
+- Review context `state/context_pack/{chapter}_review_context.md/json` must be READY, current, and must not include previous chapters as full text.
+- Ship requires both independent Codex subagent `codex_anti_ai_review.md/json` and DeepSeek `deepseek_anti_ai_review.md/json`; either missing, stale, quote-less, malformed, or `BLOCKED` review blocks evidence.
 
 Style and series-feel evidence:
 
 - `python scripts/novel.py style-check {chapter}` writes `reviews/{chapter}/style_metrics.json`.
+- `python scripts/novel.py ai-taste-check {chapter}` writes `reviews/{chapter}/ai_taste.md` and `ai_taste.json`.
+- `python scripts/novel.py dialogue-function-check {chapter}` writes `reviews/{chapter}/dialogue_function.md` and `dialogue_function.json`.
+- `python scripts/novel.py review-context {chapter} --write` writes review-only structured state and key quotes; it is for reviewers and excludes previous chapters as full text.
+- `python scripts/novel.py codex-anti-ai-review-start {chapter}` writes an isolated Codex subagent prompt and manifest; the subagent must write `reviews/{chapter}/codex_anti_ai_review.md/json`.
+- `python scripts/novel.py deepseek-anti-ai-review {chapter}` writes `reviews/{chapter}/deepseek_anti_ai_review.md` and `deepseek_anti_ai_review.json`; this is required Ship evidence, not optional style advice.
 - `python scripts/novel.py series-style-check {chapter}` writes `reviews/{chapter}/series_style.json`.
 - Chapters 1-3 are warmup. From chapter 4 the series-style report is required; chapters 4-5 allow `WARNING`; chapter 6+ requires `READY` or `ACCEPTED_BY_HUMAN`.
 - Optional DeepSeek style review: `python scripts/novel.py deepseek-style-review {chapter}` writes `reviews/{chapter}/deepseek_style_review.json`; `series-style-check --require-deepseek` can make it a required input.
+
+Anti-AI taste evidence is a hard Ship gate in this template. `ai_taste` keeps its legacy name but now means the structured anti-AI review: show-don't-tell, rhythm disorder, emotional risk, gray motive, dialogue agenda, detail economy, and consequence integrity. Codex has a separate isolated subagent hard-gate report at `codex_anti_ai_review.md/json`; DeepSeek also has an independent hard-gate report at `deepseek_anti_ai_review.md/json`. The two independent reports both receive the review context, but they do not read each other, the integrated reviews, model disagreement, or legacy anti-AI/dialogue outputs. All auxiliary reviews marked `CLEAR` must include the current official chapter hash, a current `review_sha256`, and at least one `Evidence Quotes` line that matches the official chapter after whitespace folding. `ACCEPTED_BY_HUMAN` is allowed for taste disputes only when it records `accepted_by: human`, `accepted_at`, `reason`, current official chapter hash, and current review body hash.
+
+New chapter briefs must include the six human-texture contracts: anti-AI taste, emotional boundary crossing, private motive and dirty play, dialogue function, rhythm disorder, and detail economy. Candidate prompts receive the same instructions, including that gray behavior is allowed but must leave consequences and, when it changes durable state, still goes through event ledger and personality-delta gates.
+
+### Receive Chapter Control Plane
+
+`receive-chapter` is the full receive/close-prep control plane:
+
+```bash
+python scripts/novel.py receive-chapter v01_c001 --preview
+python scripts/novel.py receive-chapter v01_c001 --resume
+python scripts/novel.py review-context v01_c001 --write
+python scripts/novel.py review-arbitration v01_c001
+python scripts/novel.py revision-plan v01_c001
+python scripts/novel.py accept-review v01_c001 --artifact ai_taste --reason "intentional style"
+python scripts/novel.py gray-consequence v01_c001 --write
+python scripts/novel.py chapter-shape-check v01_c006 --write
+python scripts/novel.py reader-feedback summarize v01_c001
+python scripts/novel.py deepseek-manifest-check v01_c001 --kind anti_ai_review
+```
+
+It writes `reviews/{chapter}/receive_chapter.json/md` and reports the exact next action. It does not auto-Ship, does not write canon, and does not write event ledger entries. Ship still goes through `chapter-evidence` and the human editor decision.
+
+DeepSeek review, anti-AI review, and style review now require run manifests at `external_runs/deepseek/{chapter}/{kind}.manifest.json`. These manifests bind model, prompt, raw response, output, allowed inputs, forbidden inputs, and isolation attestation. Missing, stale, or contaminated manifests block Ship.
+
+Revision plans, review arbitration, gray consequence reports, chapter-shape reports, and reader-feedback summaries are scaffolded for every chapter. High-impact gray behavior must be covered by human-verified event/fact evidence. Chapter-shape repetition is advisory during warmup and hard from chapter 6 when it repeats the same shape. Reader feedback is reader-experience evidence only and never a canon or event-ledger source.
 
 ## Gate
 
@@ -262,6 +302,8 @@ Gate A/B 需要章节证据、reader promise 兑现、主角主动性、初始�
 - 真实密钥只从 `DEEPSEEK_API_KEY` 读取，不写入仓库。
 - DeepSeek 只能写 `drafts/deepseek/`、`reviews/{chapter}/deepseek_integrated_review.md` 和 `external_runs/deepseek/`；被人类选择的 DeepSeek 候选稿可由 Codex 原样落入 `chapters/`。
 - DeepSeek review 不能把 Codex review 作为输入。
+- Codex 子 agent 防 AI 味审查先通过 `python scripts/novel.py codex-anti-ai-review-start {chapter}` 生成 prompt 和 manifest；子 agent 只能读取官方正文、正式 brief、context pack、review context、style contract 和 reader promise，不能读取 DeepSeek review、integrated review、model disagreement、`ai_taste.*` 或 `dialogue_function.*`。
+- DeepSeek 防 AI 味审查只能通过 `python scripts/novel.py deepseek-anti-ai-review {chapter}` 写 `reviews/{chapter}/deepseek_anti_ai_review.md/json` 和 `external_runs/deepseek/{chapter}/anti_ai_review.*`；它不能读取 `ai_taste.*`、`dialogue_function.*`、Codex review、Codex anti-AI review 或 `model_disagreement.md`。
 
 ## 维护与发布前检查
 
@@ -277,6 +319,7 @@ python scripts/novel.py backup --label release-smoke
 python scripts/run_deepseek_generate.py --chapter v01_c001 --dry-run
 python scripts/run_deepseek_review.py --chapter v01_c001 --dry-run
 python scripts/run_deepseek_style_review.py --chapter v01_c001 --dry-run
+python scripts/run_deepseek_anti_ai_review.py --chapter v01_c001 --dry-run
 ```
 
 `evidence`、`gate-check` 和 `export` 在未完成项目里应返回 NOT_READY 或拒绝导出；这说明守卫在工作。

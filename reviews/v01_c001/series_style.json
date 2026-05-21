@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "chapter": "v01_c001",
+  "generated_at": "2026-05-21T08:16:33+00:00",
+  "status": "NOT_READY",
+  "gate_mode": "WARMUP",
+  "official_chapter": {
+    "path": "chapters/v01/c001.md",
+    "sha256": ""
+  },
+  "inputs": {
+    "style_profile": {
+      "path": "state/derived/style_profile.json",
+      "exists": true,
+      "sha256": "85d131dd711bef31672687e941792b3dfac8ece460fb6d511614deb2f6414046",
+      "status": "UNBUILT"
+    },
+    "style_metrics": {
+      "path": "reviews/v01_c001/style_metrics.json",
+      "exists": true,
+      "sha256": "3be5f367edb8a238e5d31f5277862285c7cd887bd3fe59b66da59e3fcbc49813",
+      "status": "NOT_READY"
+    },
+    "recent_style_metrics": []
+  },
+  "window": {
+    "baseline_chapters": [],
+    "recent_chapters": []
+  },
+  "current_metrics": {},
+  "signals": {
+    "metric_outlier_count": 0,
+    "marker_blocker_count": 0,
+    "marker_warning_count": 0,
+    "deepseek_style_review": "missing"
+  },
+  "findings": [],
+  "blockers": [
+    "missing official chapter text: chapters/v01/c001.md",
+    "style metrics status is NOT_READY"
+  ],
+  "warnings": [],
+  "human_acceptance": null
+}

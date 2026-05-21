@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DeepSeekAntiAiReview",
+  "type": "object",
+  "required": ["schema_version", "chapter", "generated_at", "model", "status", "official_chapter", "inputs", "summary", "categories", "dialogue_samples", "blockers", "warnings"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "chapter": { "type": "string", "pattern": "^v[0-9]{2}_c[0-9]{3}$" },
+    "generated_at": { "type": "string" },
+    "model": { "type": "string" },
+    "status": { "enum": ["CLEAR", "WARNING", "BLOCKED", "ACCEPTED_BY_HUMAN"] },
+    "action": { "type": "string" },
+    "official_chapter": {
+      "type": "object",
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "type": "string" },
+        "sha256": { "type": "string" }
+      }
+    },
+    "inputs": { "type": "array", "items": { "type": "object" } },
+    "summary": { "type": "string" },
+    "categories": {
+      "type": "object",
+      "required": ["show_dont_tell", "rhythm_disorder", "emotional_risk", "gray_motive", "dialogue_agenda", "detail_economy", "setting_integration", "consequence_integrity"],
+      "additionalProperties": {
+        "type": "object",
+        "required": ["status", "severity", "evidence_quotes", "issue", "revision_actions"],
+        "properties": {
+          "status": { "enum": ["CLEAR", "WARNING", "BLOCKED", "ACCEPTED_BY_HUMAN"] },
+          "severity": { "enum": ["P0", "P1", "P2", "P3"] },
+          "evidence_quotes": { "type": "array", "items": { "type": "string" } },
+          "issue": { "type": "string" },
+          "revision_actions": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "dialogue_samples": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["evidence_quote", "function", "character_goal", "subtext_or_hidden_agenda", "status"],
+        "properties": {
+          "evidence_quote": { "type": "string" },
+          "function": { "type": "string" },
+          "character_goal": { "type": "string" },
+          "subtext_or_hidden_agenda": { "type": "string" },
+          "status": { "enum": ["CLEAR", "WARNING", "BLOCKED", "ACCEPTED_BY_HUMAN"] }
+        }
+      }
+    },
+    "blockers": { "type": "array", "items": { "type": "string" } },
+    "warnings": { "type": "array", "items": { "type": "string" } },
+    "human_acceptance": { "type": ["object", "null"] }
+  }
+}

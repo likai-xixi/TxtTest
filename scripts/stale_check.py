@@ -7,6 +7,8 @@ from typing import Any
 
 from _common import ROOT, chapter_parts, read_json, read_text
 from context_governance import sha256
+from deepseek_run_manifest import validate_run_manifest
+from review_binding import review_hash_is_current, review_status
 from workflow_errors import issue
 
 
@@ -128,6 +130,16 @@ def check_chapter(chapter: str) -> dict[str, Any]:
         issues.append(issue("STALE", "brief pack is older than official brief", rel(brief_pack)))
     checked.append(rel(brief_pack))
 
+    review_context_json = ROOT / "state" / "context_pack" / f"{chapter}_review_context.json"
+    review_context_md = ROOT / "state" / "context_pack" / f"{chapter}_review_context.md"
+    review_context, review_context_error = _json(review_context_json)
+    if review_context_error:
+        issues.append(review_context_error)
+    elif review_context:
+        issues.extend(check_input_hashes(review_context_json, review_context))
+    checked.append(rel(review_context_json))
+    checked.append(rel(review_context_md))
+
     manifest_path = ROOT / "state" / "context_pack" / f"{chapter}.manifest.json"
     manifest, manifest_error = _json(manifest_path)
     if manifest_error:
@@ -164,6 +176,21 @@ def check_chapter(chapter: str) -> dict[str, Any]:
         checked.append(rel(path))
 
     for review_name in (
+        "ai_taste.md",
+        "dialogue_function.md",
+        "codex_anti_ai_review.md",
+        "deepseek_anti_ai_review.md",
+        "review_arbitration.md",
+        "revision_plan.md",
+        "gray_consequence.md",
+        "chapter_shape.md",
+        "reader_reward_gate.md",
+        "reader_feedback.md",
+        "receive_chapter.md",
+        "web_satisfaction.md",
+        "retention_risk.md",
+        "originality.md",
+        "similarity_risk.md",
         "opening_retention.md",
         "personality_drift.md",
         "hook_retention.md",
@@ -179,7 +206,41 @@ def check_chapter(chapter: str) -> dict[str, Any]:
             official = ROOT / "chapters" / chapter[:3] / f"c{chapter[-3:]}.md"
             if "official_chapter_sha256:" in text and official.exists() and sha256(official) not in text:
                 issues.append(issue("STALE", f"{review_name} does not reference current official chapter sha", rel(path)))
+            if review_status(text) in {"CLEAR", "ACCEPTED_BY_HUMAN"} and "review_sha256:" in text and not review_hash_is_current(text, path):
+                issues.append(issue("STALE", f"{review_name} review_sha256 does not match current review body", rel(path)))
         checked.append(rel(path))
+
+    for review_json in (
+        "ai_taste.json",
+        "dialogue_function.json",
+        "codex_anti_ai_review.json",
+        "deepseek_anti_ai_review.json",
+        "revision_plan.json",
+        "review_arbitration.json",
+        "gray_consequence.json",
+        "chapter_shape.json",
+        "reader_reward_gate.json",
+        "reader_feedback.json",
+        "receive_chapter.json",
+    ):
+        path = ROOT / "reviews" / chapter / review_json
+        data, error = _json(path)
+        if error:
+            issues.append(error)
+        elif data:
+            official = ROOT / "chapters" / chapter[:3] / f"c{chapter[-3:]}.md"
+            recorded = data.get("official_chapter")
+            if isinstance(recorded, dict) and official.exists() and recorded.get("sha256") != sha256(official):
+                issues.append(issue("STALE", f"{review_json} official_chapter sha is stale", rel(path)))
+            issues.extend(check_input_hashes(path, data))
+        checked.append(rel(path))
+
+    for kind in ("review", "anti_ai_review", "style_review"):
+        manifest_path = ROOT / "external_runs" / "deepseek" / chapter / f"{kind}.manifest.json"
+        if manifest_path.exists():
+            for message in validate_run_manifest(chapter, kind):
+                issues.append(issue("STALE", message, rel(manifest_path)))
+        checked.append(rel(manifest_path))
 
     for landing_name in ("brief_landing.json", "chapter_landing.json"):
         path = ROOT / "reviews" / chapter / landing_name
@@ -189,6 +250,14 @@ def check_chapter(chapter: str) -> dict[str, Any]:
         elif data:
             issues.extend(check_input_hashes(path, data, "inputs"))
         checked.append(rel(path))
+
+    codex_anti_manifest = ROOT / "reviews" / chapter / "codex_anti_ai_review_manifest.json"
+    data, error = _json(codex_anti_manifest)
+    if error:
+        issues.append(error)
+    elif data:
+        issues.extend(check_nested_review_inputs(codex_anti_manifest, data))
+    checked.append(rel(codex_anti_manifest))
 
     categories = {item["category"] for item in issues}
     if "SCHEMA" in categories:

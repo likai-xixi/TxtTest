@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Review Arbitration",
+  "type": "object",
+  "required": ["schema_version", "chapter", "generated_at", "status", "recommendation", "official_chapter", "input_hashes", "codex_action", "deepseek_action", "blockers", "warnings", "human_acceptance"],
+  "properties": {
+    "schema_version": {"type": "integer"},
+    "chapter": {"type": "string"},
+    "generated_at": {"type": "string"},
+    "status": {"type": "string"},
+    "recommendation": {"type": "string"},
+    "official_chapter": {"type": "object"},
+    "input_hashes": {"type": "array"},
+    "codex_action": {"type": "string"},
+    "deepseek_action": {"type": "string"},
+    "blockers": {"type": "array"},
+    "warnings": {"type": "array"},
+    "human_acceptance": {"type": ["object", "null"]}
+  },
+  "additionalProperties": false
+}

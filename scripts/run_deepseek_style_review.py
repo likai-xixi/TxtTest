@@ -12,6 +12,7 @@ from typing import Any
 from _common import ROOT, chapter_parts, now_iso, read_text, write_blocked_by_locks, write_text
 from deepseek_client import call_deepseek, model_for
 from deepseek_response import DeepSeekResponseError, extract_message_content
+from deepseek_run_manifest import write_run_manifest
 
 
 STYLE_INPUTS = (
@@ -182,9 +183,22 @@ def main() -> int:
     }
 
     run_dir = ROOT / "external_runs" / "deepseek" / args.chapter
-    write_text(run_dir / "style_review.prompt.md", f"# System\n\n{system}\n\n# User\n\n{user}\n")
+    prompt_path = run_dir / "style_review.prompt.md"
+    raw_path = run_dir / "style_review.raw.json"
+    out_json = ROOT / "reviews" / args.chapter / "deepseek_style_review.json"
+    out_md = ROOT / "reviews" / args.chapter / "deepseek_style_review.md"
+    write_text(prompt_path, f"# System\n\n{system}\n\n# User\n\n{user}\n")
     if args.dry_run:
-        print(f"OK: dry run wrote {(run_dir / 'style_review.prompt.md').relative_to(ROOT)}")
+        write_run_manifest(
+            chapter=args.chapter,
+            kind="style_review",
+            model=args.model,
+            dry_run=True,
+            prompt_path=prompt_path,
+            input_paths=inputs,
+            isolation_attestation="Dry run only wrote the DeepSeek style review prompt.",
+        )
+        print(f"OK: dry run wrote {prompt_path.relative_to(ROOT)}")
         return 0
 
     api_key = os.environ.get("DEEPSEEK_API_KEY")
@@ -221,11 +235,20 @@ def main() -> int:
         "summary": str(parsed.get("summary", "")).strip(),
     }
 
-    write_text(run_dir / "style_review.raw.json", json.dumps(response, ensure_ascii=False, indent=2) + "\n")
-    out_json = ROOT / "reviews" / args.chapter / "deepseek_style_review.json"
-    out_md = ROOT / "reviews" / args.chapter / "deepseek_style_review.md"
+    write_text(raw_path, json.dumps(response, ensure_ascii=False, indent=2) + "\n")
     write_text(out_json, json.dumps(report, ensure_ascii=False, indent=2) + "\n")
     write_text(out_md, render_markdown(report))
+    write_run_manifest(
+        chapter=args.chapter,
+        kind="style_review",
+        model=args.model,
+        dry_run=False,
+        prompt_path=prompt_path,
+        input_paths=inputs,
+        raw_response_path=raw_path,
+        output_path=out_json,
+        isolation_attestation="DeepSeek style review was given only official chapter and style inputs recorded here.",
+    )
     print(f"OK: wrote {out_json.relative_to(ROOT)}")
     return 0
 

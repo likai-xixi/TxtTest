@@ -3,6 +3,17 @@ models:
     role: orchestrator
     can_modify_files: true
 
+  codex_anti_ai_review:
+    provider: codex
+    model: codex-subagent
+    mode: independent_anti_ai_review
+    can_modify_files: true
+    local_wrapper_writes:
+      - reviews/{chapter}/codex_anti_ai_review_prompt.md
+      - reviews/{chapter}/codex_anti_ai_review_manifest.json
+      - reviews/{chapter}/codex_anti_ai_review.json
+      - reviews/{chapter}/codex_anti_ai_review.md
+
   deepseek_generate:
     provider: deepseek
     model: deepseek-v4-pro
@@ -53,6 +64,17 @@ models:
       - reviews/{chapter}/deepseek_style_review.md
       - external_runs/deepseek/{chapter}/style_review.prompt.md
       - external_runs/deepseek/{chapter}/style_review.raw.json
+
+  deepseek_anti_ai_review:
+    provider: deepseek
+    model: deepseek-v4-pro
+    mode: independent_anti_ai_review
+    api_model_can_modify_files: false
+    local_wrapper_writes:
+      - reviews/{chapter}/deepseek_anti_ai_review.json
+      - reviews/{chapter}/deepseek_anti_ai_review.md
+      - external_runs/deepseek/{chapter}/anti_ai_review.prompt.md
+      - external_runs/deepseek/{chapter}/anti_ai_review.raw.json
 
   deepseek_preflight:
     provider: deepseek

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DeepSeek Run Manifest",
+  "type": "object",
+  "required": ["schema_version", "chapter", "kind", "model", "dry_run", "generated_at", "prompt", "inputs", "forbidden_inputs", "isolation_attestation"],
+  "properties": {
+    "schema_version": {"type": "integer"},
+    "chapter": {"type": "string"},
+    "kind": {"type": "string"},
+    "model": {"type": "string"},
+    "dry_run": {"type": "boolean"},
+    "generated_at": {"type": "string"},
+    "prompt": {"type": "object"},
+    "raw_response": {"type": ["object", "null"]},
+    "output": {"type": ["object", "null"]},
+    "inputs": {"type": "array"},
+    "forbidden_inputs": {"type": "array"},
+    "isolation_attestation": {"type": "string"}
+  },
+  "additionalProperties": false
+}

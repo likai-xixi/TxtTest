@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "source_boundary": "template_policy_not_project_default",
+  "valid_intensities": ["R0", "R1", "R2", "R3", "R4"],
+  "effective_progress_types": [
+    "risk_escalation",
+    "relationship_change",
+    "information_reversal",
+    "cost_landed",
+    "choice_completed",
+    "power_shift",
+    "goal_advanced",
+    "false_hope_broken",
+    "payoff",
+    "digest"
+  ],
+  "reader_reward_types": [
+    "爽点",
+    "悬念",
+    "笑点",
+    "情绪",
+    "信息",
+    "关系",
+    "权力",
+    "审美",
+    "恐惧",
+    "治愈",
+    "代价"
+  ],
+  "reader_reward_timings": ["opening", "midpoint", "ending", "full_chapter", "next_chapter_setup"],
+  "low_drama_carriers": [
+    "waiting",
+    "archive",
+    "report",
+    "travel",
+    "research",
+    "daily_repeat",
+    "emotional_silence",
+    "explanation",
+    "meeting",
+    "training",
+    "procedure",
+    "dialogue",
+    "investigation"
+  ],
+  "levels": {
+    "R0": {
+      "label": "非爽文 / 文艺 / 氛围 / 慢生活",
+      "small_payoff_required": false,
+      "reward_evidence_required": false,
+      "core_touch_required": false,
+      "max_small_payoff_gap": 5,
+      "core_mechanism_max_silent_chapters": 5,
+      "waiting_ending_max_run": 3,
+      "low_drama_repeat_max_run": 4
+    },
+    "R1": {
+      "label": "低爽，重人物和情绪，允许多章铺垫",
+      "small_payoff_required": false,
+      "reward_evidence_required": false,
+      "core_touch_required": false,
+      "max_small_payoff_gap": 4,
+      "core_mechanism_max_silent_chapters": 4,
+      "waiting_ending_max_run": 3,
+      "low_drama_repeat_max_run": 3
+    },
+    "R2": {
+      "label": "中爽，2-3 章必须有一次明显回报",
+      "small_payoff_required": true,
+      "reward_evidence_required": true,
+      "core_touch_required": false,
+      "max_small_payoff_gap": 3,
+      "core_mechanism_max_silent_chapters": 3,
+      "waiting_ending_max_run": 2,
+      "low_drama_repeat_max_run": 3
+    },
+    "R3": {
+      "label": "强爽，几乎每章要有小兑现",
+      "small_payoff_required": true,
+      "reward_evidence_required": true,
+      "core_touch_required": true,
+      "max_small_payoff_gap": 1,
+      "core_mechanism_max_silent_chapters": 2,
+      "waiting_ending_max_run": 1,
+      "low_drama_repeat_max_run": 2
+    },
+    "R4": {
+      "label": "极强爽，每章必须有压迫-反制-回报链",
+      "small_payoff_required": true,
+      "reward_evidence_required": true,
+      "core_touch_required": true,
+      "counter_turn_required": true,
+      "cost_or_aftermath_required": true,
+      "max_small_payoff_gap": 1,
+      "core_mechanism_max_silent_chapters": 1,
+      "waiting_ending_max_run": 1,
+      "low_drama_repeat_max_run": 1
+    }
+  },
+  "human_acceptance_allowed_reasons": [
+    "回报强度争议",
+    "节奏策略争议",
+    "类型内慢热/低动作表达争议"
+  ],
+  "human_acceptance_forbidden_reasons": [
+    "schema 缺失",
+    "hash stale",
+    "quote 不匹配",
+    "manifest 缺失",
+    "event ledger 缺失",
+    "continuity P0/P1",
+    "核心设定违规",
+    "未授权破局"
+  ]
+}

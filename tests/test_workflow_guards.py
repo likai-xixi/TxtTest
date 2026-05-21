@@ -102,7 +102,11 @@ def write_reader_promise_ready(repo: Path) -> None:
         "secondary_genre": "成长",
         "target_reader": "喜欢强钩子、主角主动和悬念推进的读者",
         "platform_expectation": "前三章明确追读问题",
+        "genre_profile": "悬疑成长，低动作但高信息压力",
         "core_hook": "主角用证据流程对抗无法归档的异常",
+        "core_sell_point": "证据流程撞上无法归档的异常",
+        "core_mechanism_name": "证据流程",
+        "allowed_low_drama_carriers": ["investigation", "dialogue", "procedure"],
         "main_reader_rewards": ["悬念推进", "主角主动改变局面"],
         "non_promises": ["不承诺纯设定百科", "不承诺无代价升级"],
         "first_chapter_must_deliver": "异常开局、主角选择和章末问题",
@@ -114,6 +118,13 @@ def write_reader_promise_ready(repo: Path) -> None:
         "per_chapter_must_not_only_have": ["流程记录", "设定说明"],
         "ending_hook_priority": ["新问题", "新代价", "关系变化"],
         "reward_mix": {"爽点": "中", "悬念": "高", "笑点": "低", "情绪点": "中"},
+        "reader_reward_intensity_policy": {
+            "opening_chapter_count": 3,
+            "opening_intensity_by_chapter": {"v01_c001": "R2", "v01_c002": "R2", "v01_c003": "R2"},
+            "default_chapter_intensity": "R2",
+            "allowed_chapter_overrides": {},
+            "rationale": "测试项目使用中爽节奏，每章至少有可匹配的小回报证据。",
+        },
         "genre_mismatch_red_lines": ["不得把悬疑写成说明书", "不得让主角连续旁观"],
         "source_boundary": "instruction_only_not_fact_source",
     }
@@ -151,6 +162,26 @@ def file_sha(repo: Path, relative: str) -> str:
     return hashlib.sha256((repo / relative).read_bytes()).hexdigest()
 
 
+def review_body_sha256_text(text: str) -> str:
+    filtered = [
+        line
+        for line in text.splitlines()
+        if not line.strip().lower().startswith("review_sha256:")
+    ]
+    return hashlib.sha256(("\n".join(filtered).rstrip() + "\n").encode("utf-8")).hexdigest()
+
+
+def bind_review_hash(text: str) -> str:
+    if "review_sha256:" not in text:
+        text = text.replace("official_chapter_sha256:", "official_chapter_sha256:\nreview_sha256:", 1)
+    digest = review_body_sha256_text(text)
+    lines = [
+        f"review_sha256: {digest}" if line.strip().lower().startswith("review_sha256:") else line
+        for line in text.splitlines()
+    ]
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def write_context_quality(repo: Path, chapter: str) -> None:
     write_reader_promise_ready(repo)
     write_reader_experience_derived(repo)
@@ -160,7 +191,7 @@ def write_context_quality(repo: Path, chapter: str) -> None:
     manifest = {
         "schema_version": 2,
         "chapter": chapter,
-        "budget_chars": 18000,
+        "budget_chars": 44000,
         "hard_max_chars": 48000,
         "allow_truncated": False,
         "pack_truncated": False,
@@ -172,6 +203,7 @@ def write_context_quality(repo: Path, chapter: str) -> None:
             {"id": "chapter_brief", "body_chars": 10, "sources": [{"path": f"outline/chapter_briefs/{chapter}.md"}]},
             {"id": "chapter_anchor_continuity", "body_chars": 10, "sources": [{"path": "AGENTS.md"}]},
             {"id": "active_aftermath_obligations", "body_chars": 10, "sources": [{"path": "state/derived/pacing/aftermath_obligations.json"}]},
+            {"id": "review_context_state_and_quotes", "body_chars": 10, "sources": [{"path": "state/event_ledger.jsonl"}]},
             {
                 "id": "book_outline_contract",
                 "body_chars": 10,
@@ -226,7 +258,7 @@ def write_context_quality(repo: Path, chapter: str) -> None:
         "manifest_path": manifest_rel,
         "context_pack_sha256": file_sha(repo, context_rel),
         "manifest_sha256": file_sha(repo, manifest_rel),
-        "budget_chars": 18000,
+        "budget_chars": 44000,
         "pack_chars": manifest["pack_chars"],
         "required_fact_coverage": 1.0,
         "unsupported_key_fact_count": 0,
@@ -241,6 +273,46 @@ def write_context_quality(repo: Path, chapter: str) -> None:
         "warnings": [],
     }
     write(repo, quality_rel, json.dumps(quality, ensure_ascii=False, indent=2) + "\n")
+    write_review_context(repo, chapter)
+
+
+def write_review_context(repo: Path, chapter: str) -> None:
+    volume = chapter[:3]
+    chapter_rel = f"chapters/{volume}/c{int(chapter[-3:]):03d}.md"
+    context_rel = f"state/context_pack/{chapter}.md"
+    official_sha = file_sha(repo, chapter_rel) if (repo / chapter_rel).exists() else ""
+    inputs = []
+    if (repo / context_rel).exists():
+        inputs.append({"path": context_rel, "sha256": file_sha(repo, context_rel)})
+    if (repo / chapter_rel).exists():
+        inputs.append({"path": chapter_rel, "sha256": official_sha})
+    report = {
+        "schema_version": 1,
+        "chapter": chapter,
+        "generated_at": "2000-01-01T00:00:00+00:00",
+        "status": "READY",
+        "official_chapter": {"path": chapter_rel, "sha256": official_sha},
+        "input_hashes": inputs,
+        "boundary": {
+            "purpose": "review_only_structured_state_and_key_quotes",
+            "no_previous_chapter_full_text": True,
+            "instruction": "fixture review context",
+        },
+        "structured_state": {
+            "previous_chapter_anchors": [],
+            "active_aftermath_obligations": [],
+            "reader_reward_window": [],
+            "derived_state_sources": [],
+        },
+        "key_quotes": [],
+        "warnings": [],
+    }
+    write(repo, f"state/context_pack/{chapter}_review_context.json", json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+    write(
+        repo,
+        f"state/context_pack/{chapter}_review_context.md",
+        f"# Review Context: {chapter}\n\nstatus: READY\nofficial_chapter_sha256: {official_sha}\n\n## Boundary\n\n- no previous chapter full text\n",
+    )
 
 
 def write_element_usage_report(repo: Path, chapter: str) -> None:
@@ -387,6 +459,10 @@ def idea_synthesis_ready(idea: str) -> str:
 
 COMPLETE_BRIEF = """# {chapter} Brief
 
+## 章节标题
+
+证据夜班
+
 ## 本章功能
 
 建立本章案件和主角行动目标。
@@ -447,6 +523,9 @@ W1：平台和利益方的遮蔽形成背景压力，但还没有正面冲突。
 ## 本章进展契约
 
 - 进展类型：decision
+- 有效推进类型：choice_completed
+- 有效推进单位：主角只旁观异常 -> 主角保存异常证据并承担后续调查压力
+- 有效推进证据目标：主角保存异常证据并承担后续调查压力。
 - 推进对象：thread_main_anomaly
 - 起始状态依据：开篇章初始状态。
 - 结束状态变化：主角保存异常证据并承担后续调查压力。
@@ -534,6 +613,16 @@ L0 场景细节和 L1 一次性线索可以新增；没有 L3/L4 新机制。
 - 第一屏钩子：开场即出现异常证据和强压力。
 - 本章核心问题：异常证据为什么会被遮蔽？
 - 本章读者期待：看主角在压力下主动保留证据。
+- reader_reward_intensity：R2
+- reader_reward_type：悬念 / 信息 / 代价
+- reader_reward_delivery：读者确认异常并非普通故障，并看到主角为保留证据承担追责压力。
+- reader_reward_timing：ending
+- reward_evidence_requirement：读者确认异常并非普通故障。
+- 低戏剧载体：investigation
+- 低戏剧载体承载的推进类型：choice_completed
+- 核心机制是否出现：used
+- 若未出现，当前沉默计数：0
+- 等待结尾债务：none
 - 本章中段反转 / 加压：平台追查让证据保存变成风险。
 - 本章小兑现：读者确认异常并非普通故障。
 - 本章章末钩子：幕后是谁在制造异常信号？
@@ -590,6 +679,54 @@ L0 场景细节和 L1 一次性线索可以新增；没有 L3/L4 新机制。
 - 角色口头禅或标志动作：开始重复确认细节，手指敲桌。
 - 可截图传播的句子：没有记录的东西不一定不存在，只是还没轮到他害怕。
 - 禁止使用的平铺语气：禁止把异常规则写成百科说明。
+
+## 本章防 AI 味合同
+
+- 场景压力：证据随时可能被平台抹掉，主角必须先做动作再理解。
+- 具体细节锚点：硬盘、手指、值班灯和被删掉的记录只承担线索或压力功能。
+- 解释预算：本章最多一次总结性判断，其余用动作和对白推进。
+- 禁止总结腔：不把人物动机翻译成旁白金句。
+- 必须用场景证明的判断：平台遮蔽证据这件事必须通过消失的记录证明。
+- 允许读者暂时误解的点：读者可以先以为主角过度谨慎。
+
+## 本章情绪越界合同
+
+- 不体面的真实冲动：主角想把责任推给上级并短暂想删掉自己的操作痕迹。
+- 对外表现与内在冲动的错位：表面继续走流程，内心承认自己怕被追责。
+- 本章允许出现的负面情绪：怯懦、迁怒、自保、嫉妒他人轻松脱身。
+- 不允许被旁白洗白的位置：主角想使坏时不替他解释成纯粹善意。
+
+## 本章角色私心与使坏合同
+
+- 谁有私心：主角和平台值班员。
+- 私心目标：主角想保住自己，值班员想让证据消失。
+- 使用手段：主角留备份但不立刻告知所有人，值班员拖延回函。
+- 伤害或牺牲了谁：同组同事会承担被隐瞒后的误判风险。
+- 本章即时后果：主角获得证据备份，但留下信任裂缝。
+- 后续追讨窗口：下一章或两章内必须追讨隐瞒证据的后果。
+
+## 本章对白功能合同
+
+- 关键对白场景：主角与值班员核对记录。
+- 角色目标冲突：主角要留证，值班员要拖到系统覆盖。
+- 对话信息增量：读者知道记录不是自然故障。
+- 潜台词 / 权力变化：值班员用流程压主角，主角用备份反压。
+- 哪一句不能像作者总结：关于证据和规则的台词必须带威胁或遮掩。
+- 对话后果：主角决定私下备份，值班员开始防备他。
+
+## 本章句式破整合同
+
+- 叙述节奏：短句与较长动作句混排，关键处允许半句话中断。
+- 禁止连续使用的句式：不得连续三句使用“不是……而是……”或同长度短句。
+- 必须保留的毛边：主角紧张时出现重复确认和口语赘余。
+- 禁止排比总结的位置：章末不能用排比替代具体代价。
+
+## 本章细节经济合同
+
+- 必写细节及功能：硬盘用于备份，值班灯用于时间压力，手指敲桌暴露紧张。
+- 删除型细节：不写无功能的设备编号、包装袋、刻度和装饰性读数。
+- 细节密度上限：同一段最多两个实体细节。
+- 细节必须回收或转化的位置：硬盘备份和手指动作必须在中段或章末转化为风险。
 
 ## 伏笔：新开 / 推进 / 回收
 
@@ -967,6 +1104,17 @@ def write_ready_style_contract(repo: Path, idea: str = "idea_core") -> None:
         "forbidden_styles": ["copying protected author voice"],
         "reference_style_policy": {"allowed": ["pacing"], "forbidden": ["distinctive voice"]},
         "imitation_policy": "Do not imitate a specific modern copyrighted work or author voice.",
+        "anti_ai_policy": "Show pressure in scene before summary.",
+        "ai_taste_thresholds": {
+            "exposition_connector_density_block": 12.0,
+            "summary_voice_density_block": 4.0,
+            "abstract_emotion_density_warn": 5.0,
+            "concrete_scene_anchor_density_min": 2.0,
+            "uniform_sentence_run_ratio_warn": 0.55,
+            "uniform_sentence_run_ratio_block": 0.7,
+            "dialogue_explanation_density_block": 10.0,
+        },
+        "dialogue_function_policy": "Dialogue must carry agenda, pressure, concealment, or information.",
         "style_profile_policy": "Build after three shipped chapters.",
         "writes_canon": False,
         "writes_chapters": False,
@@ -1031,6 +1179,7 @@ def run_deepseek_module_with_response(
 def write_auxiliary_reviews(repo: Path, chapter: str, status: str = "CLEAR") -> None:
     review_names = [
         "ai_taste",
+        "dialogue_function",
         "web_satisfaction",
         "retention_risk",
         "originality",
@@ -1051,19 +1200,577 @@ def write_auxiliary_reviews(repo: Path, chapter: str, status: str = "CLEAR") -> 
             findings = "- 撞梗、换皮、设定名词、人物关系、句式、对白节奏、标志性表达风险已检查。"
         if name == "similarity_risk":
             findings = "- Similarity risk checked; no reskinned plot beats or copied protected expression."
+        if name == "ai_taste":
+            findings = "- Anti-AI categories checked: show_dont_tell, rhythm_disorder, emotional_risk, gray_motive, dialogue_agenda, detail_economy, consequence_integrity."
+        if name == "dialogue_function":
+            findings = "- Dialogue functions checked for information, desire, conflict, concealment, relationship probe, and theme leakage."
         if name in {"personality_drift", "hook_retention", "protagonist_charm", "world_reveal", "suspense_ladder", "language_memorability", "genre_fit", "opening_retention"}:
             findings = "- Reader experience contract checked against the official chapter, brief, context, and derived ledgers."
-        metadata = ""
-        if name in {"personality_drift", "hook_retention", "protagonist_charm", "world_reveal", "suspense_ladder", "language_memorability", "genre_fit", "opening_retention"}:
-            volume = chapter[:3]
-            chapter_rel = f"chapters/{volume}/c{int(chapter[-3:]):03d}.md"
-            if (repo / chapter_rel).exists():
-                metadata = f"\nofficial_chapter_sha256: {file_sha(repo, chapter_rel)}\n"
+        volume = chapter[:3]
+        chapter_rel = f"chapters/{volume}/c{int(chapter[-3:]):03d}.md"
+        chapter_path = repo / chapter_rel
+        official_hash = file_sha(repo, chapter_rel) if chapter_path.exists() else ""
+        quote = ""
+        if chapter_path.exists():
+            quote = next((line.strip() for line in chapter_path.read_text(encoding="utf-8").splitlines() if line.strip()), "")
+        accepted = ""
+        if status == "ACCEPTED_BY_HUMAN":
+            accepted = "accepted_at: 2000-01-01T00:00:00+00:00\naccepted_by: human\nreason: human accepted this review.\n"
+        body = (
+            f"# {name}: {chapter}\n\n"
+            f"status: {status}\n"
+            f"official_chapter_sha256: {official_hash}\n"
+            "review_sha256:\n"
+            f"{accepted}"
+            "\n## Findings\n\n"
+            f"{findings}\n\n"
+            "## Evidence Quotes\n\n"
+            f"- {quote}\n"
+        )
         write(
             repo,
             f"reviews/{chapter}/{name}.md",
-            f"# {name}: {chapter}\n\nstatus: {status}{metadata}\n## Findings\n\n{findings}\n",
+            bind_review_hash(body),
         )
+    write_anti_ai_json_reviews(repo, chapter, status=status)
+
+
+def write_anti_ai_json_reviews(repo: Path, chapter: str, status: str = "CLEAR") -> None:
+    volume = chapter[:3]
+    chapter_rel = f"chapters/{volume}/c{int(chapter[-3:]):03d}.md"
+    chapter_path = repo / chapter_rel
+    official_hash = file_sha(repo, chapter_rel) if chapter_path.exists() else ""
+    quote = ""
+    if chapter_path.exists():
+        quote = next((line.strip() for line in chapter_path.read_text(encoding="utf-8").splitlines() if line.strip()), "")
+    categories = {
+        key: {
+            "status": "CLEAR",
+            "severity": "P3",
+            "evidence_quotes": [quote],
+            "issue": "checked in test fixture",
+            "revision_actions": ["none"],
+        }
+        for key in (
+            "show_dont_tell",
+            "rhythm_disorder",
+            "emotional_risk",
+            "gray_motive",
+            "dialogue_agenda",
+            "detail_economy",
+            "consequence_integrity",
+        )
+    }
+    ai_status = status if status in {"CLEAR", "ACCEPTED_BY_HUMAN"} else "BLOCKED"
+    write(
+        repo,
+        f"reviews/{chapter}/ai_taste.json",
+        json.dumps(
+            {
+                "schema_version": 1,
+                "chapter": chapter,
+                "generated_at": "2000-01-01T00:00:00+00:00",
+                "status": ai_status,
+                "official_chapter": {"path": chapter_rel, "sha256": official_hash},
+                "metrics": {},
+                "categories": categories,
+                "blockers": [],
+                "warnings": [],
+                "human_acceptance": None,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+    )
+    write(
+        repo,
+        f"reviews/{chapter}/dialogue_function.json",
+        json.dumps(
+            {
+                "schema_version": 1,
+                "chapter": chapter,
+                "generated_at": "2000-01-01T00:00:00+00:00",
+                "status": ai_status,
+                "official_chapter": {"path": chapter_rel, "sha256": official_hash},
+                "summary": {
+                    "dialogue_line_count": 1,
+                    "sample_count": 1,
+                    "pure_theme_statement_count": 0,
+                    "pure_theme_statement_ratio": 0.0,
+                },
+                "samples": [
+                    {
+                        "evidence_quote": quote,
+                        "speaker": "unknown",
+                        "function": "information_progress",
+                        "character_goal": "test fixture goal",
+                        "subtext_or_hidden_agenda": "test fixture subtext",
+                        "consequence_or_power_shift": "test fixture consequence",
+                        "status": "CLEAR",
+                    }
+                ],
+                "blockers": [],
+                "warnings": [],
+                "human_acceptance": None,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+    )
+
+
+def write_deepseek_anti_ai_review(repo: Path, chapter: str, status: str = "CLEAR") -> None:
+    volume = chapter[:3]
+    chapter_rel = f"chapters/{volume}/c{int(chapter[-3:]):03d}.md"
+    chapter_path = repo / chapter_rel
+    official_hash = file_sha(repo, chapter_rel) if chapter_path.exists() else ""
+    quote = ""
+    if chapter_path.exists():
+        quote = next((line.strip() for line in chapter_path.read_text(encoding="utf-8").splitlines() if line.strip()), "")
+    categories = {
+        key: {
+            "status": "CLEAR",
+            "severity": "P3",
+            "evidence_quotes": [quote],
+            "issue": "checked by DeepSeek in test fixture",
+            "revision_actions": ["none"],
+        }
+        for key in (
+            "show_dont_tell",
+            "rhythm_disorder",
+            "emotional_risk",
+            "gray_motive",
+            "dialogue_agenda",
+            "detail_economy",
+            "setting_integration",
+            "consequence_integrity",
+        )
+    }
+    review_status = status if status in {"CLEAR", "ACCEPTED_BY_HUMAN"} else "BLOCKED"
+    write(
+        repo,
+        f"reviews/{chapter}/deepseek_anti_ai_review.json",
+        json.dumps(
+            {
+                "schema_version": 1,
+                "chapter": chapter,
+                "generated_at": "2000-01-01T00:00:00+00:00",
+                "model": "deepseek-v4-pro",
+                "status": review_status,
+                "action": "Ship",
+                "official_chapter": {"path": chapter_rel, "sha256": official_hash},
+                "inputs": [{"path": chapter_rel, "sha256": official_hash}],
+                "summary": "DeepSeek anti-AI fixture is clear.",
+                "categories": categories,
+                "dialogue_samples": [
+                    {
+                        "evidence_quote": quote,
+                        "function": "information_progress",
+                        "character_goal": "test fixture goal",
+                        "subtext_or_hidden_agenda": "test fixture subtext",
+                        "status": "CLEAR",
+                    }
+                ],
+                "blockers": [],
+                "warnings": [],
+                "human_acceptance": None,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+    )
+    accepted = ""
+    if review_status == "ACCEPTED_BY_HUMAN":
+        accepted = "accepted_at: 2000-01-01T00:00:00+00:00\naccepted_by: human\nreason: human accepted this DeepSeek anti-AI review.\n"
+    body = (
+        f"# DeepSeek Anti-AI Review: {chapter}\n\n"
+        f"status: {review_status}\n"
+        f"official_chapter_sha256: {official_hash}\n"
+        "review_sha256:\n"
+        f"{accepted}"
+        "\n## Summary\n\n"
+        "- DeepSeek anti-AI fixture is clear.\n\n"
+        "## Evidence Quotes\n\n"
+        f"- {quote}\n"
+    )
+    write(repo, f"reviews/{chapter}/deepseek_anti_ai_review.md", bind_review_hash(body))
+
+
+def write_codex_anti_ai_review(repo: Path, chapter: str, status: str = "CLEAR") -> None:
+    volume = chapter[:3]
+    chapter_rel = f"chapters/{volume}/c{int(chapter[-3:]):03d}.md"
+    chapter_path = repo / chapter_rel
+    official_hash = file_sha(repo, chapter_rel) if chapter_path.exists() else ""
+    quote = ""
+    if chapter_path.exists():
+        quote = next((line.strip() for line in chapter_path.read_text(encoding="utf-8").splitlines() if line.strip()), "")
+    categories = {
+        key: {
+            "status": "CLEAR",
+            "severity": "P3",
+            "evidence_quotes": [quote],
+            "issue": "checked by Codex anti-AI subagent in test fixture",
+            "revision_actions": ["none"],
+        }
+        for key in (
+            "show_dont_tell",
+            "rhythm_disorder",
+            "emotional_risk",
+            "gray_motive",
+            "dialogue_agenda",
+            "detail_economy",
+            "setting_integration",
+            "consequence_integrity",
+        )
+    }
+    review_status = status if status in {"CLEAR", "ACCEPTED_BY_HUMAN"} else "BLOCKED"
+    inputs = [{"path": chapter_rel, "sha256": official_hash}]
+    review_context_rel = f"state/context_pack/{chapter}_review_context.json"
+    if (repo / review_context_rel).exists():
+        inputs.append({"path": review_context_rel, "sha256": file_sha(repo, review_context_rel)})
+    write(
+        repo,
+        f"reviews/{chapter}/codex_anti_ai_review.json",
+        json.dumps(
+            {
+                "schema_version": 1,
+                "chapter": chapter,
+                "generated_at": "2000-01-01T00:00:00+00:00",
+                "model": "codex-subagent",
+                "status": review_status,
+                "action": "Ship",
+                "official_chapter": {"path": chapter_rel, "sha256": official_hash},
+                "inputs": inputs,
+                "summary": "Codex anti-AI fixture is clear.",
+                "categories": categories,
+                "dialogue_samples": [
+                    {
+                        "evidence_quote": quote,
+                        "function": "information_progress",
+                        "character_goal": "test fixture goal",
+                        "subtext_or_hidden_agenda": "test fixture subtext",
+                        "status": "CLEAR",
+                    }
+                ],
+                "blockers": [],
+                "warnings": [],
+                "human_acceptance": None,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+    )
+    accepted = ""
+    if review_status == "ACCEPTED_BY_HUMAN":
+        accepted = "accepted_at: 2000-01-01T00:00:00+00:00\naccepted_by: human\nreason: human accepted this Codex anti-AI review.\n"
+    body = (
+        f"# Codex Anti-AI Review: {chapter}\n\n"
+        f"status: {review_status}\n"
+        f"official_chapter_sha256: {official_hash}\n"
+        "review_sha256:\n"
+        f"{accepted}"
+        "\n## Summary\n\n"
+        "- Codex anti-AI fixture is clear.\n\n"
+        "## Evidence Quotes\n\n"
+        f"- {quote}\n"
+    )
+    write(repo, f"reviews/{chapter}/codex_anti_ai_review.md", bind_review_hash(body))
+
+
+def write_codex_anti_ai_manifest(repo: Path, chapter: str) -> None:
+    prompt_rel = f"reviews/{chapter}/codex_anti_ai_review_prompt.md"
+    chapter_rel = f"chapters/{chapter[:3]}/c{int(chapter[-3:]):03d}.md"
+    context_rel = f"state/context_pack/{chapter}.md"
+    review_context_json_rel = f"state/context_pack/{chapter}_review_context.json"
+    review_context_md_rel = f"state/context_pack/{chapter}_review_context.md"
+    write(repo, prompt_rel, "# Codex anti-AI prompt\n")
+    inputs = []
+    for rel_path in (
+        chapter_rel,
+        f"outline/chapter_briefs/{chapter}.md",
+        context_rel,
+        review_context_md_rel,
+        review_context_json_rel,
+        "state/project_style_contract.json",
+        "state/project_reader_promise.json",
+    ):
+        if (repo / rel_path).exists():
+            inputs.append({"path": rel_path, "sha256": file_sha(repo, rel_path)})
+    manifest = {
+        "schema_version": 1,
+        "chapter": chapter,
+        "reviewer": "codex_anti_ai_subagent",
+        "generated_at": "2000-01-01T00:00:00+00:00",
+        "prompt": {"path": prompt_rel, "sha256": file_sha(repo, prompt_rel)},
+        "inputs": inputs,
+        "forbidden_inputs": [
+            f"reviews/{chapter}/codex_integrated_review.md",
+            f"reviews/{chapter}/deepseek_integrated_review.md",
+            f"reviews/{chapter}/deepseek_anti_ai_review.md",
+            f"reviews/{chapter}/deepseek_anti_ai_review.json",
+            f"reviews/{chapter}/ai_taste.md",
+            f"reviews/{chapter}/ai_taste.json",
+            f"reviews/{chapter}/dialogue_function.md",
+            f"reviews/{chapter}/dialogue_function.json",
+            f"reviews/{chapter}/model_disagreement.md",
+        ],
+        "outputs_expected": [
+            f"reviews/{chapter}/codex_anti_ai_review.json",
+            f"reviews/{chapter}/codex_anti_ai_review.md",
+        ],
+        "isolation_attestation": "fixture Codex anti-AI inputs are isolated",
+    }
+    write(repo, f"reviews/{chapter}/codex_anti_ai_review_manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
+
+
+def write_deepseek_run_manifest(repo: Path, chapter: str, kind: str, output_rel: str) -> None:
+    prompt_rel = f"external_runs/deepseek/{chapter}/{kind}.prompt.md"
+    raw_rel = f"external_runs/deepseek/{chapter}/{kind}.raw.json"
+    chapter_rel = f"chapters/{chapter[:3]}/c{int(chapter[-3:]):03d}.md"
+    context_rel = f"state/context_pack/{chapter}.md"
+    write(repo, prompt_rel, f"# DeepSeek {kind} prompt\n")
+    write(repo, raw_rel, '{"choices":[{"message":{"content":"ok"}}]}\n')
+    forbidden = {
+        "review": [
+            f"reviews/{chapter}/codex_integrated_review.md",
+            f"reviews/{chapter}/codex_anti_ai_review.md",
+            f"reviews/{chapter}/codex_anti_ai_review.json",
+            f"reviews/{chapter}/model_disagreement.md",
+        ],
+        "anti_ai_review": [
+            f"reviews/{chapter}/codex_integrated_review.md",
+            f"reviews/{chapter}/codex_anti_ai_review.md",
+            f"reviews/{chapter}/codex_anti_ai_review.json",
+            f"reviews/{chapter}/deepseek_integrated_review.md",
+            f"reviews/{chapter}/model_disagreement.md",
+            f"reviews/{chapter}/ai_taste.md",
+            f"reviews/{chapter}/ai_taste.json",
+            f"reviews/{chapter}/dialogue_function.md",
+            f"reviews/{chapter}/dialogue_function.json",
+        ],
+        "style_review": [
+            f"reviews/{chapter}/series_style.json",
+            f"reviews/{chapter}/series_style.md",
+            f"reviews/{chapter}/model_disagreement.md",
+        ],
+    }[kind]
+    manifest = {
+        "schema_version": 1,
+        "chapter": chapter,
+        "kind": kind,
+        "model": "deepseek-v4-pro",
+        "dry_run": False,
+        "generated_at": "2000-01-01T00:00:00+00:00",
+        "prompt": {"path": prompt_rel, "sha256": file_sha(repo, prompt_rel)},
+        "raw_response": {"path": raw_rel, "sha256": file_sha(repo, raw_rel)},
+        "output": {"path": output_rel, "sha256": file_sha(repo, output_rel)},
+        "inputs": [
+            {"path": chapter_rel, "sha256": file_sha(repo, chapter_rel)},
+            {"path": context_rel, "sha256": file_sha(repo, context_rel)},
+        ],
+        "forbidden_inputs": forbidden,
+        "isolation_attestation": "fixture DeepSeek inputs are isolated",
+    }
+    write(repo, f"external_runs/deepseek/{chapter}/{kind}.manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
+
+
+def write_review_arbitration(repo: Path, chapter: str) -> None:
+    chapter_rel = f"chapters/{chapter[:3]}/c{int(chapter[-3:]):03d}.md"
+    inputs = []
+    for rel_path in (
+        chapter_rel,
+        f"reviews/{chapter}/codex_integrated_review.md",
+        f"reviews/{chapter}/deepseek_integrated_review.md",
+        f"reviews/{chapter}/model_disagreement.md",
+        f"reviews/{chapter}/continuity.md",
+        f"reviews/{chapter}/ai_taste.json",
+        f"reviews/{chapter}/dialogue_function.json",
+        f"reviews/{chapter}/codex_anti_ai_review.json",
+        f"reviews/{chapter}/deepseek_anti_ai_review.json",
+    ):
+        if (repo / rel_path).exists():
+            inputs.append({"path": rel_path, "sha256": file_sha(repo, rel_path)})
+    report = {
+        "schema_version": 1,
+        "chapter": chapter,
+        "generated_at": "2000-01-01T00:00:00+00:00",
+        "status": "READY",
+        "recommendation": "Ship",
+        "official_chapter": {"path": chapter_rel, "sha256": file_sha(repo, chapter_rel)},
+        "input_hashes": inputs,
+        "codex_action": "Ship",
+        "deepseek_action": "Ship",
+        "blockers": [],
+        "warnings": [],
+        "human_acceptance": None,
+    }
+    write(repo, f"reviews/{chapter}/review_arbitration.json", json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+    body = (
+        f"# Review Arbitration: {chapter}\n\n"
+        "status: READY\n"
+        f"official_chapter_sha256: {file_sha(repo, chapter_rel)}\n"
+        "review_sha256:\n"
+        "codex_action: Ship\n"
+        "deepseek_action: Ship\n\n"
+        "## Evidence Quotes\n\n"
+        f"- Official chapter {chapter}\n"
+    )
+    write(repo, f"reviews/{chapter}/review_arbitration.md", bind_review_hash(body))
+
+
+def write_revision_plan(repo: Path, chapter: str) -> None:
+    chapter_rel = f"chapters/{chapter[:3]}/c{int(chapter[-3:]):03d}.md"
+    report = {
+        "schema_version": 1,
+        "chapter": chapter,
+        "generated_at": "2000-01-01T00:00:00+00:00",
+        "status": "READY",
+        "official_chapter": {"path": chapter_rel, "sha256": file_sha(repo, chapter_rel)},
+        "input_hashes": [{"path": chapter_rel, "sha256": file_sha(repo, chapter_rel)}],
+        "must_fix": [],
+        "should_fix": [],
+        "human_acceptance_allowed": [],
+    }
+    write(repo, f"reviews/{chapter}/revision_plan.json", json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+    write(repo, f"reviews/{chapter}/revision_plan.md", f"# Revision Plan: {chapter}\n\nstatus: READY\n")
+
+
+def write_gray_consequence(repo: Path, chapter: str, status: str = "READY") -> None:
+    chapter_rel = f"chapters/{chapter[:3]}/c{int(chapter[-3:]):03d}.md"
+    report = {
+        "schema_version": 1,
+        "chapter": chapter,
+        "generated_at": "2000-01-01T00:00:00+00:00",
+        "status": status,
+        "official_chapter": {"path": chapter_rel, "sha256": file_sha(repo, chapter_rel)},
+        "gray_markers": [],
+        "high_impact_markers": [],
+        "obligations": [],
+        "blockers": [],
+        "warnings": [],
+    }
+    write(repo, f"reviews/{chapter}/gray_consequence.json", json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+    write(repo, f"reviews/{chapter}/gray_consequence.md", f"# Gray Consequence: {chapter}\n\nstatus: {status}\n")
+
+
+def write_chapter_shape(repo: Path, chapter: str, status: str = "READY") -> None:
+    chapter_rel = f"chapters/{chapter[:3]}/c{int(chapter[-3:]):03d}.md"
+    report = {
+        "schema_version": 1,
+        "chapter": chapter,
+        "generated_at": "2000-01-01T00:00:00+00:00",
+        "status": status,
+        "official_chapter": {"path": chapter_rel, "sha256": file_sha(repo, chapter_rel)},
+        "shape": {"opening": "arrival", "obstacle": "investigation", "resolution": "procedure", "hook": "mystery"},
+        "shape_key": "arrival|investigation|procedure|mystery",
+        "repeat_count": 0,
+        "blockers": [],
+        "warnings": [],
+        "human_acceptance": None,
+    }
+    write(repo, f"reviews/{chapter}/chapter_shape.json", json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+    write(repo, f"reviews/{chapter}/chapter_shape.md", f"# Chapter Shape: {chapter}\n\nstatus: {status}\n")
+
+
+def write_reader_feedback(repo: Path, chapter: str) -> None:
+    report = {
+        "schema_version": 1,
+        "chapter": chapter,
+        "generated_at": "2000-01-01T00:00:00+00:00",
+        "status": "WARNING",
+        "response_count": 0,
+        "stuck_points": [],
+        "continue_reasons": [],
+        "reader_promise_gaps": [],
+        "risk": "fixture has no reader feedback",
+        "recommendation": "not a single-chapter hard gate",
+        "human_acceptance": None,
+    }
+    write(repo, f"reviews/{chapter}/reader_feedback.json", json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+    write(repo, f"reviews/{chapter}/reader_feedback.md", f"# Reader Feedback: {chapter}\n\nstatus: WARNING\n")
+
+
+def write_reader_reward_gate(repo: Path, chapter: str, status: str = "READY") -> None:
+    chapter_rel = f"chapters/{chapter[:3]}/c{int(chapter[-3:]):03d}.md"
+    brief_rel = f"outline/chapter_briefs/{chapter}.md"
+    report = {
+        "schema_version": 1,
+        "chapter": chapter,
+        "generated_at": "2000-01-01T00:00:00+00:00",
+        "status": status,
+        "reader_reward_intensity": "R2",
+        "configured_intensity": "R2",
+        "intensity_source": "opening_intensity_by_chapter.v01_c001",
+        "official_chapter": {"path": chapter_rel, "sha256": file_sha(repo, chapter_rel)},
+        "official_brief": {"path": brief_rel, "sha256": file_sha(repo, brief_rel)},
+        "input_hashes": [
+            {"path": brief_rel, "sha256": file_sha(repo, brief_rel)},
+            {"path": "state/project_reader_promise.json", "sha256": file_sha(repo, "state/project_reader_promise.json")},
+            {"path": "ops/reader_reward_policy.json", "sha256": file_sha(repo, "ops/reader_reward_policy.json")},
+        ],
+        "policy_rules": {"reward_evidence_required": True},
+        "contract": {
+            "reader_reward_intensity": "R2",
+            "reader_reward_delivery": "读者确认异常并非普通故障。",
+            "reward_evidence_requirement": "读者确认异常并非普通故障。",
+            "core_mechanism_presence": "used",
+            "core_mechanism_silent_count": "0",
+            "waiting_ending_debt": "none",
+            "low_drama_carrier": "investigation",
+            "low_drama_progress_type": "choice_completed",
+            "small_payoff": "读者确认异常并非普通故障。",
+        },
+        "evidence_quotes": ["读者确认异常并非普通故障"],
+        "matched_evidence_quotes": ["读者确认异常并非普通故障"],
+        "blockers": [] if status != "BLOCKED" else ["synthetic reader reward blocker"],
+        "warnings": [],
+        "human_acceptance": None,
+    }
+    write(repo, f"reviews/{chapter}/reader_reward_gate.json", json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+    write(
+        repo,
+        f"reviews/{chapter}/reader_reward_gate.md",
+        f"# Reader Reward Gate: {chapter}\n\nstatus: {status}\nofficial_chapter_sha256: {file_sha(repo, chapter_rel)}\n\n## Evidence Quotes\n\n- 读者确认异常并非普通故障\n",
+    )
+
+
+def write_reader_reward_index(repo: Path) -> None:
+    entries = []
+    for path in sorted((repo / "reviews").glob("v*_c*/reader_reward_gate.json")):
+        data = json.loads(path.read_text(encoding="utf-8"))
+        chapter = data["chapter"]
+        rel_path = f"reviews/{chapter}/reader_reward_gate.json"
+        entries.append(
+            {
+                "chapter": chapter,
+                "reader_reward_intensity": data.get("reader_reward_intensity", "R2"),
+                "gate": {"path": rel_path, "sha256": file_sha(repo, rel_path)},
+                "status": data.get("status", "READY"),
+                "waiting_ending_run": 0,
+                "core_mechanism_silent_run": 0,
+                "small_payoff_gap": 0,
+                "low_drama_repeat_run": 0,
+                "cross_blockers": [],
+                "cross_warnings": [],
+            }
+        )
+    report = {
+        "schema_version": 1,
+        "generated_at": "2000-01-01T00:00:00+00:00",
+        "source_policy": {"path": "ops/reader_reward_policy.json", "sha256": file_sha(repo, "ops/reader_reward_policy.json")},
+        "source_reader_promise": {
+            "path": "state/project_reader_promise.json",
+            "sha256": file_sha(repo, "state/project_reader_promise.json"),
+        },
+        "chapters": entries,
+        "blockers": [],
+        "warnings": [],
+    }
+    write(repo, "state/derived/pacing/reader_reward_index.json", json.dumps(report, ensure_ascii=False, indent=2) + "\n")
 
 
 def write_fact_cards_report(repo: Path, chapter: str) -> None:
@@ -1198,6 +1905,7 @@ def write_candidate_prompt_evidence(
         ("bible/style_guide.md", "style_guide"),
         ("state/project_reader_promise.json", "project_reader_promise_json"),
         ("state/project_reader_promise.md", "project_reader_promise_markdown"),
+        ("ops/reader_reward_policy.json", "reader_reward_policy"),
         ("state/derived/personality/protagonist.json", "derived_personality"),
         ("state/derived/protagonist_progression.json", "protagonist_progression"),
         ("state/derived/world_reveal_ledger.json", "world_reveal_ledger"),
@@ -1277,7 +1985,11 @@ def write_complete_chapter_evidence(repo: Path, chapter: str, number: int) -> No
 
     write(repo, context_rel, f"context for {chapter}\n")
     write(repo, brief_rel, COMPLETE_BRIEF.format(chapter=chapter))
-    write(repo, chapter_rel, f"Official chapter {chapter} with independent Codex prose.\n")
+    write(
+        repo,
+        chapter_rel,
+        f"# 证据夜班\n\nOfficial chapter {chapter} with independent Codex prose.\n主角保存异常证据并承担后续调查压力，读者确认异常并非普通故障。\n",
+    )
     write(repo, draft_rel, f"Codex candidate {chapter}.\n")
     write_context_quality(repo, chapter)
     if number >= 4:
@@ -1356,6 +2068,8 @@ def write_complete_chapter_evidence(repo: Path, chapter: str, number: int) -> No
             "recorded_at": "2000-01-01T00:00:00+00:00",
             "inputs": [
                 {"path": context_rel, "sha256": file_sha(repo, context_rel)},
+                {"path": f"state/context_pack/{chapter}_review_context.md", "sha256": file_sha(repo, f"state/context_pack/{chapter}_review_context.md")},
+                {"path": f"state/context_pack/{chapter}_review_context.json", "sha256": file_sha(repo, f"state/context_pack/{chapter}_review_context.json")},
                 {"path": chapter_rel, "sha256": file_sha(repo, chapter_rel)},
             ],
         },
@@ -1363,6 +2077,8 @@ def write_complete_chapter_evidence(repo: Path, chapter: str, number: int) -> No
             "recorded_at": "2000-01-01T00:00:00+00:00",
             "inputs": [
                 {"path": context_rel, "sha256": file_sha(repo, context_rel)},
+                {"path": f"state/context_pack/{chapter}_review_context.md", "sha256": file_sha(repo, f"state/context_pack/{chapter}_review_context.md")},
+                {"path": f"state/context_pack/{chapter}_review_context.json", "sha256": file_sha(repo, f"state/context_pack/{chapter}_review_context.json")},
                 {"path": chapter_rel, "sha256": file_sha(repo, chapter_rel)},
             ],
         },
@@ -1372,6 +2088,18 @@ def write_complete_chapter_evidence(repo: Path, chapter: str, number: int) -> No
     write(repo, f"reviews/{chapter}/continuity.md", "# Continuity\n\nstatus: CLEAR\np0_count: 0\np1_count: 0\n")
     write(repo, f"reviews/{chapter}/decision.md", "# Decision\n\ndecision: Ship\n")
     write_auxiliary_reviews(repo, chapter)
+    write_codex_anti_ai_review(repo, chapter)
+    write_codex_anti_ai_manifest(repo, chapter)
+    write_deepseek_anti_ai_review(repo, chapter)
+    write_deepseek_run_manifest(repo, chapter, "review", f"reviews/{chapter}/deepseek_integrated_review.md")
+    write_deepseek_run_manifest(repo, chapter, "anti_ai_review", f"reviews/{chapter}/deepseek_anti_ai_review.json")
+    write_review_arbitration(repo, chapter)
+    write_revision_plan(repo, chapter)
+    write_gray_consequence(repo, chapter)
+    write_chapter_shape(repo, chapter)
+    write_reader_reward_gate(repo, chapter)
+    write_reader_reward_index(repo)
+    write_reader_feedback(repo, chapter)
     write_style_metrics(repo, chapter)
     if number >= 4:
         write_series_style_report(repo, chapter)
@@ -1487,7 +2215,7 @@ class WorkflowGuardTests(unittest.TestCase):
             write(repo, "state/project_reader_promise.json", json.dumps(draft, ensure_ascii=False) + "\n")
             self.assertEqual(run(repo, "scripts/build_derived_state.py").returncode, 0)
 
-            result = run(repo, "scripts/build_context_pack.py", "--chapter", "v01_c001", "--limit", "18000")
+            result = run(repo, "scripts/build_context_pack.py", "--chapter", "v01_c001", "--limit", "44000")
 
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("reader promise", result.stderr)
@@ -1507,6 +2235,28 @@ class WorkflowGuardTests(unittest.TestCase):
                 "suspense_ladder.md",
                 "language_memorability.md",
                 "genre_fit.md",
+                "ai_taste.md",
+                "dialogue_function.md",
+                "codex_anti_ai_review.md",
+                "deepseek_anti_ai_review.md",
+                "ai_taste.json",
+                "dialogue_function.json",
+                "codex_anti_ai_review.json",
+                "deepseek_anti_ai_review.json",
+                "revision_plan.md",
+                "revision_plan.json",
+                "review_arbitration.md",
+                "review_arbitration.json",
+                "gray_consequence.md",
+                "gray_consequence.json",
+                "chapter_shape.md",
+                "chapter_shape.json",
+                "reader_reward_gate.md",
+                "reader_reward_gate.json",
+                "reader_feedback.md",
+                "reader_feedback.json",
+                "receive_chapter.md",
+                "receive_chapter.json",
             ):
                 self.assertTrue((repo / f"reviews/v01_c002/{name}").exists(), name)
 
@@ -1520,6 +2270,17 @@ class WorkflowGuardTests(unittest.TestCase):
 
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("本章留存合同", result.stdout)
+
+    def test_brief_check_rejects_missing_anti_ai_contract_sections(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            brief = COMPLETE_BRIEF.format(chapter="v01_c001").replace("## 本章防 AI 味合同", "## 本章防 AI 味合同缺失")
+            write(repo, "outline/chapter_briefs/v01_c001.md", brief)
+
+            result = run(repo, "scripts/novel.py", "brief-check", "v01_c001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("本章防 AI 味合同", result.stdout)
 
     def test_idea_select_requires_structured_initial_personality_in_synthesis(self) -> None:
         with copy_repo() as temp:
@@ -1586,6 +2347,139 @@ class WorkflowGuardTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("human acceptance is missing or stale", result.stdout)
 
+    def test_auxiliary_clear_requires_current_review_hash_and_matching_quote(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_complete_chapter_evidence(repo, "v01_c001", 1)
+            path = repo / "reviews/v01_c001/ai_taste.md"
+            text = path.read_text(encoding="utf-8")
+            path.write_text(text.replace("## Evidence Quotes\n\n- # 证据夜班", "## Evidence Quotes\n\n- Missing line."), encoding="utf-8")
+
+            result = run(repo, "scripts/chapter_evidence.py", "--chapter", "v01_c001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("review_sha256 is missing or stale", result.stdout)
+            self.assertIn("Evidence Quotes do not match", result.stdout)
+
+    def test_auxiliary_clear_without_evidence_quote_blocks_ship(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_complete_chapter_evidence(repo, "v01_c001", 1)
+            path = repo / "reviews/v01_c001/dialogue_function.md"
+            body = "# dialogue_function: v01_c001\n\nstatus: CLEAR\nofficial_chapter_sha256: " + file_sha(repo, "chapters/v01/c001.md") + "\nreview_sha256:\n\n## Findings\n\n- Checked.\n\n## Evidence Quotes\n\n"
+            path.write_text(bind_review_hash(body), encoding="utf-8")
+
+            result = run(repo, "scripts/chapter_evidence.py", "--chapter", "v01_c001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("has no Evidence Quotes", result.stdout)
+
+    def test_ai_taste_blocked_category_blocks_ship(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_complete_chapter_evidence(repo, "v01_c001", 1)
+            path = repo / "reviews/v01_c001/ai_taste.json"
+            data = json.loads(path.read_text(encoding="utf-8"))
+            data["categories"]["emotional_risk"]["status"] = "BLOCKED"
+            data["categories"]["emotional_risk"]["severity"] = "P1"
+            path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+            result = run(repo, "scripts/chapter_evidence.py", "--chapter", "v01_c001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("ai_taste.json category emotional_risk is BLOCKED", result.stdout)
+
+    def test_dialogue_function_blocked_sample_blocks_ship(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_complete_chapter_evidence(repo, "v01_c001", 1)
+            path = repo / "reviews/v01_c001/dialogue_function.json"
+            data = json.loads(path.read_text(encoding="utf-8"))
+            data["samples"][0]["status"] = "BLOCKED"
+            path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+            result = run(repo, "scripts/chapter_evidence.py", "--chapter", "v01_c001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("dialogue_function.json sample #1 is BLOCKED", result.stdout)
+
+    def test_chapter_evidence_requires_deepseek_anti_ai_review(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_complete_chapter_evidence(repo, "v01_c001", 1)
+            (repo / "reviews/v01_c001/deepseek_anti_ai_review.json").unlink()
+            (repo / "reviews/v01_c001/deepseek_anti_ai_review.md").unlink()
+
+            result = run(repo, "scripts/chapter_evidence.py", "--chapter", "v01_c001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("missing DeepSeek anti-AI review", result.stdout)
+            self.assertIn("deepseek_anti_ai_review.md", result.stdout)
+            self.assertIn("deepseek_anti_ai_review.json", result.stdout)
+
+    def test_chapter_evidence_requires_codex_anti_ai_review(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_complete_chapter_evidence(repo, "v01_c001", 1)
+            (repo / "reviews/v01_c001/codex_anti_ai_review.json").unlink()
+            (repo / "reviews/v01_c001/codex_anti_ai_review.md").unlink()
+
+            result = run(repo, "scripts/chapter_evidence.py", "--chapter", "v01_c001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("missing Codex anti-AI review", result.stdout)
+            self.assertIn("codex_anti_ai_review.md", result.stdout)
+            self.assertIn("codex_anti_ai_review.json", result.stdout)
+
+    def test_deepseek_anti_ai_blocked_category_blocks_ship(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_complete_chapter_evidence(repo, "v01_c001", 1)
+            path = repo / "reviews/v01_c001/deepseek_anti_ai_review.json"
+            data = json.loads(path.read_text(encoding="utf-8"))
+            data["categories"]["emotional_risk"]["status"] = "BLOCKED"
+            data["categories"]["emotional_risk"]["severity"] = "P1"
+            data["status"] = "BLOCKED"
+            path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+            result = run(repo, "scripts/chapter_evidence.py", "--chapter", "v01_c001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("deepseek_anti_ai_review.json category emotional_risk is BLOCKED", result.stdout)
+
+    def test_structured_anti_ai_reviews_go_stale_when_chapter_changes(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_complete_chapter_evidence(repo, "v01_c001", 1)
+            write(repo, "chapters/v01/c001.md", "Official chapter v01_c001 changed after review.\n")
+
+            result = run(repo, "scripts/stale_check.py", "v01_c001")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("status: STALE", result.stdout)
+            self.assertIn("ai_taste.json official_chapter sha is stale", result.stdout)
+            self.assertIn("dialogue_function.json official_chapter sha is stale", result.stdout)
+            self.assertIn("codex_anti_ai_review.md does not reference current official chapter sha", result.stdout)
+            self.assertIn("codex_anti_ai_review.json official_chapter sha is stale", result.stdout)
+            self.assertIn("deepseek_anti_ai_review.md does not reference current official chapter sha", result.stdout)
+            self.assertIn("deepseek_anti_ai_review.json official_chapter sha is stale", result.stdout)
+
+    def test_migrate_anti_ai_reviews_does_not_overwrite_human_review(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write(repo, "reviews/v01_c001/ai_taste.md", "human review stays\n")
+
+            result = run(repo, "scripts/novel.py", "migrate-anti-ai-reviews", "v01_c001")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual((repo / "reviews/v01_c001/ai_taste.md").read_text(encoding="utf-8"), "human review stays\n")
+            self.assertTrue((repo / "reviews/v01_c001/dialogue_function.md").exists())
+            self.assertTrue((repo / "reviews/v01_c001/ai_taste.json").exists())
+            self.assertTrue((repo / "reviews/v01_c001/codex_anti_ai_review.md").exists())
+            self.assertTrue((repo / "reviews/v01_c001/codex_anti_ai_review.json").exists())
+            self.assertTrue((repo / "reviews/v01_c001/deepseek_anti_ai_review.md").exists())
+            self.assertTrue((repo / "reviews/v01_c001/deepseek_anti_ai_review.json").exists())
+
     def test_minimal_chapter_happy_path_closes_ship(self) -> None:
         with copy_repo() as temp:
             repo = temp
@@ -1600,7 +2494,7 @@ class WorkflowGuardTests(unittest.TestCase):
             write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF.format(chapter="v01_c001"))
 
             self.assertEqual(run(repo, "scripts/build_derived_state.py").returncode, 0)
-            context = run(repo, "scripts/build_context_pack.py", "--chapter", "v01_c001", "--limit", "18000")
+            context = run(repo, "scripts/build_context_pack.py", "--chapter", "v01_c001", "--limit", "44000")
             self.assertEqual(context.returncode, 0, context.stdout + context.stderr)
 
             subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True)
@@ -1609,7 +2503,11 @@ class WorkflowGuardTests(unittest.TestCase):
             subprocess.run(["git", "add", "."], cwd=repo, check=True)
             subprocess.run(["git", "commit", "-m", "baseline"], cwd=repo, check=True, capture_output=True)
 
-            write(repo, "chapters/v01/c001.md", "Official chapter text with a concrete protagonist choice.\n")
+            write(
+                repo,
+                "chapters/v01/c001.md",
+                "# 证据夜班\n\nOfficial chapter text with a concrete protagonist choice. 主角保存异常证据并承担后续调查压力，读者确认异常并非普通故障。\n",
+            )
             write(repo, "drafts/codex/v01_c001.md", "Codex candidate text.\n")
             codex_prompt = run(repo, "scripts/novel.py", "codex-draft-prompt", "v01_c001")
             self.assertEqual(codex_prompt.returncode, 0, codex_prompt.stdout + codex_prompt.stderr)
@@ -1649,6 +2547,10 @@ class WorkflowGuardTests(unittest.TestCase):
                 "--input",
                 "state/context_pack/v01_c001.md",
                 "--input",
+                "state/context_pack/v01_c001_review_context.md",
+                "--input",
+                "state/context_pack/v01_c001_review_context.json",
+                "--input",
                 "chapters/v01/c001.md",
             )
             self.assertEqual(deepseek_manifest.returncode, 0, deepseek_manifest.stdout + deepseek_manifest.stderr)
@@ -1657,10 +2559,20 @@ class WorkflowGuardTests(unittest.TestCase):
             review = run(repo, "scripts/novel.py", "review", "v01_c001")
             self.assertEqual(review.returncode, 0, review.stdout + review.stderr)
             write_auxiliary_reviews(repo, "v01_c001")
+            write_codex_anti_ai_review(repo, "v01_c001")
+            write_codex_anti_ai_manifest(repo, "v01_c001")
+            write_deepseek_anti_ai_review(repo, "v01_c001")
+            write_deepseek_run_manifest(repo, "v01_c001", "review", "reviews/v01_c001/deepseek_integrated_review.md")
+            write_deepseek_run_manifest(repo, "v01_c001", "anti_ai_review", "reviews/v01_c001/deepseek_anti_ai_review.json")
             style = run(repo, "scripts/novel.py", "style-check", "v01_c001")
             self.assertEqual(style.returncode, 0, style.stdout + style.stderr)
             fact_cards = run(repo, "scripts/novel.py", "fact-cards", "v01_c001", "--write")
             self.assertEqual(fact_cards.returncode, 0, fact_cards.stdout + fact_cards.stderr)
+            write_review_arbitration(repo, "v01_c001")
+            write_revision_plan(repo, "v01_c001")
+            write_gray_consequence(repo, "v01_c001")
+            write_chapter_shape(repo, "v01_c001")
+            write_reader_feedback(repo, "v01_c001")
             event = run(
                 repo,
                 "scripts/novel.py",
@@ -1952,6 +2864,10 @@ class WorkflowGuardTests(unittest.TestCase):
                 "style-profile-build",
                 "style-profile-check",
                 "style-check",
+                "ai-taste-check",
+                "dialogue-function-check",
+                "deepseek-anti-ai-review",
+                "migrate-anti-ai-reviews",
                 "series-style-check",
                 "style-drift-report",
                 "deepseek-style-review",
@@ -2023,7 +2939,7 @@ class WorkflowGuardTests(unittest.TestCase):
             manifest = {
                 "schema_version": 2,
                 "chapter": chapter,
-                "budget_chars": 18000,
+                "budget_chars": 44000,
                 "hard_max_chars": 48000,
                 "allow_truncated": False,
                 "pack_truncated": False,
@@ -2055,7 +2971,7 @@ class WorkflowGuardTests(unittest.TestCase):
             chapter = "v01_c001"
             write(repo, f"outline/chapter_briefs/{chapter}.md", COMPLETE_BRIEF.format(chapter=chapter))
             self.assertEqual(run(repo, "scripts/build_derived_state.py").returncode, 0)
-            build = run(repo, "scripts/build_context_pack.py", "--chapter", chapter, "--limit", "18000")
+            build = run(repo, "scripts/build_context_pack.py", "--chapter", chapter, "--limit", "44000")
             self.assertEqual(build.returncode, 0, build.stdout + build.stderr)
             manifest = json.loads((repo / f"state/context_pack/{chapter}.manifest.json").read_text(encoding="utf-8"))
             paths = {item["path"] for item in manifest["input_hashes"]}
@@ -2093,6 +3009,22 @@ class WorkflowGuardTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("person drift", result.stdout)
 
+    def test_style_check_blocks_high_explanation_low_scene_anchor_sample(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_core_setting_freeze(repo)
+            text = (
+                "因为真正的问题意味着规则本质已经改变，所以他意识到这件事真正重要。\n"
+                "事实上这说明所有人的判断都不可靠，换句话说，归根结底还是程序和结论的关系。\n"
+                "说到底，真正可怕的不是错误，而是错误意味着什么。\n"
+            )
+            write(repo, "chapters/v01/c001.md", text)
+
+            result = run(repo, "scripts/novel.py", "style-check", "v01_c001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("anti-AI style", result.stdout)
+
     def test_volume_outline_missing_is_warning_not_blocker(self) -> None:
         with copy_repo() as temp:
             repo = temp
@@ -2106,6 +3038,19 @@ class WorkflowGuardTests(unittest.TestCase):
     def test_audit_reports_not_ready_without_stopping_early(self) -> None:
         with copy_repo() as temp:
             repo = temp
+            for relative in (
+                "reviews/v01_c001/style_metrics.json",
+                "reviews/v01_c001/style_consistency.md",
+                "reviews/v01_c001/series_style.json",
+                "reviews/v01_c001/series_style.md",
+                "reviews/v01_c001/reader_reward_gate.json",
+                "reviews/v01_c001/reader_reward_gate.md",
+                "state/derived/pacing/reader_reward_index.json",
+                "external_runs/deepseek/v01_c001/anti_ai_review.prompt.md",
+            ):
+                path = repo / relative
+                if path.exists():
+                    path.unlink()
             env = os.environ.copy()
             env["DEEPSEEK_API_KEY"] = "test-key"
             env["NOVEL_AUDIT_DEPTH"] = "1"
@@ -2119,6 +3064,17 @@ class WorkflowGuardTests(unittest.TestCase):
             self.assertIn("next_prompt:", result.stdout)
             self.assertIn("deepseek-preflight", result.stdout)
             self.assertIn("code: CORE_FREEZE_CHECK_NOT_READY", result.stdout)
+            for relative in (
+                "reviews/v01_c001/style_metrics.json",
+                "reviews/v01_c001/style_consistency.md",
+                "reviews/v01_c001/series_style.json",
+                "reviews/v01_c001/series_style.md",
+                "reviews/v01_c001/reader_reward_gate.json",
+                "reviews/v01_c001/reader_reward_gate.md",
+                "state/derived/pacing/reader_reward_index.json",
+                "external_runs/deepseek/v01_c001/anti_ai_review.prompt.md",
+            ):
+                self.assertFalse((repo / relative).exists(), relative)
 
     def test_audit_write_report_preserves_not_ready_exit_code(self) -> None:
         with copy_repo() as temp:
@@ -2318,7 +3274,7 @@ class WorkflowGuardTests(unittest.TestCase):
             self.assertTrue((repo / "state/derived/context_quality/v01_c001.md").exists())
             quality = json.loads((repo / "state/derived/context_quality/v01_c001.json").read_text(encoding="utf-8"))
             self.assertEqual(quality["status"], "READY")
-            self.assertEqual(quality["budget_chars"], 18000)
+            self.assertEqual(quality["budget_chars"], 44000)
             quality_md = (repo / "state/derived/context_quality/v01_c001.md").read_text(encoding="utf-8")
             self.assertIn("# Context Quality Report: v01_c001", quality_md)
             self.assertIn("status: READY", quality_md)
@@ -3235,6 +4191,88 @@ print("OK: stub deepseek idea")
             self.assertEqual(data["status"], "CLEAR")
             self.assertTrue((repo / "external_runs/deepseek/v01_c001/style_review.raw.json").exists())
 
+    def test_deepseek_anti_ai_review_valid_response_writes_structured_report(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write(repo, "chapters/v01/c001.md", "Official chapter with a private motive.\n")
+            write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF.format(chapter="v01_c001"))
+            write(repo, "state/context_pack/v01_c001.md", "context\n")
+            categories = {
+                key: {
+                    "status": "CLEAR",
+                    "severity": "P3",
+                    "evidence_quotes": ["Official chapter with a private motive."],
+                    "issue": "clear",
+                    "revision_actions": ["none"],
+                }
+                for key in (
+                    "show_dont_tell",
+                    "rhythm_disorder",
+                    "emotional_risk",
+                    "gray_motive",
+                    "dialogue_agenda",
+                    "detail_economy",
+                    "setting_integration",
+                    "consequence_integrity",
+                )
+            }
+            content = json.dumps(
+                {
+                    "status": "CLEAR",
+                    "action": "Ship",
+                    "summary": "ok",
+                    "categories": categories,
+                    "dialogue_samples": [
+                        {
+                            "evidence_quote": "Official chapter with a private motive.",
+                            "function": "no-dialogue interaction pressure",
+                            "character_goal": "keep a private motive hidden",
+                            "subtext_or_hidden_agenda": "self-protection",
+                            "status": "CLEAR",
+                        }
+                    ],
+                    "blockers": [],
+                    "warnings": [],
+                },
+                ensure_ascii=False,
+            )
+
+            result = run_deepseek_module_with_response(
+                repo,
+                "run_deepseek_anti_ai_review",
+                repr({"choices": [{"message": {"content": content}}]}),
+                "--chapter",
+                "v01_c001",
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            data = json.loads((repo / "reviews/v01_c001/deepseek_anti_ai_review.json").read_text(encoding="utf-8"))
+            md = (repo / "reviews/v01_c001/deepseek_anti_ai_review.md").read_text(encoding="utf-8")
+            self.assertEqual(data["status"], "CLEAR")
+            self.assertIn("review_sha256:", md)
+            self.assertTrue((repo / "external_runs/deepseek/v01_c001/anti_ai_review.raw.json").exists())
+
+    def test_deepseek_anti_ai_dry_run_does_not_write_review_files_or_read_codex_reviews(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            chapter = "v01_c009"
+            write(repo, "chapters/v01/c009.md", "Official chapter with rough human texture.\n")
+            write(repo, f"outline/chapter_briefs/{chapter}.md", COMPLETE_BRIEF.format(chapter=chapter))
+            write(repo, f"state/context_pack/{chapter}.md", "context\n")
+            write(repo, f"reviews/{chapter}/codex_integrated_review.md", "CODEx_SENTINEL_SHOULD_NOT_BE_READ\n")
+            write(repo, f"reviews/{chapter}/ai_taste.md", "AI_TASTE_SENTINEL_SHOULD_NOT_BE_READ\n")
+            write(repo, f"reviews/{chapter}/dialogue_function.md", "DIALOGUE_SENTINEL_SHOULD_NOT_BE_READ\n")
+
+            result = run(repo, "scripts/novel.py", "deepseek-anti-ai-review", chapter, "--dry-run")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            prompt = (repo / f"external_runs/deepseek/{chapter}/anti_ai_review.prompt.md").read_text(encoding="utf-8")
+            self.assertNotIn("CODEx_SENTINEL_SHOULD_NOT_BE_READ", prompt)
+            self.assertNotIn("AI_TASTE_SENTINEL_SHOULD_NOT_BE_READ", prompt)
+            self.assertNotIn("DIALOGUE_SENTINEL_SHOULD_NOT_BE_READ", prompt)
+            self.assertFalse((repo / f"reviews/{chapter}/deepseek_anti_ai_review.json").exists())
+            self.assertFalse((repo / f"reviews/{chapter}/deepseek_anti_ai_review.md").exists())
+
     def test_deepseek_brief_valid_response_writes_candidate_and_raw_json(self) -> None:
         with copy_repo() as temp:
             repo = temp
@@ -3370,7 +4408,7 @@ print("OK: stub deepseek idea")
     def test_chapter_evidence_allows_direct_deepseek_adoption(self) -> None:
         with copy_repo() as temp:
             repo = temp
-            chapter_text = "DeepSeek candidate copied exactly with a concrete protagonist choice.\n"
+            chapter_text = "# 证据夜班\n\nDeepSeek candidate copied exactly with a concrete protagonist choice. 主角保存异常证据并承担后续调查压力，读者确认异常并非普通故障。\n"
             write(repo, "bible/rules.md", "# Rules\n\nsource: test\n\n## 核心异常 / 能力 / 技术是什么？\n\nA anomaly cause.\n")
             write(repo, "state/context_pack/v01_c001.md", "context\n")
             write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF.format(chapter="v01_c001"))
@@ -3422,10 +4460,12 @@ print("OK: stub deepseek idea")
             self.assertEqual(landing.returncode, 0, landing.stdout + landing.stderr)
 
             context_item = {"path": "state/context_pack/v01_c001.md", "sha256": file_sha(repo, "state/context_pack/v01_c001.md")}
+            review_context_md_item = {"path": "state/context_pack/v01_c001_review_context.md", "sha256": file_sha(repo, "state/context_pack/v01_c001_review_context.md")}
+            review_context_json_item = {"path": "state/context_pack/v01_c001_review_context.json", "sha256": file_sha(repo, "state/context_pack/v01_c001_review_context.json")}
             chapter_item = {"path": "chapters/v01/c001.md", "sha256": file_sha(repo, "chapters/v01/c001.md")}
             manifest = {
-                "codex": {"recorded_at": "2000-01-01T00:00:00+00:00", "inputs": [context_item, chapter_item]},
-                "deepseek": {"recorded_at": "2000-01-01T00:00:00+00:00", "inputs": [context_item, chapter_item]},
+                "codex": {"recorded_at": "2000-01-01T00:00:00+00:00", "inputs": [context_item, review_context_md_item, review_context_json_item, chapter_item]},
+                "deepseek": {"recorded_at": "2000-01-01T00:00:00+00:00", "inputs": [context_item, review_context_md_item, review_context_json_item, chapter_item]},
             }
             write(repo, "reviews/v01_c001/review_manifest.json", json.dumps(manifest) + "\n")
             write(repo, "reviews/v01_c001/codex_integrated_review.md", "# Codex Review\n\naction: Ship\n")
@@ -3433,6 +4473,18 @@ print("OK: stub deepseek idea")
             write(repo, "reviews/v01_c001/model_disagreement.md", MODEL_DISAGREEMENT_READY)
             write(repo, "reviews/v01_c001/continuity.md", "# Continuity\n\nstatus: CLEAR\np0_count: 0\np1_count: 0\n")
             write_auxiliary_reviews(repo, "v01_c001")
+            write_codex_anti_ai_review(repo, "v01_c001")
+            write_codex_anti_ai_manifest(repo, "v01_c001")
+            write_deepseek_anti_ai_review(repo, "v01_c001")
+            write_deepseek_run_manifest(repo, "v01_c001", "review", "reviews/v01_c001/deepseek_integrated_review.md")
+            write_deepseek_run_manifest(repo, "v01_c001", "anti_ai_review", "reviews/v01_c001/deepseek_anti_ai_review.json")
+            write_review_arbitration(repo, "v01_c001")
+            write_revision_plan(repo, "v01_c001")
+            write_gray_consequence(repo, "v01_c001")
+            write_chapter_shape(repo, "v01_c001")
+            write_reader_reward_gate(repo, "v01_c001")
+            write_reader_reward_index(repo)
+            write_reader_feedback(repo, "v01_c001")
             write_style_metrics(repo, "v01_c001")
             write_element_usage_report(repo, "v01_c001")
 
@@ -3981,7 +5033,7 @@ print("OK: stub deepseek idea")
             )
             write(repo, "outline/chapter_briefs/v01_c001.md", brief)
 
-            result = run(repo, "scripts/build_context_pack.py", "--chapter", "v01_c001", "--limit", "18000")
+            result = run(repo, "scripts/build_context_pack.py", "--chapter", "v01_c001", "--limit", "44000")
 
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             pack = (repo / "state/context_pack/v01_c001.md").read_text(encoding="utf-8")
@@ -4088,6 +5140,151 @@ print("OK: stub deepseek idea")
 
             self.assertEqual(ready.returncode, 0, ready.stdout + ready.stderr)
             self.assertIn("status: READY", ready.stdout)
+
+    def test_reader_promise_requires_manual_reward_policy(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_reader_promise_ready(repo)
+            data = json.loads((repo / "state/project_reader_promise.json").read_text(encoding="utf-8"))
+            data.pop("reader_reward_intensity_policy")
+            write(repo, "state/project_reader_promise.json", json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+
+            result = run(repo, "scripts/novel.py", "reader-promise-check", "--require-ready")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("reader_reward_intensity_policy", result.stdout)
+
+    def test_brief_check_requires_title_and_reward_contract_fields(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            no_title = COMPLETE_BRIEF.format(chapter="v01_c001").replace("## 章节标题", "## 章节标题缺失")
+            write(repo, "outline/chapter_briefs/v01_c001.md", no_title)
+
+            missing = run(repo, "scripts/novel.py", "brief-check", "v01_c001")
+
+            self.assertNotEqual(missing.returncode, 0)
+            self.assertIn("章节标题", missing.stdout)
+
+            bad_r = COMPLETE_BRIEF.format(chapter="v01_c001").replace("- reader_reward_intensity：R2", "- reader_reward_intensity：R9")
+            write(repo, "outline/chapter_briefs/v01_c001.md", bad_r)
+
+            invalid = run(repo, "scripts/novel.py", "brief-check", "v01_c001")
+
+            self.assertNotEqual(invalid.returncode, 0)
+            self.assertIn("reader_reward_intensity must be R0-R4", invalid.stdout)
+
+            missing_unit = COMPLETE_BRIEF.format(chapter="v01_c001").replace(
+                "- 有效推进单位：主角只旁观异常 -> 主角保存异常证据并承担后续调查压力",
+                "- 有效推进单位：主角变主动",
+            )
+            write(repo, "outline/chapter_briefs/v01_c001.md", missing_unit)
+
+            unit_result = run(repo, "scripts/novel.py", "brief-check", "v01_c001")
+
+            self.assertNotEqual(unit_result.returncode, 0)
+            self.assertIn("有效推进单位", unit_result.stdout)
+
+    def test_reader_reward_check_writes_gate_and_index(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_reader_promise_ready(repo)
+            write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF.format(chapter="v01_c001"))
+            write(
+                repo,
+                "chapters/v01/c001.md",
+                "# 证据夜班\n\n主角保存异常证据并承担后续调查压力，读者确认异常并非普通故障。\n",
+            )
+
+            gate = run(repo, "scripts/novel.py", "reader-reward-check", "v01_c001", "--write")
+            index = run(repo, "scripts/novel.py", "reader-reward-index", "--write")
+
+            self.assertEqual(gate.returncode, 0, gate.stdout + gate.stderr)
+            self.assertEqual(index.returncode, 0, index.stdout + index.stderr)
+            self.assertTrue((repo / "reviews/v01_c001/reader_reward_gate.json").exists())
+            self.assertTrue((repo / "state/derived/pacing/reader_reward_index.json").exists())
+
+    def test_reader_reward_check_blocks_official_chapter_without_h1(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_reader_promise_ready(repo)
+            write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF.format(chapter="v01_c001"))
+            write(repo, "chapters/v01/c001.md", "主角保存异常证据并承担后续调查压力，读者确认异常并非普通故障。\n")
+
+            result = run(repo, "scripts/novel.py", "reader-reward-check", "v01_c001", "--write")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("official chapter first line", result.stdout)
+
+    def test_reader_reward_index_blocks_blocked_source_gate(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            index_path = repo / "state/derived/pacing/reader_reward_index.json"
+            if index_path.exists():
+                index_path.unlink()
+            write_reader_promise_ready(repo)
+            write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF.format(chapter="v01_c001"))
+            write(
+                repo,
+                "chapters/v01/c001.md",
+                "# 证据夜班\n\n主角保存异常证据并承担后续调查压力，读者确认异常并非普通故障。\n",
+            )
+            write_reader_reward_gate(repo, "v01_c001", status="BLOCKED")
+
+            result = run(repo, "scripts/novel.py", "reader-reward-index")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("status: BLOCKED", result.stdout)
+            self.assertIn("source gate BLOCKED", result.stdout)
+            self.assertFalse(index_path.exists())
+
+    def test_chapter_evidence_requires_current_reader_reward_gate(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_complete_chapter_evidence(repo, "v01_c001", 1)
+            (repo / "reviews/v01_c001/reader_reward_gate.json").unlink()
+
+            missing = run(repo, "scripts/novel.py", "chapter-evidence", "v01_c001")
+
+            self.assertNotEqual(missing.returncode, 0)
+            self.assertIn("reader_reward_gate.json", missing.stdout)
+
+            write_complete_chapter_evidence(repo, "v01_c001", 1)
+            with (repo / "chapters/v01/c001.md").open("a", encoding="utf-8", newline="\n") as handle:
+                handle.write("新增一句让 hash 过期。\n")
+
+            stale = run(repo, "scripts/novel.py", "chapter-evidence", "v01_c001")
+
+            self.assertNotEqual(stale.returncode, 0)
+            self.assertIn("reader_reward_gate.json official chapter hash is stale", stale.stdout)
+
+    def test_reader_reward_index_blocks_core_silence_over_threshold(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_reader_promise_ready(repo)
+            promise = json.loads((repo / "state/project_reader_promise.json").read_text(encoding="utf-8"))
+            promise["reader_reward_intensity_policy"]["opening_intensity_by_chapter"] = {
+                "v01_c001": "R3",
+                "v01_c002": "R3",
+                "v01_c003": "R3",
+            }
+            promise["reader_reward_intensity_policy"]["default_chapter_intensity"] = "R3"
+            write(repo, "state/project_reader_promise.json", json.dumps(promise, ensure_ascii=False, indent=2) + "\n")
+            for number in range(1, 4):
+                chapter = f"v01_c{number:03d}"
+                write(repo, f"outline/chapter_briefs/{chapter}.md", COMPLETE_BRIEF.format(chapter=chapter))
+                write(repo, f"chapters/v01/c{number:03d}.md", "# 证据夜班\n\n读者确认异常并非普通故障。\n")
+                write_reader_reward_gate(repo, chapter)
+                gate_path = repo / f"reviews/{chapter}/reader_reward_gate.json"
+                gate = json.loads(gate_path.read_text(encoding="utf-8"))
+                gate["reader_reward_intensity"] = "R3"
+                gate["contract"]["core_mechanism_presence"] = "silent"
+                gate["contract"]["core_mechanism_silent_count"] = str(number)
+                gate_path.write_text(json.dumps(gate, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+            result = run(repo, "scripts/novel.py", "reader-reward-index", "--write")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("核心机制沉默", result.stdout)
 
     def test_brief_check_requires_pacing_levels_and_explanations(self) -> None:
         with copy_repo() as temp:
@@ -4334,7 +5531,7 @@ print("OK: stub deepseek idea")
             self.assertIn("义眼成为关键调查装备", (repo / "state/derived/current_objects.yaml").read_text(encoding="utf-8"))
             self.assertIn("义眼只能捕捉", (repo / "state/derived/current_abilities.yaml").read_text(encoding="utf-8"))
 
-            context = run(repo, "scripts/build_context_pack.py", "--chapter", "v01_c001", "--limit", "18000")
+            context = run(repo, "scripts/build_context_pack.py", "--chapter", "v01_c001", "--limit", "44000")
             self.assertEqual(context.returncode, 0, context.stdout + context.stderr)
             pack = (repo / "state/context_pack/v01_c001.md").read_text(encoding="utf-8")
             self.assertIn("开书前核心设定冻结", pack)
@@ -4395,7 +5592,7 @@ print("OK: stub deepseek idea")
             self.assertEqual(brief_pack.returncode, 0, brief_pack.stdout + brief_pack.stderr)
             self.assertIn("旧硬盘", (repo / "state/context_pack/v01_c002_brief.md").read_text(encoding="utf-8"))
 
-            context = run(repo, "scripts/build_context_pack.py", "--chapter", "v01_c002", "--limit", "18000")
+            context = run(repo, "scripts/build_context_pack.py", "--chapter", "v01_c002", "--limit", "44000")
             self.assertEqual(context.returncode, 0, context.stdout + context.stderr)
             pack = (repo / "state/context_pack/v01_c002.md").read_text(encoding="utf-8")
             manifest = json.loads((repo / "state/context_pack/v01_c002.manifest.json").read_text(encoding="utf-8"))
@@ -5132,6 +6329,175 @@ print("OK: stub deepseek idea")
 
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertTrue((repo / "reader_tests/responses/gate_a/reader_001.json").exists())
+
+    def test_receive_chapter_preview_does_not_write_report(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            result = run(repo, "scripts/novel.py", "receive-chapter", "v01_c001", "--preview")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn('"status": "PREVIEW"', result.stdout)
+            self.assertFalse((repo / "reviews/v01_c001/receive_chapter.json").exists())
+
+    def test_accept_review_writes_current_human_metadata(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_complete_chapter_evidence(repo, "v01_c001", 1)
+
+            result = run(
+                repo,
+                "scripts/novel.py",
+                "accept-review",
+                "v01_c001",
+                "--artifact",
+                "ai_taste",
+                "--reason",
+                "human accepts this stylized taste choice",
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            md = (repo / "reviews/v01_c001/ai_taste.md").read_text(encoding="utf-8")
+            data = json.loads((repo / "reviews/v01_c001/ai_taste.json").read_text(encoding="utf-8"))
+            self.assertIn("status: ACCEPTED_BY_HUMAN", md)
+            self.assertIn("accepted_by: human", md)
+            self.assertEqual(data["human_acceptance"]["accepted_by"], "human")
+
+    def test_accept_review_rejects_infrastructure_marker(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_complete_chapter_evidence(repo, "v01_c001", 1)
+            write(repo, "reviews/v01_c001/review_arbitration.md", "status: NEEDS_HUMAN\n\nmanifest hash mismatch\n")
+
+            result = run(
+                repo,
+                "scripts/novel.py",
+                "accept-review",
+                "v01_c001",
+                "--artifact",
+                "review_arbitration",
+                "--reason",
+                "accept anyway",
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("infrastructure marker", result.stderr)
+
+    def test_review_arbitration_conflict_blocks_ship_evidence(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_complete_chapter_evidence(repo, "v01_c001", 1)
+            write(repo, "reviews/v01_c001/deepseek_integrated_review.md", "# DeepSeek Review\n\naction: Revise once\n")
+            write_review_arbitration(repo, "v01_c001")
+            result = run(repo, "scripts/novel.py", "review-arbitration", "v01_c001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Codex and DeepSeek actions conflict", result.stdout)
+
+    def test_deepseek_run_manifest_forbidden_input_blocks_evidence(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_complete_chapter_evidence(repo, "v01_c001", 1)
+            manifest_path = repo / "external_runs/deepseek/v01_c001/anti_ai_review.manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["inputs"].append(
+                {
+                    "path": "reviews/v01_c001/ai_taste.json",
+                    "sha256": file_sha(repo, "reviews/v01_c001/ai_taste.json"),
+                }
+            )
+            manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+            result = run(repo, "scripts/novel.py", "evidence", "v01_c001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("uses forbidden input reviews/v01_c001/ai_taste.json", result.stdout)
+
+    def test_revision_plan_required_after_revise_once_decision(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_complete_chapter_evidence(repo, "v01_c001", 1)
+            (repo / "reviews/v01_c001/revision_plan.json").unlink()
+            write(
+                repo,
+                "reviews/v01_c001/decision.json",
+                json.dumps({"chapter": "v01_c001", "decision": "Revise once", "verified_by": "human"}) + "\n",
+            )
+
+            result = run(repo, "scripts/novel.py", "evidence", "v01_c001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Revise once requires current revision_plan.json", result.stdout)
+
+    def test_gray_consequence_blocks_high_impact_uncovered_gray_action(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write(repo, "chapters/v01/c001.md", "He chose to lie and break trust in the relationship.\n")
+
+            result = run(repo, "scripts/novel.py", "gray-consequence", "v01_c001", "--write")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("status: BLOCKED", result.stdout)
+
+    def test_chapter_shape_blocks_repeated_shape_from_chapter_six(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write(repo, "chapters/v01/c006.md", "arrive at the door\nclue appears\nrecord the signal\n")
+            write(
+                repo,
+                "state/derived/chapter_shapes.json",
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "generated_at": "2000-01-01T00:00:00+00:00",
+                        "chapters": {
+                            "v01_c004": {"shape_key": "arrival|bureaucracy|new_clue|mystery"},
+                            "v01_c005": {"shape_key": "arrival|bureaucracy|new_clue|mystery"},
+                        },
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                )
+                + "\n",
+            )
+
+            result = run(repo, "scripts/novel.py", "chapter-shape-check", "v01_c006", "--write")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("status: BLOCKED", result.stdout)
+
+    def test_reader_feedback_writes_reader_only_outputs(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            canon_before = (repo / "bible/canon.md").read_text(encoding="utf-8")
+            add = run(
+                repo,
+                "scripts/novel.py",
+                "reader-feedback",
+                "add",
+                "v01_c001",
+                "--reader",
+                "reader_001",
+                "--target-reader",
+                "pilot reader",
+                "--stuck-point",
+                "middle slowed down",
+                "--continue-reason",
+                "wants the next clue",
+                "--promise-gap",
+                "needs stronger protagonist desire",
+                "--favorite-moment",
+                "the final choice",
+                "--skip-moment",
+                "none",
+            )
+            summary = run(repo, "scripts/novel.py", "reader-feedback", "summarize", "v01_c001")
+
+            self.assertEqual(add.returncode, 0, add.stdout + add.stderr)
+            self.assertEqual(summary.returncode, 0, summary.stdout + summary.stderr)
+            self.assertTrue((repo / "reader_tests/chapter_feedback/v01_c001/reader_001.json").exists())
+            self.assertTrue((repo / "reviews/v01_c001/reader_feedback.json").exists())
+            self.assertTrue((repo / "state/derived/reader_feedback.json").exists())
+            self.assertEqual((repo / "bible/canon.md").read_text(encoding="utf-8"), canon_before)
 
 
 if __name__ == "__main__":

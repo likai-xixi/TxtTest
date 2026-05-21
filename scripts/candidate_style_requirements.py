@@ -11,6 +11,7 @@ from typing import Any
 from _common import ROOT, chapter_number, chapter_parts, now_iso, read_json, read_text, write_json
 from style_contract import REQUIRED_FIELDS, validate_contract
 from reader_personality_contracts import READER_PROMISE_JSON, READER_PROMISE_MD, load_reader_promise, validate_reader_promise
+from reader_reward_policy import POLICY_PATH
 
 
 HEADER = "# Candidate Style Requirements"
@@ -138,6 +139,7 @@ def source_refs(include_profile: bool) -> list[dict[str, Any]]:
         [
             file_ref(READER_PROMISE_JSON, "project_reader_promise_json"),
             file_ref(READER_PROMISE_MD, "project_reader_promise_markdown"),
+            file_ref(POLICY_PATH, "reader_reward_policy"),
             file_ref(DERIVED_PERSONALITY, "derived_current_personality"),
             file_ref(PROTAGONIST_PROGRESSION, "protagonist_progression"),
             file_ref(WORLD_REVEAL_LEDGER, "world_reveal_ledger"),
@@ -228,6 +230,8 @@ def render_requirements(chapter: str) -> dict[str, Any]:
             "- 流程、表格、回函、检测、记录只能作为冲突工具，不能成为叙事主体。",
             "- 主角每章必须主动改变局面，哪怕改变带来更大麻烦。",
             "- 金手指必须定期展示能力、限制、反噬、升级或误导，不能长期只是发热和提示。",
+            "- 本章必须按 reader promise 的手动 R 档兑现回报；不得把 R 档当成模板默认值。",
+            "- R2+ 必须给出正文可匹配的回报证据；R3/R4 必须触达核心卖点或写清替代回报证据。",
             "- 世界观信息必须通过场景压力、人物选择或普通人反应展示。",
             "- 每章至少保留一句有传播力的台词、吐槽、反差句或情绪句。",
             "",
@@ -256,6 +260,16 @@ def render_requirements(chapter: str) -> dict[str, Any]:
             "",
             "- 本章必须规划金句、梗、反差笑点、角色口头禅、标志动作或可截图传播句之一。",
             "- 禁止整章只有平铺解释、流程复述和无压迫的观察。",
+            "",
+            "## Anti-AI Taste Requirements",
+            "",
+            "- 禁止把潜台词直接翻译成总结腔；先让动作、误判、停顿、逃避或代价发生。",
+            "- 关键角色每章至少暴露一次私利、隐瞒、错位判断、情绪越界或灰度动作；善意不能写成无菌。",
+            "- 主角可以使坏，但必须有动机、风险、短期收益、长期后果和可追责痕迹。",
+            "- 关键对白必须推进信息、暴露欲望、制造压力、遮掩真相、试探关系之一；纯主题陈述不能连续主导。",
+            "- 句式必须有毛边：允许口语冗余、突然短断、非对称节奏和被场景打断的半句话。",
+            "- 细节只保留有功能的细节：制造选择、误导、伏笔、代价、关系变化或场景压力；装饰性仿真细节要删或弱化。",
+            "- 灰度行为、偷懒、撒谎、迁怒、嫉妒、怯懦和自保可以出现，但不能无后果地被叙事洗白。",
             "",
             "## Source Trace",
             "",

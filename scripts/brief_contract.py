@@ -59,6 +59,7 @@ PROGRESS_REQUIRED_SECTIONS = (
 PROGRESS_FIELD_LABELS = tuple(aliases[0] for aliases in PROGRESS_REQUIRED_SECTIONS)
 
 REQUIRED_BRIEF_FIELDS = (
+    "章节标题",
     "本章功能",
     "开篇吸引点",
     "主角目标",
@@ -138,6 +139,20 @@ PROGRESS_MODE_ALIASES = {
     "转场": "transition",
 }
 PROGRESS_IMPORTANCE_LEVELS = {"P0", "P1", "P2", "P3"}
+READER_REWARD_INTENSITIES = {"R0", "R1", "R2", "R3", "R4"}
+EFFECTIVE_PROGRESS_TYPES = {
+    "risk_escalation",
+    "relationship_change",
+    "information_reversal",
+    "cost_landed",
+    "choice_completed",
+    "power_shift",
+    "goal_advanced",
+    "false_hope_broken",
+    "payoff",
+    "digest",
+}
+READER_REWARD_TIMINGS = {"opening", "midpoint", "ending", "full_chapter", "next_chapter_setup"}
 IMPACT_SCALES = {f"C{index}" for index in range(5)} | {f"I{index}" for index in range(5)}
 HIGH_IMPACT_SCALES = {"C3", "C4", "I3", "I4"}
 LOW_IMPACT_SCALES = {"C0", "C1", "I0", "I1"}
@@ -165,6 +180,9 @@ ANCHOR_KEY_ALIASES = {
 }
 PROGRESS_KEY_ALIASES = {
     "progress_mode": ("进展类型", "progress_mode"),
+    "effective_progress_type": ("有效推进类型", "effective_progress_type"),
+    "effective_progress_unit": ("有效推进单位", "effective_progress_unit"),
+    "effective_progress_evidence_target": ("有效推进证据目标", "effective_progress_evidence_target"),
     "progress_target": ("推进对象", "progress_target"),
     "start_state_ref": ("起始状态依据", "start_state_ref"),
     "end_state_delta": ("结束状态变化", "end_state_delta"),
@@ -184,6 +202,18 @@ PROGRESS_KEY_ALIASES = {
     "resolved_threads": ("解决伏笔", "resolved_threads"),
     "forbidden_resolution": ("禁止解决", "forbidden_resolution"),
     "resolution_requires_cost": ("解决是否需要代价", "resolution_requires_cost"),
+    "reader_reward_intensity": ("reader_reward_intensity", "爽感强度", "读者回报强度"),
+    "reader_reward_type": ("reader_reward_type", "读者回报类型"),
+    "reader_reward_delivery": ("reader_reward_delivery", "读者回报交付"),
+    "reader_reward_timing": ("reader_reward_timing", "读者回报时点"),
+    "reward_evidence_requirement": ("reward_evidence_requirement", "回报证据要求"),
+    "chapter_small_payoff": ("本章小兑现", "chapter_small_payoff"),
+    "next_click_reason": ("下一章点击理由", "next_click_reason"),
+    "low_drama_carrier": ("低戏剧载体", "low_drama_carrier"),
+    "low_drama_progress_type": ("低戏剧载体承载的推进类型", "low_drama_progress_type"),
+    "core_mechanism_presence": ("核心机制是否出现", "core_mechanism_presence"),
+    "core_mechanism_silent_count": ("若未出现，当前沉默计数", "core_mechanism_silent_count"),
+    "waiting_ending_debt": ("等待结尾债务", "waiting_ending_debt"),
 }
 SCENE_CONTINUITY_TYPES = {"原地承接", "明示跳切", "省略过桥", "开篇起始"}
 GENERIC_SCENE_CONTINUITY_NOTES = {

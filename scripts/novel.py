@@ -688,6 +688,139 @@ def command_deepseek_style_review(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_deepseek_anti_ai_review(args: argparse.Namespace) -> int:
+    ensure_no_open_locks()
+    script_args = ["--chapter", args.chapter]
+    if args.model:
+        script_args.extend(["--model", args.model])
+    if args.dry_run:
+        script_args.append("--dry-run")
+    run_script("run_deepseek_anti_ai_review.py", *script_args)
+    return 0
+
+
+def command_codex_anti_ai_review_start(args: argparse.Namespace) -> int:
+    ensure_no_open_locks()
+    return run_script("codex_anti_ai_review_start.py", args.chapter, check=False)
+
+
+def command_review_context(args: argparse.Namespace) -> int:
+    script_args = ["--chapter", args.chapter]
+    if args.write:
+        script_args.append("--write")
+    if args.json:
+        script_args.append("--json")
+    return run_script("review_context.py", *script_args, check=False)
+
+
+def command_deepseek_manifest_check(args: argparse.Namespace) -> int:
+    return run_script("deepseek_run_manifest.py", args.chapter, "--kind", args.kind, check=False)
+
+
+def command_receive_chapter(args: argparse.Namespace) -> int:
+    script_args = [args.chapter]
+    if args.preview:
+        script_args.append("--preview")
+    if args.resume:
+        script_args.append("--resume")
+    if args.run_deepseek:
+        script_args.append("--run-deepseek")
+    return run_script("receive_chapter.py", *script_args, check=False)
+
+
+def command_revision_plan(args: argparse.Namespace) -> int:
+    script_args = [args.chapter]
+    if args.json:
+        script_args.append("--json")
+    if args.no_write:
+        script_args.append("--no-write")
+    return run_script("revision_plan.py", *script_args, check=False)
+
+
+def command_accept_review(args: argparse.Namespace) -> int:
+    script_args = [args.chapter, "--artifact", args.artifact, "--reason", args.reason]
+    if args.preview:
+        script_args.append("--preview")
+    return run_script("accept_review.py", *script_args, check=False)
+
+
+def command_review_arbitration(args: argparse.Namespace) -> int:
+    script_args = [args.chapter]
+    if args.json:
+        script_args.append("--json")
+    if args.no_write:
+        script_args.append("--no-write")
+    return run_script("review_arbitration.py", *script_args, check=False)
+
+
+def command_gray_consequence(args: argparse.Namespace) -> int:
+    script_args = [args.chapter]
+    if args.write:
+        script_args.append("--write")
+    if args.json:
+        script_args.append("--json")
+    return run_script("gray_consequence.py", *script_args, check=False)
+
+
+def command_chapter_shape_check(args: argparse.Namespace) -> int:
+    script_args = [args.chapter]
+    if args.write:
+        script_args.append("--write")
+    if args.json:
+        script_args.append("--json")
+    return run_script("chapter_shape_check.py", *script_args, check=False)
+
+
+def command_reader_reward_check(args: argparse.Namespace) -> int:
+    script_args = ["--chapter", args.chapter]
+    if args.write:
+        script_args.append("--write")
+    return run_script("reader_reward_check.py", *script_args, check=False)
+
+
+def command_reader_reward_index(args: argparse.Namespace) -> int:
+    script_args: list[str] = []
+    if args.write:
+        script_args.append("--write")
+    return run_script("reader_reward_index.py", *script_args, check=False)
+
+
+def command_reader_reward_migration_report(args: argparse.Namespace) -> int:
+    return run_script("reader_reward_migration_report.py", check=False)
+
+
+def command_reader_feedback(args: argparse.Namespace) -> int:
+    script_args = [args.reader_feedback_command, args.chapter]
+    if args.reader_feedback_command == "add":
+        script_args.extend(["--reader", args.reader, "--target-reader", args.target_reader])
+        if args.answers:
+            script_args.extend(["--answers", args.answers])
+        for attr, flag in (
+            ("stuck_point", "--stuck-point"),
+            ("continue_reason", "--continue-reason"),
+            ("promise_gap", "--promise-gap"),
+            ("favorite_moment", "--favorite-moment"),
+            ("skip_moment", "--skip-moment"),
+        ):
+            value = getattr(args, attr)
+            if value:
+                script_args.extend([flag, value])
+        if args.allow_incomplete:
+            script_args.append("--allow-incomplete")
+        if args.allow_unknown:
+            script_args.append("--allow-unknown")
+    elif args.reader_feedback_command == "summarize":
+        if args.risk:
+            script_args.extend(["--risk", args.risk])
+        if args.recommendation:
+            script_args.extend(["--recommendation", args.recommendation])
+        if args.no_write:
+            script_args.append("--no-write")
+    elif args.reader_feedback_command == "resolve":
+        script_args.extend(["--reason", args.reason])
+    return run_script("reader_feedback.py", *script_args, check=False)
+
+
 def command_brief_candidates(args: argparse.Namespace) -> int:
     ensure_no_open_locks()
     brief = ROOT / "outline" / "chapter_briefs" / f"{args.chapter}.md"
@@ -784,6 +917,10 @@ def command_codex_review_start(args: argparse.Namespace) -> int:
     ensure_no_open_locks()
     volume, chapter_file = chapter_parts(args.chapter)
     context = f"state/context_pack/{args.chapter}.md"
+    review_context_md = f"state/context_pack/{args.chapter}_review_context.md"
+    review_context_json = f"state/context_pack/{args.chapter}_review_context.json"
+    if not (ROOT / review_context_md).exists() or not (ROOT / review_context_json).exists():
+        run_script("review_context.py", "--chapter", args.chapter, "--write")
     review_input = args.input or f"chapters/{volume}/{chapter_file}"
     run_script(
         "review_manifest.py",
@@ -793,6 +930,10 @@ def command_codex_review_start(args: argparse.Namespace) -> int:
         "codex",
         "--input",
         context,
+        "--input",
+        review_context_md,
+        "--input",
+        review_context_json,
         "--input",
         review_input,
     )
@@ -934,6 +1075,12 @@ def command_close(args: argparse.Namespace) -> int:
             )
             return 1
         run_script("element_usage.py", args.chapter, "--write")
+        run_script("review_arbitration.py", args.chapter, check=False)
+        run_script("revision_plan.py", args.chapter, check=False)
+        run_script("gray_consequence.py", args.chapter, "--write", check=False)
+        run_script("chapter_shape_check.py", args.chapter, "--write", check=False)
+        run_script("reader_reward_check.py", "--chapter", args.chapter, "--write", check=False)
+        run_script("reader_reward_index.py", "--write", check=False)
         run_script("chapter_evidence.py", "--chapter", args.chapter)
 
     command_decision(args)
@@ -1146,7 +1293,38 @@ def command_style_check(args: argparse.Namespace) -> int:
     script_args = ["style-check"]
     if args.chapter:
         script_args.append(args.chapter)
+    if args.no_write:
+        script_args.append("--no-write")
     return run_script("style_contract.py", *script_args, check=False)
+
+
+def command_ai_taste_check(args: argparse.Namespace) -> int:
+    script_args = [args.chapter]
+    if args.json:
+        script_args.append("--json")
+    if args.no_write:
+        script_args.append("--no-write")
+    return run_script("ai_taste_check.py", *script_args, check=False)
+
+
+def command_dialogue_function_check(args: argparse.Namespace) -> int:
+    script_args = [args.chapter]
+    if args.json:
+        script_args.append("--json")
+    if args.no_write:
+        script_args.append("--no-write")
+    return run_script("dialogue_function_check.py", *script_args, check=False)
+
+
+def command_migrate_anti_ai_reviews(args: argparse.Namespace) -> int:
+    script_args: list[str] = []
+    if args.chapter:
+        script_args.append(args.chapter)
+    if args.all:
+        script_args.append("--all")
+    if args.force:
+        script_args.append("--force")
+    return run_script("migrate_anti_ai_reviews.py", *script_args, check=False)
 
 
 def command_series_style_check(args: argparse.Namespace) -> int:
@@ -1159,6 +1337,8 @@ def command_series_style_check(args: argparse.Namespace) -> int:
         script_args.extend(["--reason", args.reason])
     if args.require_deepseek:
         script_args.append("--require-deepseek")
+    if args.no_write:
+        script_args.append("--no-write")
     return run_script("series_style.py", *script_args, check=False)
 
 
@@ -1587,7 +1767,7 @@ def command_flow(_args: argparse.Namespace) -> int:
 
 6. Start a chapter.
    python scripts/novel.py start v01_c001
-   This builds state/context_pack/v01_c001.md from the landed official brief.
+   This builds state/context_pack/v01_c001.md plus review-only structured state and key quotes at state/context_pack/v01_c001_review_context.md/json.
 
 7. Generate chapter candidates.
    Codex candidate: Codex writes drafts/codex/v01_c001.md from context pack.
@@ -1601,9 +1781,15 @@ def command_flow(_args: argparse.Namespace) -> int:
    python scripts/novel.py land v01_c001 --selected-direction "DeepSeek" --attestation "Human selected the DeepSeek draft as the official chapter; Codex recorded provenance before review."
 
 9. Review.
+   python scripts/novel.py review-context v01_c001 --write
    python scripts/novel.py codex-review-start v01_c001
    Codex writes reviews/v01_c001/codex_integrated_review.md without reading DeepSeek review.
    python scripts/novel.py review v01_c001 --deepseek
+   python scripts/novel.py ai-taste-check v01_c001
+   python scripts/novel.py dialogue-function-check v01_c001
+   python scripts/novel.py codex-anti-ai-review-start v01_c001
+   Run an isolated Codex subagent with reviews/v01_c001/codex_anti_ai_review_prompt.md; it writes codex_anti_ai_review.md/json without reading DeepSeek or integrated review outputs.
+   python scripts/novel.py deepseek-anti-ai-review v01_c001
 
 10. Human decision.
    python scripts/novel.py decision v01_c001 --decision "Revise once"
@@ -1770,6 +1956,93 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--dry-run", action="store_true")
     p.set_defaults(func=command_deepseek_style_review)
 
+    p = sub.add_parser("deepseek-anti-ai-review", help="Ask DeepSeek for an independent anti-AI taste review.")
+    p.add_argument("chapter")
+    p.add_argument("--model", default=model_for("deepseek_anti_ai_review"))
+    p.add_argument("--dry-run", action="store_true")
+    p.set_defaults(func=command_deepseek_anti_ai_review)
+
+    p = sub.add_parser("deepseek-manifest-check", help="Validate DeepSeek run manifest evidence.")
+    p.add_argument("chapter")
+    p.add_argument("--kind", required=True, choices=["review", "anti_ai_review", "style_review"])
+    p.set_defaults(func=command_deepseek_manifest_check)
+
+    p = sub.add_parser("receive-chapter", help="Run the receive-chapter control plane without auto-shipping.")
+    p.add_argument("chapter")
+    p.add_argument("--preview", action="store_true")
+    p.add_argument("--resume", action="store_true")
+    p.add_argument("--run-deepseek", action="store_true")
+    p.set_defaults(func=command_receive_chapter)
+
+    p = sub.add_parser("revision-plan", help="Build a structured revision plan from review evidence.")
+    p.add_argument("chapter")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--no-write", action="store_true")
+    p.set_defaults(func=command_revision_plan)
+
+    p = sub.add_parser("accept-review", help="Record a human acceptance for a taste/style review artifact.")
+    p.add_argument("chapter")
+    p.add_argument("--artifact", required=True)
+    p.add_argument("--reason", required=True)
+    p.add_argument("--preview", action="store_true")
+    p.set_defaults(func=command_accept_review)
+
+    p = sub.add_parser("review-arbitration", help="Arbitrate Codex and DeepSeek review conflicts.")
+    p.add_argument("chapter")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--no-write", action="store_true")
+    p.set_defaults(func=command_review_arbitration)
+
+    p = sub.add_parser("gray-consequence", help="Track high-impact gray behavior consequences.")
+    p.add_argument("chapter")
+    p.add_argument("--write", action="store_true")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=command_gray_consequence)
+
+    p = sub.add_parser("chapter-shape-check", help="Detect repeated chapter shapes.")
+    p.add_argument("chapter")
+    p.add_argument("--write", action="store_true")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=command_chapter_shape_check)
+
+    p = sub.add_parser("reader-reward-check", help="Check one chapter's reader reward gate.")
+    p.add_argument("chapter")
+    p.add_argument("--write", action="store_true")
+    p.set_defaults(func=command_reader_reward_check)
+
+    p = sub.add_parser("reader-reward-index", help="Build the cross-chapter reader reward derived index.")
+    p.add_argument("--write", action="store_true")
+    p.set_defaults(func=command_reader_reward_index)
+
+    p = sub.add_parser("reader-reward-migration-report", help="Report reader reward hard-enable migration gaps.")
+    p.set_defaults(func=command_reader_reward_migration_report)
+
+    p = sub.add_parser("reader-feedback", help="Record or summarize per-chapter reader feedback.")
+    reader_feedback_sub = p.add_subparsers(dest="reader_feedback_command", required=True)
+    rp = reader_feedback_sub.add_parser("add")
+    rp.add_argument("chapter")
+    rp.add_argument("--reader", required=True)
+    rp.add_argument("--target-reader", default="unknown")
+    rp.add_argument("--answers", default=None)
+    rp.add_argument("--stuck-point", default="")
+    rp.add_argument("--continue-reason", default="")
+    rp.add_argument("--promise-gap", default="")
+    rp.add_argument("--favorite-moment", default="")
+    rp.add_argument("--skip-moment", default="")
+    rp.add_argument("--allow-incomplete", action="store_true")
+    rp.add_argument("--allow-unknown", action="store_true")
+    rp.set_defaults(func=command_reader_feedback)
+    rp = reader_feedback_sub.add_parser("summarize")
+    rp.add_argument("chapter")
+    rp.add_argument("--risk", default="")
+    rp.add_argument("--recommendation", default="")
+    rp.add_argument("--no-write", action="store_true")
+    rp.set_defaults(func=command_reader_feedback)
+    rp = reader_feedback_sub.add_parser("resolve")
+    rp.add_argument("chapter")
+    rp.add_argument("--reason", required=True)
+    rp.set_defaults(func=command_reader_feedback)
+
     p = sub.add_parser("brief-candidates", help="Prepare Codex/DeepSeek brief candidates before official brief landing.")
     p.add_argument("chapter")
     p.add_argument("--deepseek", action="store_true", help="Call DeepSeek brief generation after the brief pack is built.")
@@ -1840,6 +2113,16 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("chapter")
     p.add_argument("--input", default=None)
     p.set_defaults(func=command_codex_review_start)
+
+    p = sub.add_parser("review-context", help="Build review-only structured state and key quote context.")
+    p.add_argument("chapter")
+    p.add_argument("--write", action="store_true")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=command_review_context)
+
+    p = sub.add_parser("codex-anti-ai-review-start", help="Prepare an isolated Codex subagent anti-AI review prompt and manifest.")
+    p.add_argument("chapter")
+    p.set_defaults(func=command_codex_anti_ai_review_start)
 
     p = sub.add_parser("decision", help="Record a human chapter decision.")
     p.add_argument("chapter")
@@ -2034,7 +2317,26 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("style-check", help="Check project or chapter style consistency.")
     p.add_argument("chapter", nargs="?")
+    p.add_argument("--no-write", action="store_true")
     p.set_defaults(func=command_style_check)
+
+    p = sub.add_parser("ai-taste-check", help="Run structured anti-AI taste review for a chapter.")
+    p.add_argument("chapter")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--no-write", action="store_true")
+    p.set_defaults(func=command_ai_taste_check)
+
+    p = sub.add_parser("dialogue-function-check", help="Run structured dialogue-function review for a chapter.")
+    p.add_argument("chapter")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--no-write", action="store_true")
+    p.set_defaults(func=command_dialogue_function_check)
+
+    p = sub.add_parser("migrate-anti-ai-reviews", help="Create anti-AI review scaffolds without clearing them.")
+    p.add_argument("chapter", nargs="?")
+    p.add_argument("--all", action="store_true")
+    p.add_argument("--force", action="store_true")
+    p.set_defaults(func=command_migrate_anti_ai_reviews)
 
     p = sub.add_parser("series-style-check", help="Check cross-chapter style consistency and series feel.")
     p.add_argument("chapter")
@@ -2042,6 +2344,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--accept", action="store_true", help="Record a human acceptance for non-infrastructure style drift.")
     p.add_argument("--reason", default="")
     p.add_argument("--require-deepseek", action="store_true")
+    p.add_argument("--no-write", action="store_true")
     p.set_defaults(func=command_series_style_check)
 
     p = sub.add_parser("style-drift-report", help="Show style drift/profile status.")

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Reader Feedback",
+  "type": "object",
+  "required": ["schema_version", "chapter", "generated_at", "status", "response_count", "stuck_points", "continue_reasons", "reader_promise_gaps", "risk", "recommendation", "human_acceptance"],
+  "properties": {
+    "schema_version": {"type": "integer"},
+    "chapter": {"type": "string"},
+    "generated_at": {"type": "string"},
+    "status": {"type": "string"},
+    "response_count": {"type": "integer"},
+    "stuck_points": {"type": "array"},
+    "continue_reasons": {"type": "array"},
+    "reader_promise_gaps": {"type": "array"},
+    "risk": {"type": "string"},
+    "recommendation": {"type": "string"},
+    "human_acceptance": {"type": ["object", "null"]},
+    "resolutions": {"type": "array"}
+  },
+  "additionalProperties": false
+}

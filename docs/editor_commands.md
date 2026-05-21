@@ -39,7 +39,16 @@ python scripts/novel.py audit --write-report
 python scripts/novel.py ci
 python scripts/novel.py reader-promise-start
 python scripts/novel.py reader-promise-check
+python scripts/novel.py reader-reward-check v01_c001 --write
+python scripts/novel.py reader-reward-index --write
+python scripts/novel.py reader-reward-migration-report
 python scripts/novel.py reader-experience-check v01_c001
+python scripts/novel.py ai-taste-check v01_c001
+python scripts/novel.py dialogue-function-check v01_c001
+python scripts/novel.py review-context v01_c001 --write
+python scripts/novel.py codex-anti-ai-review-start v01_c001
+python scripts/novel.py deepseek-anti-ai-review v01_c001 --dry-run
+python scripts/novel.py migrate-anti-ai-reviews v01_c001
 python scripts/novel.py personality-check
 python scripts/novel.py suspense-check
 python scripts/novel.py world-reveal-check
@@ -79,6 +88,8 @@ python scripts/novel.py reader-promise-start
 python scripts/novel.py reader-promise-land --ready
 python scripts/novel.py reader-promise-check --require-ready
 ```
+
+`reader promise` 必须手动声明 R0-R4 回报强度策略：`opening_chapter_count`、`opening_intensity_by_chapter`、`default_chapter_intensity`、`allowed_chapter_overrides` 和 `rationale`。模板只定义 R 档含义，不默认前三章 R3，也不默认全书 R2。
 
 三类 agent 审查完成后，先逐条记录结构化运行证据，再生成 manifest：
 
@@ -133,21 +144,21 @@ python scripts/novel.py start v01_c001
 - `外部压力档位`：`W0`-`W4`，说明外部世界如何对本章行动产生压力或回声。
 - `本章继承变化`：写本章承接的状态、关系、信息或限制。
 - `本章节奏用途` / `节奏说明`：写推进、缓冲、兑现、铺垫、转场、蓄压或爆发，并说明不会空转或强行加速。
-- `本章进展契约`：写进展类型、推进对象、起始状态依据、结束状态变化、最低落账事件、进展重要度和低牵引功能。
+- `本章进展契约`：写进展类型、有效推进类型、有效推进单位 `before -> after`、有效推进证据目标、推进对象、起始状态依据、结束状态变化、最低落账事件、进展重要度和低牵引功能。
 - `本章代价与后果契约`：写推进重量 `C0`-`C4`、后果等级、已支付代价、延后代价、后果承接义务、消化窗口和冷却范围。
 - `本章解决边界`：写新开伏笔、推进伏笔、解决伏笔、禁止解决，以及解决是否需要代价。
 - `本章可用道具 IDs`：只列本章允许使用的 `bible/objects.yaml` ID。
 - `本章可用技能 IDs`：只列本章允许使用的 `bible/abilities.yaml` ID。
 - `本章允许新增元素`：按 L0/L1/L2/L3/L4 标明哪些新元素可出现。
 - `本章禁止临场解决`：禁止靠未授权新道具、新能力或新规则解决本章核心问题。
-- `本章留存合同`：钩子、核心问题、中段加压、小兑现、章末钩子和点击理由。
+- `本章留存合同`：钩子、核心问题、手动 `reader_reward_intensity`、回报类型、回报交付、回报证据、低戏剧载体、核心机制状态、中段加压、小兑现、章末钩子和点击理由。
 - `本章主角魅力合同`：主动目标、过人之处、弱点误判、特殊资源、刻度变化和喜欢主角的瞬间。
 - `本章初始人格挑战合同`：压迫哪些 initial_personality 字段，是否需要人格变化落账。
 - `本章世界观展示合同` / `本章名词预算`：控制新名词，要求场景化展示。
 - `本章悬念推进合同`：旧问题、新线索、部分解答、新问题和悬念状态。
 - `本章语言记忆点`：金句、梗/反差句、标志动作和禁止语气。
 
-`brief-precheck` 在生成候选 brief 前检查核心冻结、上一章锚点、Gate、stop lock、后果债务和关键源占位；`brief-check` 做正式 brief 的单章硬检查；`pacing-check` 会硬拦连续小事、高推进无消化和缺少进展契约的窗口，可用 `--write` 归档节奏证据。`pacing-dashboard` 汇总最近 5 章节奏和 active/overdue/resolved 后果债务，给总编复盘用，不替代 `pacing-check`。收章时用 `chapter_anchor` 事件确认章末锚点，并用 brief 中的 `最低落账事件` 约束 `state/event_ledger.jsonl`；下一章 brief pack 和 context pack 会自动带入章末锚点与后果承接债务。
+`brief-precheck` 在生成候选 brief 前检查核心冻结、上一章锚点、Gate、stop lock、后果债务和关键源占位；`brief-check` 做正式 brief 的单章硬检查，并硬拦缺标题、缺 R 档、缺有效推进单位和缺下一章点击理由；`reader-reward-check --write` 生成单章 reader reward gate；`reader-reward-index --write` 汇总跨章等待、核心机制沉默、小兑现间隔和低戏剧载体重复。`pacing-check` 会硬拦连续小事、高推进无消化和缺少进展契约的窗口，可用 `--write` 归档节奏证据。`pacing-dashboard` 汇总最近 5 章节奏和 active/overdue/resolved 后果债务，给总编复盘用，不替代 `pacing-check`。收章时用 `chapter_anchor` 事件确认章末锚点，并用 brief 中的 `最低落账事件` 约束 `state/event_ledger.jsonl`；下一章 brief pack 和 context pack 会自动带入章末锚点与后果承接债务。
 
 DeepSeek 和 Codex 可以创造新鲜细节，但重要新元素必须有授权、伏笔或后续归档。
 
@@ -165,6 +176,40 @@ python scripts/novel.py deepseek-generate v01_c001
 - DeepSeek prompt evidence is written to `external_runs/deepseek/{chapter}/generate.prompt.md` and `generate.prompt.manifest.json`.
 - Both prompts must start with `# Candidate Style Requirements`.
 - `select-candidate`, `land`, and `evidence` verify the selected provider prompt manifests, context pack hash, and style source hashes.
+- Candidate Style Requirements now inject anti-AI constraints: no safe summary voice, no role-as-theme-mouthpiece dialogue, no decorative detail dump, and no gray action without visible cost or later accountability.
+
+## Anti-AI Review Gates
+
+```bash
+python scripts/novel.py ai-taste-check v01_c001
+python scripts/novel.py dialogue-function-check v01_c001
+python scripts/novel.py review-context v01_c001 --write
+python scripts/novel.py codex-anti-ai-review-start v01_c001
+python scripts/novel.py deepseek-anti-ai-review v01_c001
+python scripts/novel.py migrate-anti-ai-reviews --all
+```
+
+`ai_taste` is kept for compatibility, but it is now the structured anti-AI review. Ship evidence requires `ai_taste.md/json`, `dialogue_function.md/json`, independent Codex subagent `codex_anti_ai_review.md/json`, and independent DeepSeek `deepseek_anti_ai_review.md/json`. `review-context` provides structured state and key prior quotes to reviewers without including previous chapters as full text. Markdown reviews marked `CLEAR` must bind to the current official chapter hash, current review body hash, and at least one matching `Evidence Quotes` line. Human acceptance is available only with `accepted_by: human`, `accepted_at`, `reason`, current official chapter hash, and current review hash.
+
+## Receive Chapter Control Plane
+
+```bash
+python scripts/novel.py receive-chapter v01_c001 --preview
+python scripts/novel.py receive-chapter v01_c001 --resume
+python scripts/novel.py review-context v01_c001 --write
+python scripts/novel.py revision-plan v01_c001
+python scripts/novel.py review-arbitration v01_c001
+python scripts/novel.py accept-review v01_c001 --artifact ai_taste --reason "intentional house style"
+python scripts/novel.py gray-consequence v01_c001 --write
+python scripts/novel.py chapter-shape-check v01_c006 --write
+python scripts/novel.py reader-feedback add v01_c001 --reader reader_001 --target-reader "pilot reader" --stuck-point "..." --continue-reason "..." --promise-gap "..." --favorite-moment "..." --skip-moment "..."
+python scripts/novel.py reader-feedback summarize v01_c001
+python scripts/novel.py deepseek-manifest-check v01_c001 --kind anti_ai_review
+```
+
+`receive-chapter` is an orchestrator, not an auto-Ship command. It may run deterministic local checks and report the next editor action, but it does not write canon, does not write event ledger entries, and does not replace the human editor decision.
+
+Codex anti-AI subagent review leaves `reviews/{chapter}/codex_anti_ai_review_prompt.md` and `codex_anti_ai_review_manifest.json`; Ship evidence rejects missing manifest inputs, stale hashes, forbidden inputs, and missing final `codex_anti_ai_review.md/json`. DeepSeek review, anti-AI review, and style review leave run manifests under `external_runs/deepseek/{chapter}/`. Ship evidence rejects missing manifests, stale hashes, and forbidden inputs such as Codex review files being included in DeepSeek anti-AI review inputs.
 
 ## Gate 提醒
 
@@ -188,6 +233,7 @@ python scripts/novel.py style-profile-build
 python scripts/novel.py style-check v01_c001
 python scripts/novel.py series-style-check v01_c004
 python scripts/novel.py deepseek-style-review v01_c004 --dry-run
+python scripts/novel.py deepseek-anti-ai-review v01_c004 --dry-run
 python scripts/novel.py style-drift-report
 ```
 

@@ -133,6 +133,7 @@ def main() -> int:
     for step in [
         ["scripts/build_derived_state.py"],
         ["scripts/build_context_pack.py", "--chapter", args.chapter],
+        ["scripts/review_context.py", "--chapter", args.chapter, "--write"],
         ["scripts/context_pack_quality.py", "--chapter", args.chapter],
     ]:
         code = run(step)

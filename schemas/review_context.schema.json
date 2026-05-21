@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReviewContext",
+  "type": "object",
+  "required": ["schema_version", "chapter", "generated_at", "status", "official_chapter", "input_hashes", "boundary", "structured_state", "key_quotes", "warnings"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "chapter": { "type": "string", "pattern": "^v[0-9]{2}_c[0-9]{3}$" },
+    "generated_at": { "type": "string" },
+    "status": { "enum": ["READY", "WARNING"] },
+    "official_chapter": {
+      "type": "object",
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "type": "string" },
+        "sha256": { "type": "string" }
+      }
+    },
+    "input_hashes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "sha256"],
+        "properties": {
+          "path": { "type": "string" },
+          "sha256": { "type": "string" }
+        }
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "required": ["purpose", "no_previous_chapter_full_text", "instruction"],
+      "properties": {
+        "purpose": { "type": "string" },
+        "no_previous_chapter_full_text": { "type": "boolean" },
+        "instruction": { "type": "string" }
+      }
+    },
+    "structured_state": {
+      "type": "object",
+      "required": ["previous_chapter_anchors", "active_aftermath_obligations", "reader_reward_window", "derived_state_sources"],
+      "properties": {
+        "previous_chapter_anchors": { "type": "array", "items": { "type": "object" } },
+        "active_aftermath_obligations": { "type": "array", "items": { "type": "object" } },
+        "reader_reward_window": { "type": "array", "items": { "type": "object" } },
+        "derived_state_sources": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "key_quotes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["chapter", "event_id", "type", "importance", "fact", "consequence", "evidence_quote", "quote_anchor_status"],
+        "properties": {
+          "chapter": { "type": "string" },
+          "event_id": { "type": "string" },
+          "type": { "type": "string" },
+          "importance": { "type": "string" },
+          "fact": { "type": "string" },
+          "consequence": { "type": "string" },
+          "evidence_quote": { "type": "string" },
+          "quote_anchor_status": { "enum": ["matched", "not_matched", "missing_quote", "source_chapter_missing"] }
+        }
+      }
+    },
+    "warnings": { "type": "array", "items": { "type": "string" } }
+  }
+}

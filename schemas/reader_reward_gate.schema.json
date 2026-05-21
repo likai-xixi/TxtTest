@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReaderRewardGate",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "chapter",
+    "generated_at",
+    "status",
+    "reader_reward_intensity",
+    "official_chapter",
+    "official_brief",
+    "input_hashes",
+    "evidence_quotes",
+    "matched_evidence_quotes",
+    "blockers",
+    "warnings",
+    "human_acceptance"
+  ],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "chapter": { "type": "string", "pattern": "^v\\d{2}_c\\d{3}$" },
+    "generated_at": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["READY", "WARNING", "BLOCKED", "ACCEPTED_BY_HUMAN"] },
+    "reader_reward_intensity": { "enum": ["R0", "R1", "R2", "R3", "R4"] },
+    "official_chapter": {
+      "type": "object",
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string" }
+      }
+    },
+    "official_brief": {
+      "type": "object",
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string" }
+      }
+    },
+    "input_hashes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "sha256"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "sha256": { "type": "string" }
+        }
+      }
+    },
+    "evidence_quotes": { "type": "array", "items": { "type": "string" } },
+    "matched_evidence_quotes": { "type": "array", "items": { "type": "string" } },
+    "blockers": { "type": "array", "items": { "type": "string" } },
+    "warnings": { "type": "array", "items": { "type": "string" } },
+    "human_acceptance": { "type": ["object", "null"] }
+  }
+}

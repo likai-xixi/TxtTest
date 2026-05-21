@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Chapter Shape",
+  "type": "object",
+  "required": ["schema_version", "chapter", "generated_at", "status", "official_chapter", "shape", "shape_key", "repeat_count", "blockers", "warnings"],
+  "properties": {
+    "schema_version": {"type": "integer"},
+    "chapter": {"type": "string"},
+    "generated_at": {"type": "string"},
+    "status": {"type": "string"},
+    "official_chapter": {"type": "object"},
+    "shape": {"type": "object"},
+    "shape_key": {"type": "string"},
+    "repeat_count": {"type": "integer"},
+    "blockers": {"type": "array"},
+    "warnings": {"type": "array"},
+    "human_acceptance": {"type": ["object", "null"]}
+  },
+  "additionalProperties": false
+}

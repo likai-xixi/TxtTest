@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "chapter": "v01_c001",
+  "generated_at": "2026-05-21T08:16:30+00:00",
+  "status": "NOT_READY",
+  "official_chapter": {
+    "path": "chapters/v01/c001.md",
+    "sha256": ""
+  },
+  "style_contract": {
+    "path": "state/project_style_contract.json",
+    "status": "DRAFT"
+  },
+  "style_profile": {
+    "path": "state/derived/style_profile.json",
+    "status": "UNBUILT"
+  },
+  "metrics": {},
+  "blockers": [
+    "style contract status must be one of ['READY']",
+    "missing official chapter text: chapters/v01/c001.md"
+  ],
+  "warnings": []
+}

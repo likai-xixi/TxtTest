@@ -9,7 +9,14 @@ from deepseek_client import call_deepseek, model_for
 from deepseek_response import DeepSeekResponseError, extract_message_content
 
 
-ROUTES = ("deepseek_idea", "deepseek_brief", "deepseek_generate", "deepseek_review", "deepseek_style_review")
+ROUTES = (
+    "deepseek_idea",
+    "deepseek_brief",
+    "deepseek_generate",
+    "deepseek_review",
+    "deepseek_style_review",
+    "deepseek_anti_ai_review",
+)
 
 
 def main() -> int:

@@ -51,7 +51,11 @@ READER_PROMISE_REQUIRED_FIELDS = (
     "secondary_genre",
     "target_reader",
     "platform_expectation",
+    "genre_profile",
     "core_hook",
+    "core_sell_point",
+    "core_mechanism_name",
+    "allowed_low_drama_carriers",
     "main_reader_rewards",
     "non_promises",
     "first_chapter_must_deliver",
@@ -63,6 +67,7 @@ READER_PROMISE_REQUIRED_FIELDS = (
     "per_chapter_must_not_only_have",
     "ending_hook_priority",
     "reward_mix",
+    "reader_reward_intensity_policy",
     "genre_mismatch_red_lines",
 )
 
@@ -74,12 +79,28 @@ READER_BRIEF_REQUIRED_SECTIONS = (
     ("本章名词预算", "Concept Budget"),
     ("本章悬念推进合同", "Suspense Progression Contract"),
     ("本章语言记忆点", "Language Memorability Contract"),
+    ("本章防 AI 味合同", "Anti AI Taste Contract"),
+    ("本章情绪越界合同", "Emotional Risk Contract"),
+    ("本章角色私心与使坏合同", "Gray Motive Contract"),
+    ("本章对白功能合同", "Dialogue Function Contract"),
+    ("本章句式破整合同", "Sentence Rhythm Break Contract"),
+    ("本章细节经济合同", "Detail Economy Contract"),
 )
 READER_BRIEF_REQUIRED_LABELS = {
     "本章留存合同": (
         "第一屏钩子",
         "本章核心问题",
         "本章读者期待",
+        "reader_reward_intensity",
+        "reader_reward_type",
+        "reader_reward_delivery",
+        "reader_reward_timing",
+        "reward_evidence_requirement",
+        "低戏剧载体",
+        "低戏剧载体承载的推进类型",
+        "核心机制是否出现",
+        "若未出现，当前沉默计数",
+        "等待结尾债务",
         "本章中段反转 / 加压",
         "本章小兑现",
         "本章章末钩子",
@@ -130,6 +151,48 @@ READER_BRIEF_REQUIRED_LABELS = {
         "角色口头禅或标志动作",
         "可截图传播的句子",
         "禁止使用的平铺语气",
+    ),
+    "本章防 AI 味合同": (
+        "场景压力",
+        "具体细节锚点",
+        "解释预算",
+        "禁止总结腔",
+        "必须用场景证明的判断",
+        "允许读者暂时误解的点",
+    ),
+    "本章情绪越界合同": (
+        "不体面的真实冲动",
+        "对外表现与内在冲动的错位",
+        "本章允许出现的负面情绪",
+        "不允许被旁白洗白的位置",
+    ),
+    "本章角色私心与使坏合同": (
+        "谁有私心",
+        "私心目标",
+        "使用手段",
+        "伤害或牺牲了谁",
+        "本章即时后果",
+        "后续追讨窗口",
+    ),
+    "本章对白功能合同": (
+        "关键对白场景",
+        "角色目标冲突",
+        "对话信息增量",
+        "潜台词 / 权力变化",
+        "哪一句不能像作者总结",
+        "对话后果",
+    ),
+    "本章句式破整合同": (
+        "叙述节奏",
+        "禁止连续使用的句式",
+        "必须保留的毛边",
+        "禁止排比总结的位置",
+    ),
+    "本章细节经济合同": (
+        "必写细节及功能",
+        "删除型细节",
+        "细节密度上限",
+        "细节必须回收或转化的位置",
     ),
 }
 
@@ -300,7 +363,11 @@ def default_reader_promise() -> dict[str, Any]:
         "secondary_genre": "待定",
         "target_reader": "待定",
         "platform_expectation": "待定",
+        "genre_profile": "待定",
         "core_hook": "待定",
+        "core_sell_point": "待定",
+        "core_mechanism_name": "待定",
+        "allowed_low_drama_carriers": ["待定"],
         "main_reader_rewards": ["待定"],
         "non_promises": ["待定"],
         "first_chapter_must_deliver": "待定",
@@ -317,9 +384,67 @@ def default_reader_promise() -> dict[str, Any]:
             "笑点": "待定",
             "情绪点": "待定",
         },
+        "reader_reward_intensity_policy": {
+            "opening_chapter_count": 0,
+            "opening_intensity_by_chapter": {},
+            "default_chapter_intensity": "待定",
+            "allowed_chapter_overrides": {},
+            "rationale": "待定",
+        },
         "genre_mismatch_red_lines": ["待定"],
         "source_boundary": "instruction_only_not_fact_source",
     }
+
+
+def validate_reader_reward_intensity_policy(value: object, *, require_ready: bool) -> list[str]:
+    errors: list[str] = []
+    allowed = {"R0", "R1", "R2", "R3", "R4"}
+    if not isinstance(value, dict):
+        return ["reader promise reader_reward_intensity_policy must be an object"]
+    for field in (
+        "opening_chapter_count",
+        "opening_intensity_by_chapter",
+        "default_chapter_intensity",
+        "allowed_chapter_overrides",
+        "rationale",
+    ):
+        if field not in value:
+            errors.append(f"reader promise reader_reward_intensity_policy missing field: {field}")
+        elif require_ready and field in {"default_chapter_intensity", "rationale"} and has_placeholder(value.get(field)):
+            errors.append(f"reader promise reader_reward_intensity_policy field is placeholder: {field}")
+    count = value.get("opening_chapter_count")
+    if not isinstance(count, int) or count < 0:
+        errors.append("reader promise reader_reward_intensity_policy.opening_chapter_count must be a non-negative integer")
+    opening = value.get("opening_intensity_by_chapter")
+    if not isinstance(opening, dict):
+        errors.append("reader promise reader_reward_intensity_policy.opening_intensity_by_chapter must be an object")
+    else:
+        for chapter, intensity in opening.items():
+            if str(intensity) not in allowed:
+                errors.append(f"reader promise opening intensity for {chapter} must be R0-R4")
+    default = str(value.get("default_chapter_intensity", "")).strip()
+    if default not in allowed:
+        errors.append("reader promise reader_reward_intensity_policy.default_chapter_intensity must be R0-R4")
+    overrides = value.get("allowed_chapter_overrides")
+    if not isinstance(overrides, (dict, list)):
+        errors.append("reader promise reader_reward_intensity_policy.allowed_chapter_overrides must be an object or list")
+    elif isinstance(overrides, dict):
+        for chapter, item in overrides.items():
+            intensity = item.get("intensity") if isinstance(item, dict) else item
+            if str(intensity) not in allowed and str(chapter).lower() not in {"none", "无"}:
+                errors.append(f"reader promise override intensity for {chapter} must be R0-R4")
+    elif isinstance(overrides, list):
+        for index, item in enumerate(overrides, start=1):
+            if not isinstance(item, dict):
+                errors.append(f"reader promise override #{index} must be an object")
+                continue
+            if str(item.get("intensity", "")) not in allowed:
+                errors.append(f"reader promise override #{index} intensity must be R0-R4")
+            if not str(item.get("chapter", "")).strip():
+                errors.append(f"reader promise override #{index} chapter is missing")
+    if require_ready and not str(value.get("rationale", "")).strip():
+        errors.append("reader promise reader_reward_intensity_policy.rationale is required")
+    return errors
 
 
 def validate_reader_promise(data: object, *, require_ready: bool = False) -> list[str]:
@@ -333,10 +458,16 @@ def validate_reader_promise(data: object, *, require_ready: bool = False) -> lis
     for field in READER_PROMISE_REQUIRED_FIELDS:
         if field not in data:
             errors.append(f"reader promise missing field: {field}")
-        elif data.get("status") == "READY" and has_placeholder(data.get(field)):
+        elif field != "reader_reward_intensity_policy" and data.get("status") == "READY" and has_placeholder(data.get(field)):
             errors.append(f"reader promise field is empty or placeholder: {field}")
     if data.get("source_boundary") != "instruction_only_not_fact_source":
         errors.append("reader promise source_boundary must be instruction_only_not_fact_source")
+    errors.extend(
+        validate_reader_reward_intensity_policy(
+            data.get("reader_reward_intensity_policy"),
+            require_ready=require_ready or data.get("status") == "READY",
+        )
+    )
     return errors
 
 
@@ -365,7 +496,11 @@ def render_reader_promise_markdown(data: dict[str, Any]) -> str:
         f"- 副类型：{data.get('secondary_genre', '')}",
         f"- 目标读者：{data.get('target_reader', '')}",
         f"- 平台预期：{data.get('platform_expectation', '')}",
+        f"- genre_profile：{data.get('genre_profile', '')}",
         f"- 本书核心卖点：{data.get('core_hook', '')}",
+        f"- core_sell_point：{data.get('core_sell_point', '')}",
+        f"- core_mechanism_name：{data.get('core_mechanism_name', '')}",
+        "- allowed_low_drama_carriers：" + "、".join(map(str, data.get("allowed_low_drama_carriers", []))),
         "- 本书主要快感来源：" + "、".join(map(str, data.get("main_reader_rewards", []))),
         "- 本书不承诺什么：" + "、".join(map(str, data.get("non_promises", []))),
         "",
@@ -384,6 +519,16 @@ def render_reader_promise_markdown(data: dict[str, Any]) -> str:
         "- 章末钩子类型优先级：" + "、".join(map(str, data.get("ending_hook_priority", []))),
         "- 爽点 / 悬念 / 笑点 / 情绪点比例：" + json.dumps(data.get("reward_mix", {}), ensure_ascii=False),
         "- 类型错位红线：" + "、".join(map(str, data.get("genre_mismatch_red_lines", []))),
+        "",
+        "## 手动 R 档回报强度策略",
+        "",
+        f"- opening_chapter_count：{data.get('reader_reward_intensity_policy', {}).get('opening_chapter_count', '')}",
+        "- opening_intensity_by_chapter："
+        + json.dumps(data.get("reader_reward_intensity_policy", {}).get("opening_intensity_by_chapter", {}), ensure_ascii=False),
+        f"- default_chapter_intensity：{data.get('reader_reward_intensity_policy', {}).get('default_chapter_intensity', '')}",
+        "- allowed_chapter_overrides："
+        + json.dumps(data.get("reader_reward_intensity_policy", {}).get("allowed_chapter_overrides", {}), ensure_ascii=False),
+        f"- rationale：{data.get('reader_reward_intensity_policy', {}).get('rationale', '')}",
         "",
     ]
     return "\n".join(lines)

@@ -459,6 +459,7 @@ def chapter_paths(chapter: str) -> dict[str, Path]:
         "brief_landing": ROOT / "reviews" / chapter / "brief_landing.json",
         "brief_pack": ROOT / "state" / "context_pack" / f"{chapter}_brief.md",
         "context_pack": ROOT / "state" / "context_pack" / f"{chapter}.md",
+        "review_context": ROOT / "state" / "context_pack" / f"{chapter}_review_context.json",
         "context_quality": ROOT / "state" / "derived" / "context_quality" / f"{chapter}.json",
         "codex_prompt": ROOT / "external_runs" / "codex" / chapter / "draft.prompt.md",
         "codex_prompt_manifest": ROOT / "external_runs" / "codex" / chapter / "draft.prompt.manifest.json",
@@ -470,6 +471,8 @@ def chapter_paths(chapter: str) -> dict[str, Path]:
         "official": ROOT / "chapters" / volume / chapter_file,
         "style_metrics": ROOT / "reviews" / chapter / "style_metrics.json",
         "series_style": ROOT / "reviews" / chapter / "series_style.json",
+        "codex_anti_ai": ROOT / "reviews" / chapter / "codex_anti_ai_review.json",
+        "deepseek_anti_ai": ROOT / "reviews" / chapter / "deepseek_anti_ai_review.json",
         "decision": ROOT / "reviews" / chapter / "decision.md",
     }
 
@@ -839,6 +842,8 @@ def dashboard(chapter: str | None = None) -> dict[str, Any]:
     evidence_paths = [rel(paths["brief"])]
     if paths["context_pack"].exists():
         evidence_paths.append(rel(paths["context_pack"]))
+    if paths["review_context"].exists():
+        evidence_paths.append(rel(paths["review_context"]))
     if paths["context_quality"].exists():
         evidence_paths.append(rel(paths["context_quality"]))
     if paths["codex_prompt_manifest"].exists():
@@ -849,6 +854,10 @@ def dashboard(chapter: str | None = None) -> dict[str, Any]:
         evidence_paths.append(rel(paths["style_metrics"]))
     if paths["series_style"].exists():
         evidence_paths.append(rel(paths["series_style"]))
+    if paths["codex_anti_ai"].exists():
+        evidence_paths.append(rel(paths["codex_anti_ai"]))
+    if paths["deepseek_anti_ai"].exists():
+        evidence_paths.append(rel(paths["deepseek_anti_ai"]))
     idea_id = idea.get("idea_id")
     advisory = advisory_snapshot(chapter, idea_id)
     contracts = contract_snapshot()

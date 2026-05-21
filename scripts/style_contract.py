@@ -36,6 +36,9 @@ REQUIRED_FIELDS = (
     "forbidden_styles",
     "reference_style_policy",
     "imitation_policy",
+    "anti_ai_policy",
+    "ai_taste_thresholds",
+    "dialogue_function_policy",
 )
 
 BLOCKER_MARKERS = {
@@ -127,6 +130,17 @@ def default_contract(idea_id: str, *, status: str = "CANDIDATE") -> dict[str, An
             ],
         },
         "imitation_policy": "Do not ask any model to imitate a living or modern copyrighted author's identifiable voice. Translate references into technical parameters only.",
+        "anti_ai_policy": "Show pressure through scene behavior before summary. Require character self-interest, concealment, emotional overflow, and consequence when a scene risks becoming too clean.",
+        "ai_taste_thresholds": {
+            "exposition_connector_density_block": 12.0,
+            "summary_voice_density_block": 4.0,
+            "abstract_emotion_density_warn": 5.0,
+            "concrete_scene_anchor_density_min": 2.0,
+            "uniform_sentence_run_ratio_warn": 0.55,
+            "uniform_sentence_run_ratio_block": 0.7,
+            "dialogue_explanation_density_block": 10.0
+        },
+        "dialogue_function_policy": "Key dialogue must carry at least one character goal, pressure, concealment, relationship test, or information turn; pure theme statements cannot dominate.",
         "style_profile_policy": "After Gate A, build a style profile from the first three shipped chapters and check later chapters against it.",
         "writes_canon": False,
         "writes_chapters": False,
@@ -189,6 +203,12 @@ def render_style_guide(data: dict[str, Any]) -> str:
             "## Forbidden Styles",
             "",
             render_value(data.get("forbidden_styles")),
+            "",
+            "## Anti-AI Prose Guardrails",
+            "",
+            f"- anti_ai_policy: {data.get('anti_ai_policy')}",
+            f"- dialogue_function_policy: {data.get('dialogue_function_policy')}",
+            f"- ai_taste_thresholds: {render_value(data.get('ai_taste_thresholds'))}",
             "",
         ]
     ).rstrip() + "\n"
@@ -341,6 +361,34 @@ def marker_density(text: str, markers: tuple[str, ...]) -> float:
     return round(count / len(compact) * 1000, 3)
 
 
+def sentence_uniform_run_ratio(lengths: list[int]) -> float:
+    if len(lengths) < 4:
+        return 0.0
+    runs = 0
+    for index in range(len(lengths) - 2):
+        window = lengths[index : index + 3]
+        if max(window) - min(window) <= 6:
+            runs += 1
+    return round(runs / max(len(lengths) - 2, 1), 3)
+
+
+def dialogue_text(text: str) -> str:
+    lines = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith(("“", "\"", "'", "「", "『", "- ")) or ("“" in stripped and "”" in stripped):
+            lines.append(stripped)
+    return "\n".join(lines)
+
+
+ANTI_AI_GENERIC_MARKERS = ("某种", "某种意义", "仿佛", "像是", "无法言说", "微妙", "复杂情绪", "微微", "不由得")
+EXPOSITION_CONNECTORS = ("因为", "所以", "意味着", "本质", "事实上", "换句话说", "说到底", "真正", "归根结底")
+ABSTRACT_EMOTION_MARKERS = ("有点", "不安", "害怕", "烦躁", "庆幸", "感动", "复杂", "说不清", "意识到")
+SCENE_ANCHOR_MARKERS = ("手", "眼", "门", "窗", "桌", "灯", "纸", "墙", "脚", "水", "血", "汗", "声音", "气味", "冷", "热")
+SUMMARY_VOICE_MARKERS = ("真正", "本质", "说到底", "归根结底", "最怕", "通常是", "这说明", "这意味着", "无非是")
+SUMMARY_DIALOGUE_MARKERS = ("不是", "而是", "你追的不是", "真正", "答案", "规则", "边界", "证据", "结论")
+
+
 def line_start_ratio(text: str, markers: tuple[str, ...]) -> float:
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     if not lines:
@@ -352,6 +400,7 @@ def line_start_ratio(text: str, markers: tuple[str, ...]) -> float:
 def metrics_for_text(text: str) -> dict[str, Any]:
     lengths = sentence_lengths(text)
     paras = paragraph_lengths(text)
+    dialogue = dialogue_text(text)
     return {
         "char_count": len(text),
         "paragraph_count": len(paras),
@@ -376,6 +425,13 @@ def metrics_for_text(text: str) -> dict[str, Any]:
             "\n".join(paragraph_lengths_text(text)[-2:]),
             ("？", "吗", "怎么", "为什么", "忽然", "突然", "却", "只剩", "没想到"),
         ),
+        "generic_phrase_density": marker_density(text, ANTI_AI_GENERIC_MARKERS),
+        "exposition_connector_density": marker_density(text, EXPOSITION_CONNECTORS),
+        "abstract_emotion_density": marker_density(text, ABSTRACT_EMOTION_MARKERS),
+        "concrete_scene_anchor_density": marker_density(text, SCENE_ANCHOR_MARKERS),
+        "sentence_uniform_run_ratio": sentence_uniform_run_ratio(lengths),
+        "summary_voice_density": marker_density(text, SUMMARY_VOICE_MARKERS),
+        "dialogue_explanation_density": marker_density(dialogue, SUMMARY_DIALOGUE_MARKERS),
         "short_paragraph_ratio": round(sum(1 for item in paras if item <= 80) / len(paras), 3) if paras else 0,
         "dialogue_start_ratio": line_start_ratio(text, ("“", "\"", "'", "「", "『", "- ")),
     }
@@ -521,6 +577,45 @@ def profile_warnings_for_chapter(chapter: str) -> list[str]:
     return []
 
 
+def anti_ai_thresholds() -> dict[str, float]:
+    defaults = default_contract("template").get("ai_taste_thresholds", {})
+    data = read_json(CONTRACT_JSON, {}) if CONTRACT_JSON.exists() else {}
+    configured = data.get("ai_taste_thresholds") if isinstance(data, dict) else {}
+    thresholds = defaults if isinstance(defaults, dict) else {}
+    if isinstance(configured, dict):
+        thresholds = {**thresholds, **configured}
+    return {key: float(value) for key, value in thresholds.items() if isinstance(value, (int, float))}
+
+
+def anti_ai_metric_findings(metrics: dict[str, Any]) -> tuple[list[str], list[str]]:
+    thresholds = anti_ai_thresholds()
+    blockers: list[str] = []
+    warnings: list[str] = []
+    exposition = float(metrics.get("exposition_connector_density") or 0)
+    scene_anchors = float(metrics.get("concrete_scene_anchor_density") or 0)
+    summary = float(metrics.get("summary_voice_density") or 0)
+    abstract_emotion = float(metrics.get("abstract_emotion_density") or 0)
+    uniformity = float(metrics.get("sentence_uniform_run_ratio") or 0)
+    dialogue_explanation = float(metrics.get("dialogue_explanation_density") or 0)
+
+    if (
+        exposition >= thresholds.get("exposition_connector_density_block", 12.0)
+        and scene_anchors < thresholds.get("concrete_scene_anchor_density_min", 2.0)
+    ):
+        blockers.append("anti-AI style: explanation connector density is high while concrete scene anchors are low")
+    if summary >= thresholds.get("summary_voice_density_block", 4.0) and scene_anchors < thresholds.get("concrete_scene_anchor_density_min", 2.0):
+        blockers.append("anti-AI style: summary-voice density is high without enough scene anchoring")
+    if dialogue_explanation >= thresholds.get("dialogue_explanation_density_block", 10.0):
+        blockers.append("anti-AI style: dialogue explanation/theme density is too high")
+    if uniformity >= thresholds.get("uniform_sentence_run_ratio_block", 0.7):
+        blockers.append("anti-AI style: sentence lengths are too uniform")
+    elif uniformity >= thresholds.get("uniform_sentence_run_ratio_warn", 0.55):
+        warnings.append("anti-AI style: sentence lengths are approaching a too-even rhythm")
+    if abstract_emotion >= thresholds.get("abstract_emotion_density_warn", 5.0):
+        warnings.append("anti-AI style: abstract emotion markers are dense; verify emotion leaves the safe middle")
+    return blockers, warnings
+
+
 def check_chapter_text(chapter: str, text: str) -> tuple[list[str], list[str], dict[str, Any]]:
     blockers: list[str] = []
     warnings: list[str] = []
@@ -533,6 +628,9 @@ def check_chapter_text(chapter: str, text: str) -> tuple[list[str], list[str], d
     blockers.extend(protected_imitation_findings(text))
     warnings.extend(profile_warnings_for_chapter(chapter))
     metrics = metrics_for_text(text)
+    metric_blockers, metric_warnings = anti_ai_metric_findings(metrics)
+    blockers.extend(metric_blockers)
+    warnings.extend(metric_warnings)
     return blockers, warnings, metrics
 
 
@@ -578,10 +676,11 @@ def command_style_check(args: argparse.Namespace) -> int:
             "blockers": blockers,
             "warnings": warnings,
         }
-        out_json = ROOT / "reviews" / chapter / "style_metrics.json"
-        out_md = ROOT / "reviews" / chapter / "style_consistency.md"
-        write_json(out_json, result)
-        write_text(out_md, render_style_report(result))
+        if not args.no_write:
+            out_json = ROOT / "reviews" / chapter / "style_metrics.json"
+            out_md = ROOT / "reviews" / chapter / "style_consistency.md"
+            write_json(out_json, result)
+            write_text(out_md, render_style_report(result))
     print("# Style Check")
     print()
     if blockers:
@@ -667,6 +766,7 @@ def main() -> int:
 
     p = sub.add_parser("style-check")
     p.add_argument("chapter", nargs="?")
+    p.add_argument("--no-write", action="store_true")
     p.set_defaults(func=command_style_check)
 
     p = sub.add_parser("drift-report")

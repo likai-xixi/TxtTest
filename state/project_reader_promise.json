@@ -6,7 +6,13 @@
   "secondary_genre": "待定",
   "target_reader": "待定",
   "platform_expectation": "待定",
+  "genre_profile": "待定",
   "core_hook": "待定",
+  "core_sell_point": "待定",
+  "core_mechanism_name": "待定",
+  "allowed_low_drama_carriers": [
+    "待定"
+  ],
   "main_reader_rewards": [
     "待定"
   ],
@@ -33,9 +39,15 @@
     "笑点": "待定",
     "情绪点": "待定"
   },
+  "reader_reward_intensity_policy": {
+    "opening_chapter_count": 0,
+    "opening_intensity_by_chapter": {},
+    "default_chapter_intensity": "待定",
+    "allowed_chapter_overrides": {},
+    "rationale": "待定"
+  },
   "genre_mismatch_red_lines": [
     "待定"
   ],
   "source_boundary": "instruction_only_not_fact_source"
 }
-

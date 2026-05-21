@@ -4,6 +4,9 @@ status: 待评
 
 official_chapter_sha256:
 review_sha256:
+accepted_at:
+accepted_by:
+reason:
 
 ## Contract Checked
 
@@ -22,4 +25,3 @@ review_sha256:
 ## Required Outcome
 
 将 `status` 改为 `CLEAR`、`BLOCKED` 或 `ACCEPTED_BY_HUMAN`。若为 `ACCEPTED_BY_HUMAN`，必须填写 accepted_at、accepted_by、reason、official_chapter_sha256、review_sha256。
-

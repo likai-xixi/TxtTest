@@ -23,7 +23,7 @@
 
 商业化、标题、简介、赛道扫描、表格视图、章末阅读理由、润色，只能作为总编辅助层；不得直接写入 `bible/canon.md`、`chapters/`、`state/event_ledger.jsonl`，不得进入 `state/context_pack/*.manifest.json` 的事实源输入链。
 
-事实、设定、授权、因果、后果、相似风险、落账，继续作为 Ship 硬门禁。`reviews/{chapter}/similarity_risk.md`、`reviews/{chapter}/fact_cards.json` 与至少一张已通过 `accept-fact-card` 写入 event ledger 的 fact card，是 `chapter-evidence` 的必查证据。fact card 只能写 `state/event_ledger.jsonl`，不能写 canon。
+事实、设定、授权、因果、后果、相似风险、落账，继续作为 Ship 硬门禁。防 AI 味也是 Ship 硬门禁：`state/context_pack/{chapter}_review_context.md/json`、`reviews/{chapter}/ai_taste.md/json`、`reviews/{chapter}/dialogue_function.md/json`、Codex 子 agent 独立 `reviews/{chapter}/codex_anti_ai_review.md/json`、DeepSeek 独立 `reviews/{chapter}/deepseek_anti_ai_review.md/json`、`reviews/{chapter}/similarity_risk.md`、`reviews/{chapter}/fact_cards.json` 与至少一张已通过 `accept-fact-card` 写入 event ledger 的 fact card，是 `chapter-evidence` 的必查证据。fact card 只能写 `state/event_ledger.jsonl`，不能写 canon。
 
 辅助入口：
 
@@ -52,7 +52,8 @@ python scripts/novel.py fact-card-check v01_c001
 - `继续`：运行 `python scripts/novel.py go` 和 `status`，判断下一步；只在需要人类回答、确认或裁决时停下。
 - `加设定：...` / `设定：...`：运行 `python scripts/novel.py setting --text "..."`，若用户指定章节则加 `--chapter {chapter}`；只能暂存到 `bible/open_questions.md` 和当章 brief 的“新增设定”，不得直接写 canon；若触碰已冻结核心设定，必须重新人类裁决，不得暗改。
 - `开章 v01_c001` / `写下一章` / `写书`：优先运行 `python scripts/novel.py write {chapter}`；无明确章节时运行 `python scripts/novel.py write`。若核心设定冻结缺失，停止并回到开书实验；若 brief 缺失或仍有占位，必须先走 brief 候选流程：Codex 写 `drafts/codex/{chapter}_brief.md`，DeepSeek 写 `drafts/deepseek/{chapter}_brief.md`，Codex 汇总优劣，等待人类选择 / 混合 / 修改后，再由 Codex 运行 `select-brief` 与 `land-brief` 落正式 `outline/chapter_briefs/{chapter}.md`；不得直接写正文。
-- `收章 v01_c001`：Codex 自行执行候选选择记录、正式落章 provenance、Codex review manifest、DeepSeek review、continuity、model_disagreement、evidence 检查；缺人类裁决或 event ledger 事实时再问用户。
+- `收章 v01_c001`：Codex 自行执行候选选择记录、正式落章 provenance、review context、Codex review manifest、DeepSeek review、Codex 子 agent 防 AI 味审查、DeepSeek 防 AI 味审查、continuity、model_disagreement、evidence 检查；缺人类裁决或 event ledger 事实时再问用户。
+- `收章 v01_c001`：优先运行 `python scripts/novel.py receive-chapter v01_c001 --resume`。该命令只做收章控制面编排与卡点报告，不自动 Ship、不写 canon、不写 event ledger。缺 DeepSeek run manifest、审查仲裁、修订计划、灰度后果、章节形状、读者反馈或人工裁决时，按报告给出的下一步继续。
 - `总编台` / `下一步`：运行 `python scripts/novel.py desk`，只给用户一句当前卡点和可选口令。
 - `查状态`：运行 `python scripts/novel.py status`，用一句话告诉用户现在卡在哪里。
 - `锁读者承诺` / `读者承诺`：运行 `python scripts/novel.py reader-promise-start` 或 `reader-promise-check`，引导人类补全后用 `reader-promise-land --ready` 落为 READY。
@@ -92,7 +93,7 @@ python scripts/novel.py self-test
 
 ## 每章流程
 
-每章 brief 必须声明：`上章章末锚点`、`本章开场落点`、`场景承接说明`、`主线牵引档位`、`外部压力档位`、`本章继承变化`、`本章节奏用途`、`节奏说明`、`本章进展契约`、`本章代价与后果契约`、`本章解决边界`、`本章可用道具 IDs`、`本章可用技能 IDs`、`本章允许新增元素`、`本章禁止临场解决`、`本章留存合同`、`本章主角魅力合同`、`本章初始人格挑战合同`、`本章世界观展示合同`、`本章名词预算`、`本章悬念推进合同`、`本章语言记忆点`。`brief_check` 硬查字段完整、场景承接、档位合法、进展契约、代价后果、解决边界和读者体验合同；`pacing_check` 硬查跨章连续低推进、连续小事、高推进后无消化，并保留过热预警。`build_derived_state` 必须生成 `state/derived/pacing/progress_index.json`、`state/derived/pacing/aftermath_obligations.json`、`state/derived/personality/protagonist.json`、`state/derived/protagonist_progression.json`、`state/derived/world_reveal_ledger.json` 和 `state/derived/suspense_ledger.json`；`build_context_pack` 只能按这些 ID 拉取完整道具/技能条目，并带入上一章人类确认的章末锚点、当前后果承接债务、当前人格、读者承诺、悬念和世界观预算；未授权的新道具、新能力或新规则不得成为本章破局钥匙。Ship evidence 必须核验 brief 承诺的 `最低落账事件` 已进入 `state/event_ledger.jsonl`，且新增专项 review 不缺失、不 stale、不 BLOCKED。
+每章 brief 必须声明：`上章章末锚点`、`本章开场落点`、`场景承接说明`、`主线牵引档位`、`外部压力档位`、`本章继承变化`、`本章节奏用途`、`节奏说明`、`本章进展契约`、`本章代价与后果契约`、`本章解决边界`、`本章可用道具 IDs`、`本章可用技能 IDs`、`本章允许新增元素`、`本章禁止临场解决`、`本章留存合同`、`本章主角魅力合同`、`本章初始人格挑战合同`、`本章世界观展示合同`、`本章名词预算`、`本章悬念推进合同`、`本章语言记忆点`、`本章防 AI 味合同`、`本章情绪越界合同`、`本章角色私心与使坏合同`、`本章对白功能合同`、`本章句式破整合同`、`本章细节经济合同`。`brief_check` 硬查字段完整、场景承接、档位合法、进展契约、代价后果、解决边界、读者体验合同和人味合同；`pacing_check` 硬查跨章连续低推进、连续小事、高推进后无消化，并保留过热预警。`build_derived_state` 必须生成 `state/derived/pacing/progress_index.json`、`state/derived/pacing/aftermath_obligations.json`、`state/derived/personality/protagonist.json`、`state/derived/protagonist_progression.json`、`state/derived/world_reveal_ledger.json` 和 `state/derived/suspense_ledger.json`；`build_context_pack` 只能按这些 ID 拉取完整道具/技能条目，并带入上一章人类确认的章末锚点、当前后果承接债务、当前人格、读者承诺、悬念和世界观预算；未授权的新道具、新能力或新规则不得成为本章破局钥匙。Ship evidence 必须核验 brief 承诺的 `最低落账事件` 已进入 `state/event_ledger.jsonl`，且新增专项 review 不缺失、不 stale、不 BLOCKED。
 
 ```text
 1. python scripts/novel.py brief-precheck {chapter}
@@ -110,14 +111,18 @@ python scripts/novel.py self-test
 13. python scripts/novel.py codex-review-start {chapter}
 14. Codex 写独立审查，不读取 DeepSeek review
 15. python scripts/novel.py review {chapter} --deepseek
-16. python scripts/novel.py evidence {chapter}
-17. 人类判定：Ship / Revise once / Rewrite brief / Kill chapter / Pause project
-18. python scripts/novel.py event ...（Ship 前至少记录一个 `chapter_anchor` 章末锚点事件，供下一章承接）
-19. python scripts/novel.py close {chapter} --decision Ship
+16. python scripts/novel.py ai-taste-check {chapter}
+17. python scripts/novel.py dialogue-function-check {chapter}
+18. python scripts/novel.py deepseek-anti-ai-review {chapter}
+19. python scripts/novel.py evidence {chapter}
+20. 人类判定：Ship / Revise once / Rewrite brief / Kill chapter / Pause project
+21. python scripts/novel.py event ...（Ship 前至少记录一个 `chapter_anchor` 章末锚点事件，供下一章承接）
+22. python scripts/novel.py close {chapter} --decision Ship
 ```
 
-Ship close 必须具备：结构化候选选择、官方正文落章 provenance、Codex/DeepSeek 审查、review manifest、model_disagreement、无 P0/P1 continuity、辅助审查、`style-check` 与 post-warmup `series-style-check`；若直采 DeepSeek，必须证明人类已选择 DeepSeek 且 landing 记录为 `deepseek_direct_adoption`。
-Ship close 还必须具备：前三章 `opening_retention.md`，全章 `personality_drift.md`、`hook_retention.md`、`protagonist_charm.md`、`world_reveal.md`、`suspense_ladder.md`、`language_memorability.md`、`genre_fit.md`。状态只接受 `CLEAR` 或带当前 official chapter hash 的 `ACCEPTED_BY_HUMAN`；若正文发生人格变化，必须有 `character_state_change` 事件和合法 `personality_delta`。
+Ship close 必须具备：结构化候选选择、官方正文落章 provenance、Codex/DeepSeek 审查、review manifest、model_disagreement、无 P0/P1 continuity、辅助审查、`style-check`、`ai-taste-check`、`dialogue-function-check`、`deepseek-anti-ai-review` 与 post-warmup `series-style-check`；若直采 DeepSeek，必须证明人类已选择 DeepSeek 且 landing 记录为 `deepseek_direct_adoption`。
+Ship close 还必须具备：前三章 `opening_retention.md`，全章 `ai_taste.md/json`、`dialogue_function.md/json`、`codex_anti_ai_review.md/json`、`deepseek_anti_ai_review.md/json`、`personality_drift.md`、`hook_retention.md`、`protagonist_charm.md`、`world_reveal.md`、`suspense_ladder.md`、`language_memorability.md`、`genre_fit.md`。Markdown review 状态只接受 `CLEAR` 或带当前 official chapter hash、当前 review body hash、人工理由的 `ACCEPTED_BY_HUMAN`；`CLEAR` 必须至少有一条能在正文中匹配的 `Evidence Quotes`。若正文发生人格变化，必须有 `character_state_change` 事件和合法 `personality_delta`。
+Ship close 还必须具备收章控制面证据：`review_arbitration.json/md`、`revision_plan.json/md`（若此前已 `Revise once`）、Codex anti-AI manifest、DeepSeek `review/anti_ai_review` run manifests、`gray_consequence.json/md`（高影响灰度行为时硬门禁）、`chapter_shape.json/md`（第 6 章起硬门禁）、`reader_feedback.json/md`（单章辅助，Gate 层硬汇总）。`accept-review` 只能接受审美/风格争议，不能接受 hash、schema、quote、manifest、event ledger、continuity P0/P1 或未授权破局错误。
 
 跨章文风与系列感：前三章是 warmup；第 4 章起必须有 `reviews/{chapter}/series_style.json`；第 4-5 章允许 `WARNING` 作为人工观察期，第 6 章起 Ship evidence 只接受 `READY` 或 `ACCEPTED_BY_HUMAN`。可选 DeepSeek 独立文风审查由 `deepseek-style-review` 生成，若本章使用 `series-style-check --require-deepseek`，缺失或过期的 DeepSeek 文风审查必须阻断收章。
 
@@ -127,6 +132,8 @@ Ship close 还必须具备：前三章 `opening_retention.md`，全章 `personal
 - 环境变量：`DEEPSEEK_API_KEY`。
 - DeepSeek 只能写候选输出目录、独立审查文件和 `external_runs/deepseek/`。
 - DeepSeek 文风审查只能通过 Codex wrapper 写 `reviews/{chapter}/deepseek_style_review.json`、`.md` 和 `external_runs/deepseek/{chapter}/style_review.*`，不得写正文、canon 或 event ledger。
+- DeepSeek 防 AI 味审查只能通过 Codex wrapper 写 `reviews/{chapter}/deepseek_anti_ai_review.json`、`.md` 和 `external_runs/deepseek/{chapter}/anti_ai_review.*`；它不得读取 `reviews/{chapter}/ai_taste.*`、`dialogue_function.*`、Codex review 或 model disagreement，不得写正文、canon 或 event ledger。
+- Codex 子 agent 防 AI 味审查必须先运行 `python scripts/novel.py codex-anti-ai-review-start {chapter}` 生成 prompt 和 manifest；子 agent 只能读取官方正文、正式 brief、context pack、review context、style contract、reader promise，不得读取 DeepSeek review、DeepSeek 防 AI 味、integrated review、model disagreement、`ai_taste.*` 或 `dialogue_function.*`。
 - DeepSeek brief 只能写 `drafts/deepseek/{chapter}_brief.md` 和 `external_runs/deepseek/{chapter}/brief.*`；不能直接写 `outline/chapter_briefs/`。
 - DeepSeek 不能直接改 `chapters/`、`bible/`、`state/event_ledger.jsonl`；但被人类选择的 DeepSeek 候选稿可由 Codex 原样落入 `chapters/` 并记录为正式章来源。
 - dry-run 只生成 prompt，不触网。

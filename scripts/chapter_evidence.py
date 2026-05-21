@@ -22,16 +22,24 @@ from brief_contract import (
 )
 from candidate_style_requirements import prompt_paths, validate_prompt_manifest
 from context_governance import context_manifest_path, context_quality_path
+from deepseek_run_manifest import validate_run_manifest
 from element_context import markdown_sections, missing_section, section_body
 from element_usage import evaluate as evaluate_element_usage
 from fact_cards import evaluate as evaluate_fact_cards
 from reader_personality_contracts import (
     OPENING_RETENTION_REVIEW,
     READER_EXPERIENCE_REVIEWS,
-    accepted_by_human_is_current,
-    official_chapter_path,
     required_reviews_for_chapter,
+)
+from review_binding import (
+    any_quote_matches_official,
+    evidence_quotes,
+    official_chapter_path,
+    quote_matches_text,
     review_bound_to_current_chapter,
+    review_hash_is_current,
+    accepted_by_human_is_current,
+    validate_markdown_review_binding,
 )
 
 
@@ -59,6 +67,7 @@ REQUIRED_MODEL_DISAGREEMENT_SECTIONS = (
 )
 AUXILIARY_REVIEWS = (
     "ai_taste.md",
+    "dialogue_function.md",
     "web_satisfaction.md",
     "retention_risk.md",
     "originality.md",
@@ -126,10 +135,14 @@ def validate_manifest_entry(chapter: str, reviewer: str, manifest: dict) -> list
     volume, chapter_file = chapter_parts(chapter)
     required = {
         f"state/context_pack/{chapter}.md",
+        f"state/context_pack/{chapter}_review_context.md",
+        f"state/context_pack/{chapter}_review_context.json",
         f"chapters/{volume}/{chapter_file}",
     }
     allowed = {
         f"state/context_pack/{chapter}.md",
+        f"state/context_pack/{chapter}_review_context.md",
+        f"state/context_pack/{chapter}_review_context.json",
         f"chapters/{volume}/{chapter_file}",
         f"drafts/codex/{chapter}.md",
         f"drafts/deepseek/{chapter}.md",
@@ -314,6 +327,36 @@ def validate_context_quality(chapter: str, landing: dict) -> list[str]:
         failures.append(f"{chapter}: landing record missing context quality input {quality_rel}")
     elif landing_paths[quality_rel].get("sha256") != sha256(quality_path):
         failures.append(f"{chapter}: landing context quality hash mismatch")
+    return failures
+
+
+def validate_review_context(chapter: str) -> list[str]:
+    json_path = ROOT / "state" / "context_pack" / f"{chapter}_review_context.json"
+    md_path = ROOT / "state" / "context_pack" / f"{chapter}_review_context.md"
+    failures: list[str] = []
+    if not md_path.exists() or not read_text(md_path).strip():
+        failures.append(f"{chapter}: missing review context {md_path.relative_to(ROOT)}")
+    if not json_path.exists():
+        return failures + [f"{chapter}: missing review context {json_path.relative_to(ROOT)}"]
+    data = read_json(json_path, {})
+    if not isinstance(data, dict):
+        return failures + [f"{chapter}: review context must be a JSON object"]
+    if data.get("chapter") != chapter:
+        failures.append(f"{chapter}: review context chapter mismatch")
+    if data.get("status") != "READY":
+        failures.append(f"{chapter}: review context status is {data.get('status', 'MISSING')}; expected READY")
+    official = data.get("official_chapter")
+    if not isinstance(official, dict):
+        failures.append(f"{chapter}: review context missing official_chapter")
+    elif official_chapter_path(chapter).exists() and official.get("sha256") != sha256(official_chapter_path(chapter)):
+        failures.append(f"{chapter}: review context official chapter hash is stale")
+    boundary = data.get("boundary")
+    if not isinstance(boundary, dict) or boundary.get("no_previous_chapter_full_text") is not True:
+        failures.append(f"{chapter}: review context must assert no_previous_chapter_full_text")
+    failures.extend(input_hash_failures(chapter, json_path, data))
+    for item in data.get("key_quotes", []):
+        if isinstance(item, dict) and item.get("quote_anchor_status") not in {None, "", "matched"}:
+            failures.append(f"{chapter}: review context key quote is not anchored: {item.get('event_id')}")
     return failures
 
 
@@ -610,6 +653,563 @@ def validate_series_style_check(chapter: str) -> list[str]:
     return failures
 
 
+def collect_structured_quotes(value: object) -> list[str]:
+    quotes: list[str] = []
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if key in {"evidence_quote"} and isinstance(item, str) and item.strip():
+                quotes.append(item.strip())
+            elif key in {"evidence_quotes"} and isinstance(item, list):
+                quotes.extend(str(quote).strip() for quote in item if str(quote).strip())
+            else:
+                quotes.extend(collect_structured_quotes(item))
+    elif isinstance(value, list):
+        for item in value:
+            quotes.extend(collect_structured_quotes(item))
+    return quotes
+
+
+def validate_structured_official_binding(chapter: str, path: Path, data: dict) -> list[str]:
+    failures: list[str] = []
+    official_path = official_chapter_path(chapter)
+    official = data.get("official_chapter")
+    if not isinstance(official, dict):
+        return [f"{chapter}: structured review {path.relative_to(ROOT)} missing official_chapter"]
+    expected_rel = official_path.relative_to(ROOT).as_posix()
+    if official.get("path") != expected_rel:
+        failures.append(f"{chapter}: structured review {path.name} official chapter path is stale or wrong")
+    if not official_path.exists() or official.get("sha256") != sha256(official_path):
+        failures.append(f"{chapter}: structured review {path.name} official chapter hash is missing or stale")
+    return failures
+
+
+def structured_review_body_hash(data: dict) -> str:
+    clean = dict(data)
+    clean.pop("human_acceptance", None)
+    clean.pop("accepted_by", None)
+    clean.pop("accepted_at", None)
+    clean.pop("reason", None)
+    clean.pop("review_sha256", None)
+    body = json.dumps(clean, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(body.encode("utf-8")).hexdigest()
+
+
+def validate_structured_human_acceptance(chapter: str, path: Path, data: dict) -> list[str]:
+    acceptance = data.get("human_acceptance")
+    if not isinstance(acceptance, dict):
+        return [f"{chapter}: {path.name} human_acceptance is missing"]
+    failures: list[str] = []
+    if acceptance.get("accepted_by") != "human":
+        failures.append(f"{chapter}: {path.name} human_acceptance.accepted_by must be human")
+    if not str(acceptance.get("accepted_at", "")).strip():
+        failures.append(f"{chapter}: {path.name} human_acceptance.accepted_at is missing")
+    if not str(acceptance.get("reason", "")).strip():
+        failures.append(f"{chapter}: {path.name} human_acceptance.reason is missing")
+    official = official_chapter_path(chapter)
+    if not official.exists() or acceptance.get("official_chapter_sha256") != sha256(official):
+        failures.append(f"{chapter}: {path.name} human_acceptance official chapter hash is missing or stale")
+    if acceptance.get("review_sha256") != structured_review_body_hash(data):
+        failures.append(f"{chapter}: {path.name} human_acceptance review hash is missing or stale")
+    return failures
+
+
+def validate_codex_anti_ai_manifest(chapter: str) -> list[str]:
+    path = ROOT / "reviews" / chapter / "codex_anti_ai_review_manifest.json"
+    if not path.exists():
+        return [f"{chapter}: missing Codex anti-AI review manifest {path.relative_to(ROOT)}"]
+    data = read_json(path, {})
+    if not isinstance(data, dict):
+        return [f"{chapter}: Codex anti-AI review manifest must be a JSON object"]
+    volume, chapter_file = chapter_parts(chapter)
+    required = {
+        f"chapters/{volume}/{chapter_file}",
+        f"outline/chapter_briefs/{chapter}.md",
+        f"state/context_pack/{chapter}.md",
+        f"state/context_pack/{chapter}_review_context.md",
+        f"state/context_pack/{chapter}_review_context.json",
+        "state/project_style_contract.json",
+        "state/project_reader_promise.json",
+    }
+    failures: list[str] = []
+    if data.get("chapter") != chapter:
+        failures.append(f"{chapter}: Codex anti-AI review manifest chapter mismatch")
+    if data.get("reviewer") != "codex_anti_ai_subagent":
+        failures.append(f"{chapter}: Codex anti-AI review manifest reviewer must be codex_anti_ai_subagent")
+    prompt = data.get("prompt")
+    if not isinstance(prompt, dict):
+        failures.append(f"{chapter}: Codex anti-AI review manifest missing prompt")
+    else:
+        prompt_path = ROOT / str(prompt.get("path", ""))
+        if not prompt_path.exists():
+            failures.append(f"{chapter}: Codex anti-AI review prompt is missing")
+        elif prompt.get("sha256") != sha256(prompt_path):
+            failures.append(f"{chapter}: Codex anti-AI review prompt hash is stale")
+    inputs = data.get("inputs")
+    if not isinstance(inputs, list):
+        failures.append(f"{chapter}: Codex anti-AI review manifest inputs must be a list")
+        return failures
+    paths = {item.get("path"): item for item in inputs if isinstance(item, dict)}
+    failures.extend(f"{chapter}: Codex anti-AI review manifest missing input {item}" for item in sorted(required - set(paths)))
+    failures.extend(input_hash_failures(chapter, path, data, "inputs"))
+    forbidden = data.get("forbidden_inputs")
+    if not isinstance(forbidden, list) or not forbidden:
+        failures.append(f"{chapter}: Codex anti-AI review manifest missing forbidden_inputs")
+    attestation = str(data.get("isolation_attestation", "")).strip()
+    if not attestation:
+        failures.append(f"{chapter}: Codex anti-AI review manifest missing isolation_attestation")
+    return failures
+
+
+def validate_ai_taste_json(chapter: str) -> list[str]:
+    path = ROOT / "reviews" / chapter / "ai_taste.json"
+    if not path.exists():
+        return [f"{chapter}: missing structured anti-AI review {path.relative_to(ROOT)}"]
+    data = read_json(path, {})
+    if not isinstance(data, dict):
+        return [f"{chapter}: structured anti-AI review must be a JSON object"]
+    failures = validate_structured_official_binding(chapter, path, data)
+    if data.get("status") not in {"CLEAR", "ACCEPTED_BY_HUMAN"}:
+        failures.append(f"{chapter}: ai_taste.json status is {data.get('status', 'MISSING')}; expected CLEAR or ACCEPTED_BY_HUMAN")
+    if data.get("status") == "ACCEPTED_BY_HUMAN":
+        failures.extend(validate_structured_human_acceptance(chapter, path, data))
+    categories = data.get("categories")
+    required = {
+        "show_dont_tell",
+        "rhythm_disorder",
+        "emotional_risk",
+        "gray_motive",
+        "dialogue_agenda",
+        "detail_economy",
+        "consequence_integrity",
+    }
+    if not isinstance(categories, dict):
+        failures.append(f"{chapter}: ai_taste.json missing categories")
+    else:
+        missing = sorted(required - set(categories))
+        failures.extend(f"{chapter}: ai_taste.json missing category {item}" for item in missing)
+        for key, item in categories.items():
+            if not isinstance(item, dict):
+                failures.append(f"{chapter}: ai_taste.json category {key} is malformed")
+                continue
+            status = item.get("status")
+            severity = item.get("severity")
+            if data.get("status") != "ACCEPTED_BY_HUMAN" and status == "BLOCKED":
+                failures.append(f"{chapter}: ai_taste.json category {key} is BLOCKED")
+            if data.get("status") != "ACCEPTED_BY_HUMAN" and severity in {"P0", "P1"} and status != "CLEAR":
+                failures.append(f"{chapter}: ai_taste.json category {key} has unresolved {severity}")
+            if not isinstance(item.get("revision_actions"), list) or not item.get("revision_actions"):
+                failures.append(f"{chapter}: ai_taste.json category {key} missing revision_actions")
+            if not isinstance(item.get("issue"), str) or not item.get("issue", "").strip():
+                failures.append(f"{chapter}: ai_taste.json category {key} missing issue")
+    quotes = collect_structured_quotes(data)
+    if not quotes:
+        failures.append(f"{chapter}: ai_taste.json has no evidence quotes")
+    elif not any_quote_matches_official(quotes, official_chapter_path(chapter)):
+        failures.append(f"{chapter}: ai_taste.json evidence quotes do not match the official chapter")
+    return failures
+
+
+def validate_dialogue_function_json(chapter: str) -> list[str]:
+    path = ROOT / "reviews" / chapter / "dialogue_function.json"
+    if not path.exists():
+        return [f"{chapter}: missing structured dialogue review {path.relative_to(ROOT)}"]
+    data = read_json(path, {})
+    if not isinstance(data, dict):
+        return [f"{chapter}: structured dialogue review must be a JSON object"]
+    failures = validate_structured_official_binding(chapter, path, data)
+    if data.get("status") not in {"CLEAR", "ACCEPTED_BY_HUMAN"}:
+        failures.append(f"{chapter}: dialogue_function.json status is {data.get('status', 'MISSING')}; expected CLEAR or ACCEPTED_BY_HUMAN")
+    if data.get("status") == "ACCEPTED_BY_HUMAN":
+        failures.extend(validate_structured_human_acceptance(chapter, path, data))
+    samples = data.get("samples")
+    if not isinstance(samples, list) or not samples:
+        failures.append(f"{chapter}: dialogue_function.json requires at least one sampled dialogue or no-dialogue scene")
+    else:
+        for index, sample in enumerate(samples, start=1):
+            if not isinstance(sample, dict):
+                failures.append(f"{chapter}: dialogue_function.json sample #{index} is malformed")
+                continue
+            if data.get("status") != "ACCEPTED_BY_HUMAN" and sample.get("status") == "BLOCKED":
+                failures.append(f"{chapter}: dialogue_function.json sample #{index} is BLOCKED")
+            if not str(sample.get("function", "")).strip():
+                failures.append(f"{chapter}: dialogue_function.json sample #{index} missing function")
+            if not str(sample.get("character_goal", "")).strip():
+                failures.append(f"{chapter}: dialogue_function.json sample #{index} missing character_goal")
+    blockers = data.get("blockers")
+    if data.get("status") != "ACCEPTED_BY_HUMAN" and isinstance(blockers, list) and blockers:
+        failures.extend(f"{chapter}: dialogue_function.json blocker: {item}" for item in blockers)
+    quotes = collect_structured_quotes(data)
+    if not quotes:
+        failures.append(f"{chapter}: dialogue_function.json has no evidence quotes")
+    elif not any_quote_matches_official(quotes, official_chapter_path(chapter)):
+        failures.append(f"{chapter}: dialogue_function.json evidence quotes do not match the official chapter")
+    return failures
+
+
+def validate_agent_anti_ai_review(chapter: str, stem: str, label: str) -> list[str]:
+    path = ROOT / "reviews" / chapter / f"{stem}.json"
+    md_path = ROOT / "reviews" / chapter / f"{stem}.md"
+    failures: list[str] = []
+    if not md_path.exists() or not read_text(md_path).strip():
+        failures.append(f"{chapter}: missing {label} anti-AI review {md_path.relative_to(ROOT)}")
+    else:
+        failures.extend(validate_markdown_review_binding(chapter=chapter, review_path=md_path))
+    if not path.exists():
+        return failures + [f"{chapter}: missing {label} anti-AI review {path.relative_to(ROOT)}"]
+    data = read_json(path, {})
+    if not isinstance(data, dict):
+        return failures + [f"{chapter}: {label} anti-AI review must be a JSON object"]
+    failures.extend(validate_structured_official_binding(chapter, path, data))
+    status = data.get("status")
+    if status not in {"CLEAR", "ACCEPTED_BY_HUMAN"}:
+        failures.append(
+            f"{chapter}: {stem}.json status is {status or 'MISSING'}; "
+            "expected CLEAR or ACCEPTED_BY_HUMAN"
+        )
+    if status == "ACCEPTED_BY_HUMAN":
+        failures.extend(validate_structured_human_acceptance(chapter, path, data))
+    blockers = data.get("blockers")
+    if isinstance(blockers, list) and blockers and status != "ACCEPTED_BY_HUMAN":
+        failures.extend(f"{chapter}: {stem}.json blocker: {item}" for item in blockers)
+
+    categories = data.get("categories")
+    required = {
+        "show_dont_tell",
+        "rhythm_disorder",
+        "emotional_risk",
+        "gray_motive",
+        "dialogue_agenda",
+        "detail_economy",
+        "setting_integration",
+        "consequence_integrity",
+    }
+    if not isinstance(categories, dict):
+        failures.append(f"{chapter}: {stem}.json missing categories")
+    else:
+        missing = sorted(required - set(categories))
+        failures.extend(f"{chapter}: {stem}.json missing category {item}" for item in missing)
+        for key, item in categories.items():
+            if not isinstance(item, dict):
+                failures.append(f"{chapter}: {stem}.json category {key} is malformed")
+                continue
+            item_status = item.get("status")
+            severity = item.get("severity")
+            if status != "ACCEPTED_BY_HUMAN" and item_status == "BLOCKED":
+                failures.append(f"{chapter}: {stem}.json category {key} is BLOCKED")
+            if status != "ACCEPTED_BY_HUMAN" and severity in {"P0", "P1"} and item_status != "CLEAR":
+                failures.append(f"{chapter}: {stem}.json category {key} has unresolved {severity}")
+            if not isinstance(item.get("revision_actions"), list) or not item.get("revision_actions"):
+                failures.append(f"{chapter}: {stem}.json category {key} missing revision_actions")
+            if not isinstance(item.get("issue"), str) or not item.get("issue", "").strip():
+                failures.append(f"{chapter}: {stem}.json category {key} missing issue")
+
+    samples = data.get("dialogue_samples")
+    if not isinstance(samples, list):
+        failures.append(f"{chapter}: {stem}.json dialogue_samples must be a list")
+    else:
+        for index, sample in enumerate(samples, start=1):
+            if not isinstance(sample, dict):
+                failures.append(f"{chapter}: {stem}.json dialogue sample #{index} is malformed")
+                continue
+            if status != "ACCEPTED_BY_HUMAN" and sample.get("status") == "BLOCKED":
+                failures.append(f"{chapter}: {stem}.json dialogue sample #{index} is BLOCKED")
+            if not str(sample.get("function", "")).strip():
+                failures.append(f"{chapter}: {stem}.json dialogue sample #{index} missing function")
+            if not str(sample.get("character_goal", "")).strip():
+                failures.append(f"{chapter}: {stem}.json dialogue sample #{index} missing character_goal")
+
+    quotes = collect_structured_quotes(data)
+    if not quotes:
+        failures.append(f"{chapter}: {stem}.json has no evidence quotes")
+    elif not any_quote_matches_official(quotes, official_chapter_path(chapter)):
+        failures.append(f"{chapter}: {stem}.json evidence quotes do not match the official chapter")
+    return failures
+
+
+def validate_codex_anti_ai_review(chapter: str) -> list[str]:
+    failures = validate_agent_anti_ai_review(chapter, "codex_anti_ai_review", "Codex")
+    failures.extend(validate_codex_anti_ai_manifest(chapter))
+    return failures
+
+
+def validate_deepseek_anti_ai_review(chapter: str) -> list[str]:
+    return validate_agent_anti_ai_review(chapter, "deepseek_anti_ai_review", "DeepSeek")
+
+
+def validate_deepseek_run_manifests(chapter: str) -> list[str]:
+    failures: list[str] = []
+    for kind in ("review", "anti_ai_review"):
+        failures.extend(f"{chapter}: {item}" for item in validate_run_manifest(chapter, kind))
+    return failures
+
+
+def input_hash_failures(chapter: str, path: Path, data: dict, key: str = "input_hashes") -> list[str]:
+    failures: list[str] = []
+    values = data.get(key, [])
+    if not isinstance(values, list):
+        return [f"{chapter}: {path.name} {key} must be a list"]
+    for item in values:
+        if not isinstance(item, dict):
+            failures.append(f"{chapter}: {path.name} {key} entry is malformed")
+            continue
+        rel_path = str(item.get("path", "")).strip()
+        expected = str(item.get("sha256", "")).strip()
+        if not rel_path or not expected:
+            failures.append(f"{chapter}: {path.name} {key} entry missing path/sha256")
+            continue
+        source = ROOT / rel_path
+        if not source.exists():
+            failures.append(f"{chapter}: {path.name} input missing {rel_path}")
+        elif sha256(source) != expected:
+            failures.append(f"{chapter}: {path.name} input hash mismatch {rel_path}")
+    return failures
+
+
+def decision_value(chapter: str) -> str:
+    data = read_json(ROOT / "reviews" / chapter / "decision.json", {})
+    if isinstance(data, dict) and data.get("decision"):
+        return str(data["decision"])
+    text = read_text(ROOT / "reviews" / chapter / "decision.md")
+    for line in text.splitlines():
+        if line.startswith("decision:"):
+            return line.split(":", 1)[1].strip()
+    return ""
+
+
+def validate_revision_plan(chapter: str) -> list[str]:
+    path = ROOT / "reviews" / chapter / "revision_plan.json"
+    if not path.exists():
+        if decision_value(chapter) == "Revise once":
+            return [f"{chapter}: Revise once requires current revision_plan.json"]
+        return []
+    data = read_json(path, {})
+    if not isinstance(data, dict):
+        return [f"{chapter}: revision_plan.json must be a JSON object"]
+    failures: list[str] = []
+    official = data.get("official_chapter")
+    if not isinstance(official, dict):
+        failures.append(f"{chapter}: revision_plan.json missing official_chapter")
+    elif official_chapter_path(chapter).exists() and official.get("sha256") != sha256(official_chapter_path(chapter)):
+        failures.append(f"{chapter}: revision_plan.json official chapter hash is stale")
+    failures.extend(input_hash_failures(chapter, path, data))
+    if decision_value(chapter) == "Revise once" and not data.get("must_fix") and data.get("status") not in {"READY", "NOT_READY"}:
+        failures.append(f"{chapter}: revision_plan.json malformed for Revise once")
+    return failures
+
+
+def validate_review_arbitration(chapter: str) -> list[str]:
+    path = ROOT / "reviews" / chapter / "review_arbitration.json"
+    md_path = ROOT / "reviews" / chapter / "review_arbitration.md"
+    failures: list[str] = []
+    if not md_path.exists() or not read_text(md_path).strip():
+        failures.append(f"{chapter}: missing review arbitration {md_path.relative_to(ROOT)}")
+    elif status_value(read_text(md_path)) == "ACCEPTED_BY_HUMAN":
+        if not accepted_by_human_is_current(read_text(md_path), md_path, official_chapter_path(chapter)):
+            failures.append(f"{chapter}: review_arbitration.md human acceptance is missing or stale")
+    if not path.exists():
+        return failures + [f"{chapter}: missing review arbitration {path.relative_to(ROOT)}"]
+    data = read_json(path, {})
+    if not isinstance(data, dict):
+        return failures + [f"{chapter}: review_arbitration.json must be a JSON object"]
+    status = str(data.get("status", ""))
+    accepted = status == "ACCEPTED_BY_HUMAN" or isinstance(data.get("human_acceptance"), dict)
+    if accepted:
+        failures.extend(validate_structured_human_acceptance(chapter, path, data))
+    if status not in {"READY", "ACCEPTED_BY_HUMAN"} and not accepted:
+        failures.append(f"{chapter}: review_arbitration.json status is {status or 'MISSING'}; expected READY or ACCEPTED_BY_HUMAN")
+    if data.get("blockers") and not accepted:
+        failures.extend(f"{chapter}: review_arbitration blocker: {item}" for item in data.get("blockers", []))
+    failures.extend(input_hash_failures(chapter, path, data))
+    return failures
+
+
+def text_has_high_impact_gray(chapter: str) -> bool:
+    text = read_text(official_chapter_path(chapter)).lower()
+    gray = any(marker in text for marker in ("lie", "hide", "secret", "selfish", "betray", "私心", "隐瞒", "骗", "使坏"))
+    impact = any(marker in text for marker in ("relationship", "trust", "rule", "ability", "关系", "信任", "规则", "人格", "破局"))
+    return gray and impact
+
+
+def validate_gray_consequence(chapter: str) -> list[str]:
+    path = ROOT / "reviews" / chapter / "gray_consequence.json"
+    if not path.exists():
+        return [f"{chapter}: high-impact gray behavior requires gray_consequence.json"] if text_has_high_impact_gray(chapter) else []
+    data = read_json(path, {})
+    if not isinstance(data, dict):
+        return [f"{chapter}: gray_consequence.json must be a JSON object"]
+    official = data.get("official_chapter")
+    failures: list[str] = []
+    if not isinstance(official, dict):
+        failures.append(f"{chapter}: gray_consequence.json missing official_chapter")
+    elif official_chapter_path(chapter).exists() and official.get("sha256") != sha256(official_chapter_path(chapter)):
+        failures.append(f"{chapter}: gray_consequence.json official chapter hash is stale")
+    status = data.get("status")
+    if status == "BLOCKED":
+        failures.append(f"{chapter}: gray_consequence.json is BLOCKED")
+    if text_has_high_impact_gray(chapter) and status != "READY":
+        failures.append(f"{chapter}: high-impact gray behavior requires READY gray consequence evidence")
+    return failures
+
+
+def validate_chapter_shape(chapter: str) -> list[str]:
+    path = ROOT / "reviews" / chapter / "chapter_shape.json"
+    if chapter_number(chapter) < 6 and not path.exists():
+        return []
+    if not path.exists():
+        return [f"{chapter}: chapter 6+ requires chapter_shape.json"]
+    data = read_json(path, {})
+    if not isinstance(data, dict):
+        return [f"{chapter}: chapter_shape.json must be a JSON object"]
+    official = data.get("official_chapter")
+    failures: list[str] = []
+    if isinstance(official, dict) and official_chapter_path(chapter).exists() and official.get("sha256") != sha256(official_chapter_path(chapter)):
+        failures.append(f"{chapter}: chapter_shape.json official chapter hash is stale")
+    status = data.get("status")
+    if status == "ACCEPTED_BY_HUMAN":
+        failures.extend(validate_structured_human_acceptance(chapter, path, data))
+    if chapter_number(chapter) >= 6 and status not in {"READY", "ACCEPTED_BY_HUMAN"}:
+        failures.append(f"{chapter}: chapter_shape.json status is {status or 'MISSING'}; expected READY or ACCEPTED_BY_HUMAN for chapter 6+")
+    if status == "BLOCKED":
+        failures.append(f"{chapter}: chapter_shape.json is BLOCKED")
+    return failures
+
+
+def brief_path(chapter: str) -> Path:
+    return ROOT / "outline" / "chapter_briefs" / f"{chapter}.md"
+
+
+def validate_reader_reward_acceptance(chapter: str, path: Path, data: dict) -> list[str]:
+    acceptance = data.get("human_acceptance")
+    if not isinstance(acceptance, dict):
+        return [f"{chapter}: reader_reward_gate.json human_acceptance is missing"]
+    failures: list[str] = []
+    for field in (
+        "accepted_by",
+        "accepted_at",
+        "reason",
+        "compensation_evidence_quote",
+        "next_chapter_obligation",
+        "official_chapter_sha256",
+        "official_brief_sha256",
+        "reader_promise_sha256",
+        "policy_sha256",
+        "review_sha256",
+    ):
+        if not str(acceptance.get(field, "")).strip():
+            failures.append(f"{chapter}: reader_reward_gate.json human_acceptance.{field} is missing")
+    if acceptance.get("accepted_by") != "human":
+        failures.append(f"{chapter}: reader_reward_gate.json human_acceptance.accepted_by must be human")
+    official = official_chapter_path(chapter)
+    brief = brief_path(chapter)
+    hashes = {item.get("path"): item.get("sha256") for item in data.get("input_hashes", []) if isinstance(item, dict)}
+    if not official.exists() or acceptance.get("official_chapter_sha256") != sha256(official):
+        failures.append(f"{chapter}: reader_reward_gate.json human_acceptance official chapter hash is missing or stale")
+    if not brief.exists() or acceptance.get("official_brief_sha256") != sha256(brief):
+        failures.append(f"{chapter}: reader_reward_gate.json human_acceptance official brief hash is missing or stale")
+    if acceptance.get("reader_promise_sha256") != hashes.get("state/project_reader_promise.json"):
+        failures.append(f"{chapter}: reader_reward_gate.json human_acceptance reader promise hash is missing or stale")
+    if acceptance.get("policy_sha256") != hashes.get("ops/reader_reward_policy.json"):
+        failures.append(f"{chapter}: reader_reward_gate.json human_acceptance policy hash is missing or stale")
+    clean = dict(data)
+    clean.pop("human_acceptance", None)
+    clean.pop("status", None)
+    review_hash = hashlib.sha256(
+        json.dumps(clean, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    if acceptance.get("review_sha256") != review_hash:
+        failures.append(f"{chapter}: reader_reward_gate.json human_acceptance review hash is missing or stale")
+    quote = str(acceptance.get("compensation_evidence_quote", "")).strip()
+    if quote and official.exists() and not quote_matches_text(quote, read_text(official)):
+        failures.append(f"{chapter}: reader_reward_gate.json human_acceptance compensation evidence quote does not match official chapter")
+    allowed_reason_markers = ("回报强度争议", "节奏策略争议", "慢热", "低动作")
+    reason = str(acceptance.get("reason", ""))
+    if reason and not any(marker in reason for marker in allowed_reason_markers):
+        failures.append(f"{chapter}: reader_reward_gate.json human_acceptance reason is not an allowed reader reward exception")
+    return failures
+
+
+def validate_reader_reward_gate(chapter: str) -> list[str]:
+    json_path = ROOT / "reviews" / chapter / "reader_reward_gate.json"
+    md_path = ROOT / "reviews" / chapter / "reader_reward_gate.md"
+    failures: list[str] = []
+    if not md_path.exists() or not read_text(md_path).strip():
+        failures.append(f"{chapter}: missing reader reward gate {md_path.relative_to(ROOT)}")
+    if not json_path.exists():
+        return failures + [f"{chapter}: missing reader reward gate {json_path.relative_to(ROOT)}"]
+    data = read_json(json_path, {})
+    if not isinstance(data, dict):
+        return failures + [f"{chapter}: reader_reward_gate.json must be a JSON object"]
+    official = data.get("official_chapter")
+    if not isinstance(official, dict):
+        failures.append(f"{chapter}: reader_reward_gate.json missing official_chapter")
+    elif official_chapter_path(chapter).exists() and official.get("sha256") != sha256(official_chapter_path(chapter)):
+        failures.append(f"{chapter}: reader_reward_gate.json official chapter hash is stale")
+    brief = data.get("official_brief")
+    if not isinstance(brief, dict):
+        failures.append(f"{chapter}: reader_reward_gate.json missing official_brief")
+    elif brief_path(chapter).exists() and brief.get("sha256") != sha256(brief_path(chapter)):
+        failures.append(f"{chapter}: reader_reward_gate.json official brief hash is stale")
+    failures.extend(input_hash_failures(chapter, json_path, data))
+    status = data.get("status")
+    if status == "BLOCKED":
+        failures.append(f"{chapter}: reader_reward_gate.json is BLOCKED")
+    if status not in {"READY", "WARNING", "ACCEPTED_BY_HUMAN", "BLOCKED"}:
+        failures.append(f"{chapter}: reader_reward_gate.json status is {status or 'MISSING'}")
+    if status == "ACCEPTED_BY_HUMAN":
+        failures.extend(validate_reader_reward_acceptance(chapter, json_path, data))
+    blockers = data.get("blockers")
+    if isinstance(blockers, list) and blockers and status != "ACCEPTED_BY_HUMAN":
+        failures.extend(f"{chapter}: reader_reward_gate blocker: {item}" for item in blockers)
+    intensity = str(data.get("reader_reward_intensity", "")).strip().upper()
+    matched = data.get("matched_evidence_quotes")
+    if intensity in {"R2", "R3", "R4"}:
+        if not isinstance(matched, list) or not matched:
+            failures.append(f"{chapter}: R2+ reader_reward_gate requires matched evidence quotes")
+        elif not any_quote_matches_official([str(item) for item in matched], official_chapter_path(chapter)):
+            failures.append(f"{chapter}: reader_reward_gate matched evidence quotes do not match official chapter")
+    return failures
+
+
+def validate_reader_reward_index(chapter: str) -> list[str]:
+    path = ROOT / "state" / "derived" / "pacing" / "reader_reward_index.json"
+    if not path.exists():
+        return [f"{chapter}: missing derived reader reward index {path.relative_to(ROOT)}"]
+    data = read_json(path, {})
+    if not isinstance(data, dict):
+        return [f"{chapter}: reader_reward_index.json must be a JSON object"]
+    failures: list[str] = []
+    for key, rel_path in (
+        ("source_policy", "ops/reader_reward_policy.json"),
+        ("source_reader_promise", "state/project_reader_promise.json"),
+    ):
+        item = data.get(key)
+        source = ROOT / rel_path
+        if not isinstance(item, dict) or item.get("path") != rel_path or not source.exists() or item.get("sha256") != sha256(source):
+            failures.append(f"{chapter}: reader_reward_index.json {key} hash is missing or stale")
+    entry = None
+    for item in data.get("chapters", []):
+        if isinstance(item, dict) and item.get("chapter") == chapter:
+            entry = item
+            break
+    if not isinstance(entry, dict):
+        return failures + [f"{chapter}: reader_reward_index.json missing current chapter entry"]
+    gate = entry.get("gate")
+    gate_path = ROOT / "reviews" / chapter / "reader_reward_gate.json"
+    if not isinstance(gate, dict) or gate.get("path") != f"reviews/{chapter}/reader_reward_gate.json":
+        failures.append(f"{chapter}: reader_reward_index.json gate reference is missing or wrong")
+    elif gate_path.exists() and gate.get("sha256") != sha256(gate_path):
+        failures.append(f"{chapter}: reader_reward_index.json gate hash is stale")
+    cross_blockers = entry.get("cross_blockers")
+    if isinstance(cross_blockers, list) and cross_blockers:
+        gate_data = read_json(gate_path, {})
+        accepted = isinstance(gate_data, dict) and gate_data.get("status") == "ACCEPTED_BY_HUMAN"
+        acceptance = gate_data.get("human_acceptance") if isinstance(gate_data, dict) else None
+        has_obligation = isinstance(acceptance, dict) and bool(str(acceptance.get("next_chapter_obligation", "")).strip())
+        if not accepted or not has_obligation:
+            failures.extend(f"{chapter}: reader reward cross-chapter blocker: {item}" for item in cross_blockers)
+    return failures
+
+
 def validate_auxiliary_review(chapter: str, name: str) -> list[str]:
     path = ROOT / "reviews" / chapter / name
     if not path.exists() or not read_text(path).strip():
@@ -624,8 +1224,16 @@ def validate_auxiliary_review(chapter: str, name: str) -> list[str]:
             f"{chapter}: auxiliary review {name} status is {status or 'MISSING'}; "
             f"expected one of {sorted(ALLOWED_AUXILIARY_STATUS)}"
         )
-    if status == "CLEAR" and name in required_reviews_for_chapter(chapter) and not review_bound_to_current_chapter(text, official_chapter_path(chapter)):
+    if status == "CLEAR" and not review_bound_to_current_chapter(text, official_chapter_path(chapter)):
         failures.append(f"{chapter}: auxiliary review {name} official chapter hash is missing or stale")
+    if status == "CLEAR" and not review_hash_is_current(text, path):
+        failures.append(f"{chapter}: auxiliary review {name} review_sha256 is missing or stale")
+    if status == "CLEAR":
+        quotes = evidence_quotes(text)
+        if not quotes:
+            failures.append(f"{chapter}: auxiliary review {name} has no Evidence Quotes")
+        elif not any_quote_matches_official(quotes, official_chapter_path(chapter)):
+            failures.append(f"{chapter}: auxiliary review {name} Evidence Quotes do not match the official chapter")
     if status == "ACCEPTED_BY_HUMAN" and not accepted_by_human_is_current(text, path, official_chapter_path(chapter)):
         failures.append(f"{chapter}: auxiliary review {name} human acceptance is missing or stale")
     if name == "originality.md":
@@ -807,6 +1415,7 @@ def chapter_evidence_failures(chapter: str) -> list[str]:
     failures.extend(validate_landing(chapter))
     failures.extend(validate_candidate_prompt_evidence(chapter, selection, landing))
     failures.extend(validate_context_quality(chapter, landing))
+    failures.extend(validate_review_context(chapter))
     failures.extend(validate_authorized_breakers(chapter))
     failures.extend(validate_element_usage(chapter))
     failures.extend(validate_deepseek_direct_adoption(chapter, selection, landing))
@@ -815,6 +1424,17 @@ def chapter_evidence_failures(chapter: str) -> list[str]:
     failures.extend(validate_end_state_change(chapter))
     failures.extend(validate_style_check(chapter))
     failures.extend(validate_series_style_check(chapter))
+    failures.extend(validate_ai_taste_json(chapter))
+    failures.extend(validate_dialogue_function_json(chapter))
+    failures.extend(validate_codex_anti_ai_review(chapter))
+    failures.extend(validate_deepseek_anti_ai_review(chapter))
+    failures.extend(validate_deepseek_run_manifests(chapter))
+    failures.extend(validate_review_arbitration(chapter))
+    failures.extend(validate_revision_plan(chapter))
+    failures.extend(validate_gray_consequence(chapter))
+    failures.extend(validate_chapter_shape(chapter))
+    failures.extend(validate_reader_reward_gate(chapter))
+    failures.extend(validate_reader_reward_index(chapter))
 
     required_reviews = [
         "codex_integrated_review.md",

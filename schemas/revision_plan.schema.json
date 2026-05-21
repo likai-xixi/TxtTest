@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Revision Plan",
+  "type": "object",
+  "required": ["schema_version", "chapter", "generated_at", "status", "official_chapter", "input_hashes", "must_fix", "should_fix", "human_acceptance_allowed"],
+  "properties": {
+    "schema_version": {"type": "integer"},
+    "chapter": {"type": "string"},
+    "generated_at": {"type": "string"},
+    "status": {"type": "string"},
+    "official_chapter": {"type": "object"},
+    "input_hashes": {"type": "array"},
+    "must_fix": {"type": "array"},
+    "should_fix": {"type": "array"},
+    "human_acceptance_allowed": {"type": "array"}
+  },
+  "additionalProperties": false
+}

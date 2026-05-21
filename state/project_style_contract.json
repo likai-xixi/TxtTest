@@ -46,6 +46,17 @@
     ]
   },
   "imitation_policy": "Do not ask any model to imitate a living or modern copyrighted author's identifiable voice. Translate references into technical parameters only.",
+  "anti_ai_policy": "Show pressure through scene behavior before summary. Require character self-interest, concealment, emotional overflow, and consequence when a scene risks becoming too clean.",
+  "ai_taste_thresholds": {
+    "exposition_connector_density_block": 12.0,
+    "summary_voice_density_block": 4.0,
+    "abstract_emotion_density_warn": 5.0,
+    "concrete_scene_anchor_density_min": 2.0,
+    "uniform_sentence_run_ratio_warn": 0.55,
+    "uniform_sentence_run_ratio_block": 0.7,
+    "dialogue_explanation_density_block": 10.0
+  },
+  "dialogue_function_policy": "Key dialogue must carry at least one character goal, pressure, concealment, relationship test, or information turn; pure theme statements cannot dominate.",
   "style_profile_policy": "After Gate A, build a style profile from the first three shipped chapters.",
   "writes_canon": false,
   "writes_chapters": false,

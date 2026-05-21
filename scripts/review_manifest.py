@@ -21,6 +21,8 @@ def allowed_inputs(chapter: str, reviewer: str) -> set[Path]:
     volume, chapter_file = chapter_parts(chapter)
     base = {
         (ROOT / "state" / "context_pack" / f"{chapter}.md").absolute(),
+        (ROOT / "state" / "context_pack" / f"{chapter}_review_context.md").absolute(),
+        (ROOT / "state" / "context_pack" / f"{chapter}_review_context.json").absolute(),
         (ROOT / "chapters" / volume / chapter_file).absolute(),
         (ROOT / "drafts" / "codex" / f"{chapter}.md").absolute(),
         (ROOT / "drafts" / "deepseek" / f"{chapter}.md").absolute(),
@@ -80,6 +82,7 @@ def main() -> int:
         "inputs": inputs,
         "forbidden_inputs": [
             "reviews/{chapter}/codex_integrated_review.md for DeepSeek",
+            "reviews/{chapter}/codex_anti_ai_review.md/json for DeepSeek",
             "reviews/{chapter}/deepseek_integrated_review.md for Codex",
         ],
     }

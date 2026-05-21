@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "chapter": "v01_c001",
+  "generated_at": "2026-05-20T17:04:21+00:00",
+  "status": "BLOCKED",
+  "official_chapter": {
+    "path": "chapters/v01/c001.md",
+    "sha256": ""
+  },
+  "metrics": {},
+  "categories": {
+    "show_dont_tell": {
+      "status": "BLOCKED",
+      "severity": "P1",
+      "evidence_quotes": [],
+      "issue": "migration draft; reviewer must inspect current official chapter",
+      "revision_actions": [
+        "fill evidence quote and decide CLEAR / BLOCKED / ACCEPTED_BY_HUMAN"
+      ]
+    },
+    "rhythm_disorder": {
+      "status": "BLOCKED",
+      "severity": "P1",
+      "evidence_quotes": [],
+      "issue": "migration draft; reviewer must inspect current official chapter",
+      "revision_actions": [
+        "fill evidence quote and decide CLEAR / BLOCKED / ACCEPTED_BY_HUMAN"
+      ]
+    },
+    "emotional_risk": {
+      "status": "BLOCKED",
+      "severity": "P1",
+      "evidence_quotes": [],
+      "issue": "migration draft; reviewer must inspect current official chapter",
+      "revision_actions": [
+        "fill evidence quote and decide CLEAR / BLOCKED / ACCEPTED_BY_HUMAN"
+      ]
+    },
+    "gray_motive": {
+      "status": "BLOCKED",
+      "severity": "P1",
+      "evidence_quotes": [],
+      "issue": "migration draft; reviewer must inspect current official chapter",
+      "revision_actions": [
+        "fill evidence quote and decide CLEAR / BLOCKED / ACCEPTED_BY_HUMAN"
+      ]
+    },
+    "dialogue_agenda": {
+      "status": "BLOCKED",
+      "severity": "P1",
+      "evidence_quotes": [],
+      "issue": "migration draft; reviewer must inspect current official chapter",
+      "revision_actions": [
+        "fill evidence quote and decide CLEAR / BLOCKED / ACCEPTED_BY_HUMAN"
+      ]
+    },
+    "detail_economy": {
+      "status": "BLOCKED",
+      "severity": "P1",
+      "evidence_quotes": [],
+      "issue": "migration draft; reviewer must inspect current official chapter",
+      "revision_actions": [
+        "fill evidence quote and decide CLEAR / BLOCKED / ACCEPTED_BY_HUMAN"
+      ]
+    },
+    "consequence_integrity": {
+      "status": "BLOCKED",
+      "severity": "P1",
+      "evidence_quotes": [],
+      "issue": "migration draft; reviewer must inspect current official chapter",
+      "revision_actions": [
+        "fill evidence quote and decide CLEAR / BLOCKED / ACCEPTED_BY_HUMAN"
+      ]
+    }
+  },
+  "blockers": [
+    "migration draft is not reviewed"
+  ],
+  "warnings": [],
+  "human_acceptance": null
+}

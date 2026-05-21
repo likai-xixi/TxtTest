@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Gray Consequence",
+  "type": "object",
+  "required": ["schema_version", "chapter", "generated_at", "status", "official_chapter", "gray_markers", "high_impact_markers", "obligations", "blockers", "warnings"],
+  "properties": {
+    "schema_version": {"type": "integer"},
+    "chapter": {"type": "string"},
+    "generated_at": {"type": "string"},
+    "status": {"type": "string"},
+    "official_chapter": {"type": "object"},
+    "gray_markers": {"type": "array"},
+    "high_impact_markers": {"type": "array"},
+    "obligations": {"type": "array"},
+    "blockers": {"type": "array"},
+    "warnings": {"type": "array"}
+  },
+  "additionalProperties": true
+}

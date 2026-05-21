@@ -33,6 +33,7 @@ DIRS = [
     "schemas",
     "reader_tests",
     "reader_tests/responses",
+    "reader_tests/chapter_feedback",
     "docs",
     "scripts",
     "templates",
@@ -42,6 +43,7 @@ DIRS = [
 
 GENERATED_PATTERNS = [
     "state/context_pack/*.md",
+    "state/context_pack/*.json",
     "state/snapshots/*.md",
     "state/derived/*.md",
     "state/derived/*.yaml",
@@ -57,6 +59,7 @@ GENERATED_PATTERNS = [
     "state/idea_lab/*/*.json",
     "external_runs/deepseek/*/*.prompt.md",
     "external_runs/deepseek/*/*.prompt.manifest.json",
+    "external_runs/deepseek/*/*.manifest.json",
     "external_runs/deepseek/*/*.raw.json",
     "external_runs/codex/*/*.prompt.md",
     "external_runs/codex/*/*.manifest.json",

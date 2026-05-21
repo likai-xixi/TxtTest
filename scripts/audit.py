@@ -40,6 +40,8 @@ def has_explicit_error(output: str) -> bool:
 
 def classify(name: str, returncode: int, output: str, state: dict | None = None, *, mode: str = "project") -> str:
     if mode == "template":
+        if name == "reader-promise-check" and "status: NOT_READY" in output:
+            return "READY"
         if returncode != 0 or has_explicit_error(output):
             return "ERROR"
         return "READY"
@@ -49,7 +51,13 @@ def classify(name: str, returncode: int, output: str, state: dict | None = None,
         return "WARNING"
     if "status: INFO" in output:
         return "INFO"
-    if "status: REHEARSAL_NOT_READY" in output or "status: NOT_READY" in output or "NOT_READY" in output:
+    if (
+        "status: REHEARSAL_NOT_READY" in output
+        or "status: NOT_READY" in output
+        or "status: BLOCKED" in output
+        or "status: NEEDS_HUMAN" in output
+        or "NOT_READY" in output
+    ):
         return "NOT_READY"
     if returncode == 0:
         return "READY"
@@ -86,8 +94,20 @@ def step_defs_for(mode: str, chapter: str, gate: str) -> list[tuple[str, list[st
         ("reader-promise-check", ["reader-promise-check", "--require-ready"]),
         ("brief-check", ["brief-check", chapter]),
         ("reader-experience-check", ["reader-experience-check", chapter]),
-        ("style-check", ["style-check", chapter]),
-        ("series-style-check", ["series-style-check", chapter]),
+        ("style-check", ["style-check", chapter, "--no-write"]),
+        ("ai-taste-check", ["ai-taste-check", chapter, "--no-write"]),
+        ("dialogue-function-check", ["dialogue-function-check", chapter, "--no-write"]),
+        ("deepseek-manifest-check-review", ["deepseek-manifest-check", chapter, "--kind", "review"]),
+        ("deepseek-manifest-check-anti-ai", ["deepseek-manifest-check", chapter, "--kind", "anti_ai_review"]),
+        ("review-arbitration", ["review-arbitration", chapter, "--no-write"]),
+        ("revision-plan", ["revision-plan", chapter, "--no-write"]),
+        ("gray-consequence", ["gray-consequence", chapter]),
+        ("chapter-shape-check", ["chapter-shape-check", chapter]),
+        ("reader-reward-check", ["reader-reward-check", chapter]),
+        ("reader-reward-index", ["reader-reward-index"]),
+        ("reader-feedback", ["reader-feedback", "summarize", chapter, "--no-write"]),
+        ("receive-chapter-preview", ["receive-chapter", chapter, "--preview"]),
+        ("series-style-check", ["series-style-check", chapter, "--no-write"]),
         ("evidence", ["evidence", chapter]),
         ("market-scan-check", ["market-scan-check", "--id", "latest"]),
         ("commercial-idea-check", ["commercial-idea-check", "--id", "latest"]),

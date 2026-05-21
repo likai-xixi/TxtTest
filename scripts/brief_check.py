@@ -25,6 +25,7 @@ from brief_contract import (
     HIGH_IMPACT_SCALES,
     HIGH_S_LEVELS,
     HIGH_W_LEVELS,
+    EFFECTIVE_PROGRESS_TYPES,
     IMPACT_SCALES,
     INHERITED_CHANGE_SECTIONS,
     LEDGER_EVENT_TYPES,
@@ -41,6 +42,8 @@ from brief_contract import (
     PROGRESS_CONTRACT_SECTIONS,
     PROGRESS_IMPORTANCE_LEVELS,
     PROGRESS_REQUIRED_SECTIONS,
+    READER_REWARD_INTENSITIES,
+    READER_REWARD_TIMINGS,
     RESOLUTION_BOUNDARY_SECTIONS,
     SCENE_CONTINUITY_SECTIONS,
     SCENE_CONTINUITY_TYPES,
@@ -77,6 +80,17 @@ INTRO_SECTIONS = ("章节简介", "Chapter Intro")
 STRUCTURE_HINT_SECTIONS = ("本章结构提示", "Structure Hint")
 END_STATE_CHANGE_SECTIONS = ("章末状态变化", "End State Change")
 END_STATE_CHANGE_TYPES = {"关系改变", "代价落地", "认知更新", "选择完成", "风险显形", "旧问题变形", "新线索出现", "后果承接"}
+READER_RETENTION_SECTIONS = ("本章留存合同", "Reader Retention Contract")
+PLACEHOLDER_TITLES = {"标题", "章节标题", "chapter title", "todo", "tbd", "待定", "待填", "无题"}
+
+
+def title_is_ready(title: str) -> bool:
+    value = title.strip().strip("#").strip()
+    if not value:
+        return False
+    if value.lower() in PLACEHOLDER_TITLES or value in PLACEHOLDER_TITLES:
+        return False
+    return not has_placeholder(value)
 
 
 def check_pacing_sections(parsed: dict[str, str]) -> list[str]:
@@ -243,6 +257,14 @@ def check_progress_contract_sections(parsed: dict[str, str]) -> list[str]:
     if not progress_mode:
         failures.append("本章进展契约 has invalid 进展类型")
 
+    effective_type = progress_value(progress, "effective_progress_type").strip()
+    if effective_type not in EFFECTIVE_PROGRESS_TYPES:
+        failures.append("本章进展契约 有效推进类型 must be a valid effective progress type")
+    if "->" not in progress_value(progress, "effective_progress_unit") and "→" not in progress_value(progress, "effective_progress_unit"):
+        failures.append("本章进展契约 有效推进单位 must use before -> after")
+    if not concrete_value(progress_value(progress, "effective_progress_evidence_target")):
+        failures.append("本章进展契约 field must be concrete: 有效推进证据目标")
+
     for key, label in (
         ("progress_target", "推进对象"),
         ("start_state_ref", "起始状态依据"),
@@ -293,6 +315,26 @@ def check_progress_contract_sections(parsed: dict[str, str]) -> list[str]:
         if not concrete_value(progress_value(cost, "cooldown_scope")):
             failures.append("高牵引/高推进章必须填写 冷却范围")
 
+    retention = section_body(parsed, READER_RETENTION_SECTIONS)
+    intensity = progress_value(retention, "reader_reward_intensity").strip().upper()
+    if intensity not in READER_REWARD_INTENSITIES:
+        failures.append("本章留存合同 reader_reward_intensity must be R0-R4")
+    if not concrete_value(progress_value(retention, "reader_reward_type"), min_chars=1):
+        failures.append("本章留存合同 field must be concrete: reader_reward_type")
+    if not concrete_value(progress_value(retention, "reader_reward_delivery")):
+        failures.append("本章留存合同 field must be concrete: reader_reward_delivery")
+    timing = progress_value(retention, "reader_reward_timing").strip()
+    if timing not in READER_REWARD_TIMINGS:
+        failures.append("本章留存合同 reader_reward_timing must be opening/midpoint/ending/full_chapter/next_chapter_setup")
+    evidence_requirement = progress_value(retention, "reward_evidence_requirement")
+    if intensity in {"R2", "R3", "R4"} and not concrete_value(evidence_requirement):
+        failures.append("R2+ 本章留存合同 reward_evidence_requirement must be concrete")
+    if intensity == "R4":
+        if not concrete_value(progress_value(cost, "cost_paid_now")):
+            failures.append("R4 本章代价与后果契约必须填写 已支付代价")
+        if not concrete_value(obligation):
+            failures.append("R4 本章代价与后果契约必须填写 后果承接义务")
+
     resolved_threads = progress_value(boundary, "resolved_threads")
     if not is_none_body(resolved_threads):
         if not is_yes(progress_value(boundary, "resolution_requires_cost")):
@@ -315,6 +357,11 @@ def check_brief(path: Path) -> list[str]:
         return [f"missing brief: {path.relative_to(ROOT)}"]
     text = read_text(path)
     parsed = markdown_sections(text)
+    title = section_body(parsed, TITLE_SECTIONS).strip()
+    if missing_section(parsed, TITLE_SECTIONS):
+        failures.append("missing required section: 章节标题")
+    elif not title_is_ready(title):
+        failures.append("章节标题 must be non-placeholder")
     for name in REQUIRED_SECTIONS:
         if name not in parsed:
             failures.append(f"missing required section: {name}")

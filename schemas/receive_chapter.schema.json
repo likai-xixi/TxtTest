@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Receive Chapter",
+  "type": "object",
+  "required": ["schema_version", "chapter", "generated_at", "status", "steps", "next_action"],
+  "properties": {
+    "schema_version": {"type": "integer"},
+    "chapter": {"type": "string"},
+    "generated_at": {"type": "string"},
+    "status": {"type": "string"},
+    "steps": {"type": "array"},
+    "next_action": {"type": "string"}
+  },
+  "additionalProperties": false
+}

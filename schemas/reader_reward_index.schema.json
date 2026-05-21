@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReaderRewardIndex",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "generated_at",
+    "source_policy",
+    "source_reader_promise",
+    "chapters",
+    "blockers",
+    "warnings"
+  ],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "generated_at": { "type": "string", "minLength": 1 },
+    "source_policy": {
+      "type": "object",
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string" }
+      }
+    },
+    "source_reader_promise": {
+      "type": "object",
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string" }
+      }
+    },
+    "chapters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["chapter", "reader_reward_intensity", "gate", "cross_blockers", "cross_warnings"],
+        "properties": {
+          "chapter": { "type": "string", "pattern": "^v\\d{2}_c\\d{3}$" },
+          "reader_reward_intensity": { "enum": ["R0", "R1", "R2", "R3", "R4"] },
+          "gate": { "type": "object" },
+          "cross_blockers": { "type": "array", "items": { "type": "string" } },
+          "cross_warnings": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "blockers": { "type": "array", "items": { "type": "string" } },
+    "warnings": { "type": "array", "items": { "type": "string" } }
+  }
+}

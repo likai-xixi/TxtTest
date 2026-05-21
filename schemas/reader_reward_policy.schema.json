@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReaderRewardPolicy",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "source_boundary",
+    "valid_intensities",
+    "effective_progress_types",
+    "reader_reward_types",
+    "reader_reward_timings",
+    "low_drama_carriers",
+    "levels",
+    "human_acceptance_allowed_reasons",
+    "human_acceptance_forbidden_reasons"
+  ],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "source_boundary": { "const": "template_policy_not_project_default" },
+    "valid_intensities": {
+      "type": "array",
+      "items": { "enum": ["R0", "R1", "R2", "R3", "R4"] },
+      "minItems": 5
+    },
+    "effective_progress_types": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+    "reader_reward_types": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+    "reader_reward_timings": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+    "low_drama_carriers": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+    "levels": {
+      "type": "object",
+      "required": ["R0", "R1", "R2", "R3", "R4"],
+      "properties": {
+        "R0": { "type": "object" },
+        "R1": { "type": "object" },
+        "R2": { "type": "object" },
+        "R3": { "type": "object" },
+        "R4": { "type": "object" }
+      }
+    },
+    "human_acceptance_allowed_reasons": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+    "human_acceptance_forbidden_reasons": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+  }
+}

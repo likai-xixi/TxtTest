@@ -9,7 +9,12 @@ source_boundary: instruction_only_not_fact_source
 - 副类型：待定
 - 目标读者：待定
 - 平台预期：待定
+- genre_profile：待定
 - 本书核心卖点：待定
+- core_sell_point：待定
+- core_mechanism_name：待定
+- allowed_low_drama_carriers：
+  - 待定
 - 本书主要快感来源：
   - 待定
 - 本书不承诺什么：
@@ -35,3 +40,12 @@ source_boundary: instruction_only_not_fact_source
 - 类型错位红线：
   - 待定
 
+## 手动 R 档回报强度策略
+
+- opening_chapter_count：待定
+- opening_intensity_by_chapter：
+  - v01_c001：待定
+- default_chapter_intensity：待定
+- allowed_chapter_overrides：
+  - none
+- rationale：待定

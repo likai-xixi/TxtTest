@@ -69,7 +69,7 @@ def gate_ready(chapter: str) -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Build the allowed source pack for Codex/DeepSeek brief candidates.")
     parser.add_argument("--chapter", required=True)
-    parser.add_argument("--limit", type=int, default=14000)
+    parser.add_argument("--limit", type=int, default=20000)
     args = parser.parse_args()
 
     if write_blocked_by_locks("brief candidate pack build"):

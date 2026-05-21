@@ -11,6 +11,8 @@ from pathlib import Path
 from _common import ROOT, chapter_parts, now_iso, read_text, write_blocked_by_locks, write_text
 from deepseek_client import call_deepseek, model_for
 from deepseek_response import DeepSeekResponseError, extract_message_content
+from deepseek_run_manifest import write_run_manifest
+from review_context import write_review_context
 
 
 def default_chapter_path(chapter: str) -> Path:
@@ -45,6 +47,8 @@ def validate_input_path(path: Path, chapter: str) -> Path:
 
 def write_manifest(chapter: str, chapter_path: Path) -> None:
     context_path = ROOT / "state" / "context_pack" / f"{chapter}.md"
+    review_context_md = ROOT / "state" / "context_pack" / f"{chapter}_review_context.md"
+    review_context_json = ROOT / "state" / "context_pack" / f"{chapter}_review_context.json"
     manifest_path = ROOT / "reviews" / chapter / "review_manifest.json"
     current = {}
     if manifest_path.exists():
@@ -52,6 +56,8 @@ def write_manifest(chapter: str, chapter_path: Path) -> None:
     inputs = []
     for path in (
         context_path.resolve(),
+        review_context_md.resolve(),
+        review_context_json.resolve(),
         chapter_path.resolve(),
         (ROOT / "state" / "project_reader_promise.json").resolve(),
         (ROOT / "state" / "derived" / "personality" / "protagonist.json").resolve(),
@@ -70,7 +76,11 @@ def write_manifest(chapter: str, chapter_path: Path) -> None:
     current["deepseek"] = {
         "recorded_at": now_iso(),
         "inputs": inputs,
-        "forbidden_inputs": ["reviews/{chapter}/codex_integrated_review.md"],
+        "forbidden_inputs": [
+            "reviews/{chapter}/codex_integrated_review.md",
+            "reviews/{chapter}/codex_anti_ai_review.md",
+            "reviews/{chapter}/codex_anti_ai_review.json",
+        ],
     }
     write_text(manifest_path, json.dumps(current, ensure_ascii=False, indent=2) + "\n")
 
@@ -94,6 +104,8 @@ def main() -> int:
         return 1
 
     context_path = ROOT / "state" / "context_pack" / f"{args.chapter}.md"
+    review_context_md = ROOT / "state" / "context_pack" / f"{args.chapter}_review_context.md"
+    review_context_json = ROOT / "state" / "context_pack" / f"{args.chapter}_review_context.json"
     chapter_path = Path(args.input) if args.input else default_chapter_path(args.chapter)
     if not chapter_path.is_absolute():
         chapter_path = ROOT / chapter_path
@@ -109,8 +121,11 @@ def main() -> int:
     if not chapter_path.exists():
         print(f"ERROR: missing review input: {chapter_path.relative_to(ROOT)}", file=sys.stderr)
         return 1
+    if not review_context_md.exists() or not review_context_json.exists():
+        write_review_context(args.chapter)
 
     context = read_text(context_path)
+    review_context = read_text(review_context_md)
     chapter_text = read_text(chapter_path)
     system = (
         "你是独立审查模型。你不能读取 Codex review，也不能修改仓库文件。"
@@ -138,6 +153,10 @@ def main() -> int:
 
 {context}
 
+# Review Context
+
+{review_context}
+
 # Chapter
 
 {chapter_text}
@@ -156,9 +175,32 @@ def main() -> int:
     }
 
     run_dir = ROOT / "external_runs" / "deepseek" / args.chapter
-    write_text(run_dir / "review.prompt.md", f"# System\n\n{system}\n\n# User\n\n{user}\n")
+    prompt_path = run_dir / "review.prompt.md"
+    raw_path = run_dir / "review.raw.json"
+    out = ROOT / "reviews" / args.chapter / "deepseek_integrated_review.md"
+    input_paths = [
+        context_path,
+        review_context_md,
+        review_context_json,
+        chapter_path,
+        ROOT / "state" / "project_reader_promise.json",
+        ROOT / "state" / "derived" / "personality" / "protagonist.json",
+        ROOT / "state" / "derived" / "protagonist_progression.json",
+        ROOT / "state" / "derived" / "world_reveal_ledger.json",
+        ROOT / "state" / "derived" / "suspense_ledger.json",
+    ]
+    write_text(prompt_path, f"# System\n\n{system}\n\n# User\n\n{user}\n")
     if args.dry_run:
-        print(f"OK: dry run wrote {(run_dir / 'review.prompt.md').relative_to(ROOT)}")
+        write_run_manifest(
+            chapter=args.chapter,
+            kind="review",
+            model=args.model,
+            dry_run=True,
+            prompt_path=prompt_path,
+            input_paths=input_paths,
+            isolation_attestation="Dry run only wrote the DeepSeek review prompt; no review artifact was produced.",
+        )
+        print(f"OK: dry run wrote {prompt_path.relative_to(ROOT)}")
         return 0
 
     api_key = os.environ.get("DEEPSEEK_API_KEY")
@@ -181,10 +223,20 @@ def main() -> int:
         print(f"ERROR: invalid DeepSeek response: {exc}", file=sys.stderr)
         return 1
 
-    write_manifest(args.chapter, chapter_path)
-    write_text(run_dir / "review.raw.json", json.dumps(response, ensure_ascii=False, indent=2))
-    out = ROOT / "reviews" / args.chapter / "deepseek_integrated_review.md"
+    write_text(raw_path, json.dumps(response, ensure_ascii=False, indent=2))
     write_text(out, content + "\n")
+    write_manifest(args.chapter, chapter_path)
+    write_run_manifest(
+        chapter=args.chapter,
+        kind="review",
+        model=args.model,
+        dry_run=False,
+        prompt_path=prompt_path,
+        input_paths=input_paths,
+        raw_response_path=raw_path,
+        output_path=out,
+        isolation_attestation="DeepSeek review was given only the official/candidate chapter and context inputs recorded here.",
+    )
     print(f"OK: wrote {out.relative_to(ROOT)}")
     return 0
 
