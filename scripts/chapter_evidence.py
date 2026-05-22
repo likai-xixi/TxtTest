@@ -1276,6 +1276,138 @@ def validate_chapter_shape(chapter: str) -> list[str]:
     return failures
 
 
+def validate_prose_risk(chapter: str) -> list[str]:
+    json_path = ROOT / "reviews" / chapter / "prose_risk.json"
+    md_path = ROOT / "reviews" / chapter / "prose_risk.md"
+    failures: list[str] = []
+    if not md_path.exists() or not read_text(md_path).strip():
+        failures.append(f"{chapter}: missing prose risk review {md_path.relative_to(ROOT)}")
+    else:
+        md_text = read_text(md_path)
+        md_status = status_value(md_text)
+        if md_status not in {"CLEAR", "WARNING", "BLOCKED", "ACCEPTED_BY_HUMAN"}:
+            failures.append(f"{chapter}: prose_risk.md status is {md_status or 'MISSING'}")
+        if md_status in {"CLEAR", "WARNING", "BLOCKED"}:
+            if not review_bound_to_current_chapter(md_text, official_chapter_path(chapter)):
+                failures.append(f"{chapter}: prose_risk.md official chapter hash is missing or stale")
+            if not review_hash_is_current(md_text, md_path):
+                failures.append(f"{chapter}: prose_risk.md review_sha256 is missing or stale")
+        if md_status == "ACCEPTED_BY_HUMAN" and not accepted_by_human_is_current(md_text, md_path, official_chapter_path(chapter)):
+            failures.append(f"{chapter}: prose_risk.md human acceptance is missing or stale")
+    if not json_path.exists():
+        return failures + [f"{chapter}: missing prose risk review {json_path.relative_to(ROOT)}"]
+    data = read_json(json_path, {})
+    if not isinstance(data, dict):
+        return failures + [f"{chapter}: prose_risk.json must be a JSON object"]
+    failures.extend(validate_structured_official_binding(chapter, json_path, data))
+    brief_ref = data.get("official_brief")
+    failures.extend(validate_current_file_ref(brief_ref, ROOT / "outline" / "chapter_briefs" / f"{chapter}.md", f"{chapter}: prose_risk official_brief"))
+    failures.extend(input_hash_failures(chapter, json_path, data))
+    status = str(data.get("status", "")).strip().upper()
+    if status not in {"CLEAR", "WARNING", "BLOCKED", "ACCEPTED_BY_HUMAN"}:
+        failures.append(f"{chapter}: prose_risk.json status is {status or 'MISSING'}")
+    if status == "ACCEPTED_BY_HUMAN":
+        failures.extend(validate_structured_human_acceptance(chapter, json_path, data))
+    if status == "BLOCKED":
+        failures.append(f"{chapter}: prose_risk.json is BLOCKED")
+    categories = data.get("categories")
+    required = {
+        "subject_repetition",
+        "process_bloat",
+        "protagonist_invulnerable",
+        "flat_side_character",
+        "homogeneous_hook",
+        "qa_dialogue",
+        "anomaly_density",
+    }
+    if not isinstance(categories, dict):
+        failures.append(f"{chapter}: prose_risk.json missing categories")
+    else:
+        for key in sorted(required - set(categories)):
+            failures.append(f"{chapter}: prose_risk.json missing category {key}")
+        for key, item in categories.items():
+            if not isinstance(item, dict):
+                failures.append(f"{chapter}: prose_risk.json category {key} is malformed")
+                continue
+            for field in ("status", "severity", "issue", "evidence_quotes", "revision_actions", "human_acceptance_allowed"):
+                if field not in item:
+                    failures.append(f"{chapter}: prose_risk.json category {key} missing {field}")
+            severity = str(item.get("severity", "")).upper()
+            category_status = str(item.get("status", "")).upper()
+            if status != "ACCEPTED_BY_HUMAN" and category_status == "BLOCKED":
+                failures.append(f"{chapter}: prose_risk.json category {key} is BLOCKED")
+            if status != "ACCEPTED_BY_HUMAN" and severity in {"P0", "P1"} and category_status != "CLEAR":
+                failures.append(f"{chapter}: prose_risk.json category {key} has unresolved {severity}")
+            if key == "anomaly_density" and category_status == "BLOCKED":
+                failures.append(f"{chapter}: prose_risk anomaly_density cannot be accepted without authorization rewrite")
+    quotes = collect_structured_quotes(data)
+    if not quotes:
+        failures.append(f"{chapter}: prose_risk.json has no evidence quotes")
+    elif not any_quote_matches_official(quotes, official_chapter_path(chapter)):
+        failures.append(f"{chapter}: prose_risk.json evidence quotes do not match the official chapter")
+    return failures
+
+
+def validate_prose_risk_index(chapter: str) -> list[str]:
+    path = ROOT / "state" / "derived" / "prose_risk" / "latest.json"
+    if not path.exists():
+        return [f"{chapter}: missing prose risk index; run prose-risk-index --to {chapter} --write"]
+    data = read_json(path, {})
+    if not isinstance(data, dict):
+        return [f"{chapter}: prose risk index latest.json must be a JSON object"]
+    failures: list[str] = []
+    through = str(data.get("through", ""))
+    try:
+        through_number = chapter_number(through)
+    except ValueError:
+        through_number = -1
+    if through[:3] != chapter[:3] or through_number < chapter_number(chapter):
+        failures.append(f"{chapter}: prose risk index is stale; expected through {chapter} or later")
+    status = str(data.get("status", "")).strip().upper()
+    if status == "BLOCKED":
+        failures.append(f"{chapter}: prose risk index is BLOCKED")
+    elif status not in {"READY", "WARNING"}:
+        failures.append(f"{chapter}: prose risk index status is {status or 'MISSING'}")
+    blockers = data.get("blockers")
+    if isinstance(blockers, list) and blockers:
+        failures.extend(f"{chapter}: prose risk blocker: {item}" for item in blockers[:10])
+    failures.extend(
+        validate_current_file_ref(
+            data.get("source_event_ledger"),
+            ROOT / "state" / "event_ledger.jsonl",
+            f"{chapter}: prose risk source_event_ledger",
+        )
+    )
+    for item in data.get("chapters", []):
+        if not isinstance(item, dict):
+            failures.append(f"{chapter}: prose risk index chapter entry is malformed")
+            continue
+        item_chapter = str(item.get("chapter", ""))
+        if not item_chapter:
+            continue
+        try:
+            if chapter_number(item_chapter) > chapter_number(chapter):
+                continue
+        except ValueError:
+            continue
+        failures.extend(
+            validate_current_file_ref(
+                item.get("prose_risk"),
+                ROOT / "reviews" / item_chapter / "prose_risk.json",
+                f"{chapter}: prose risk {item_chapter} prose_risk",
+            )
+        )
+        if "chapter_shape" in item:
+            failures.extend(
+                validate_current_file_ref(
+                    item.get("chapter_shape"),
+                    ROOT / "reviews" / item_chapter / "chapter_shape.json",
+                    f"{chapter}: prose risk {item_chapter} chapter_shape",
+                )
+            )
+    return failures
+
+
 def brief_path(chapter: str) -> Path:
     return ROOT / "outline" / "chapter_briefs" / f"{chapter}.md"
 
@@ -1774,8 +1906,10 @@ def chapter_evidence_failures(chapter: str, *, include_revision_closure: bool = 
         failures.extend(validate_revision_closure(chapter))
     failures.extend(validate_gray_consequence(chapter))
     failures.extend(validate_chapter_shape(chapter))
+    failures.extend(validate_prose_risk(chapter))
     failures.extend(validate_reader_reward_gate(chapter))
     failures.extend(validate_reader_reward_index(chapter))
+    failures.extend(validate_prose_risk_index(chapter))
     failures.extend(validate_reader_risk_index(chapter))
     failures.extend(validate_long_health(chapter))
 

@@ -1157,6 +1157,8 @@ def command_close(args: argparse.Namespace) -> int:
         run_script("review_arbitration.py", args.chapter, check=False)
         run_script("gray_consequence.py", args.chapter, "--write", check=False)
         run_script("chapter_shape_check.py", args.chapter, "--write", check=False)
+        run_script("prose_risk_check.py", args.chapter, "--write", check=False)
+        run_script("prose_risk_index.py", "--to", args.chapter, "--write", check=False)
         run_script("reader_reward_check.py", "--chapter", args.chapter, "--write", check=False)
         run_script("reader_reward_index.py", "--write", check=False)
         run_script("reader_risk_index.py", "--to", args.chapter, "--write", check=False)
@@ -1397,6 +1399,28 @@ def command_dialogue_function_check(args: argparse.Namespace) -> int:
     if args.no_write:
         script_args.append("--no-write")
     return run_script("dialogue_function_check.py", *script_args, check=False)
+
+
+def command_prose_risk_check(args: argparse.Namespace) -> int:
+    script_args = [args.chapter]
+    if args.write:
+        script_args.append("--write")
+    if args.json:
+        script_args.append("--json")
+    if args.no_write:
+        script_args.append("--no-write")
+    return run_script("prose_risk_check.py", *script_args, check=False)
+
+
+def command_prose_risk_index(args: argparse.Namespace) -> int:
+    script_args: list[str] = []
+    if args.to:
+        script_args.extend(["--to", args.to])
+    if args.write:
+        script_args.append("--write")
+    if args.json:
+        script_args.append("--json")
+    return run_script("prose_risk_index.py", *script_args, check=False)
 
 
 def command_emotion_relationship_gate(args: argparse.Namespace) -> int:
@@ -2512,6 +2536,19 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--json", action="store_true")
     p.add_argument("--no-write", action="store_true")
     p.set_defaults(func=command_dialogue_function_check)
+
+    p = sub.add_parser("prose-risk-check", help="Run seven-prose-risk review for a chapter.")
+    p.add_argument("chapter")
+    p.add_argument("--write", action="store_true")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--no-write", action="store_true")
+    p.set_defaults(func=command_prose_risk_check)
+
+    p = sub.add_parser("prose-risk-index", help="Build the cross-chapter seven-prose-risk index.")
+    p.add_argument("--to", default=None)
+    p.add_argument("--write", action="store_true")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=command_prose_risk_index)
 
     p = sub.add_parser("emotion-relationship-gate", help="Check chapter emotion and relationship continuity.")
     p.add_argument("chapter")

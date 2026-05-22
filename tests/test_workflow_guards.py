@@ -2199,6 +2199,112 @@ def write_reader_risk_index(repo: Path, chapter: str) -> None:
     write(repo, "state/derived/reader_risk/latest.md", f"# Reader Risk Index\n\nstatus: READY\nthrough: {chapter}\n")
 
 
+PROSE_RISK_CATEGORIES = (
+    "subject_repetition",
+    "process_bloat",
+    "protagonist_invulnerable",
+    "flat_side_character",
+    "homogeneous_hook",
+    "qa_dialogue",
+    "anomaly_density",
+)
+
+
+def prose_risk_category(quote: str, *, status: str = "CLEAR", severity: str = "P3", issue: str = "fixture clear", allowed: bool = False) -> dict:
+    return {
+        "status": status,
+        "severity": severity,
+        "issue": issue,
+        "evidence_quotes": [quote],
+        "revision_actions": ["none"] if status == "CLEAR" else ["revise fixture risk"],
+        "human_acceptance_allowed": allowed,
+        "metrics": {},
+    }
+
+
+def write_prose_risk(repo: Path, chapter: str, *, status: str = "CLEAR", overrides: dict | None = None, hook_type: str = "choice") -> None:
+    volume = chapter[:3]
+    chapter_rel = f"chapters/{volume}/c{int(chapter[-3:]):03d}.md"
+    brief_rel = f"outline/chapter_briefs/{chapter}.md"
+    quote = next((line.strip() for line in (repo / chapter_rel).read_text(encoding="utf-8").splitlines() if line.strip()), "")
+    categories = {key: prose_risk_category(quote) for key in PROSE_RISK_CATEGORIES}
+    if overrides:
+        for key, value in overrides.items():
+            categories[key].update(value)
+    blockers = [f"{key}: {item['issue']}" for key, item in categories.items() if item.get("status") == "BLOCKED"]
+    warnings = [f"{key}: {item['issue']}" for key, item in categories.items() if item.get("status") == "WARNING"]
+    report = {
+        "schema_version": 1,
+        "chapter": chapter,
+        "generated_at": "2000-01-01T00:00:00+00:00",
+        "status": status,
+        "official_chapter": {"path": chapter_rel, "sha256": file_sha(repo, chapter_rel)},
+        "official_brief": {"path": brief_rel, "sha256": file_sha(repo, brief_rel)},
+        "input_hashes": [
+            {"path": chapter_rel, "sha256": file_sha(repo, chapter_rel)},
+            {"path": brief_rel, "sha256": file_sha(repo, brief_rel)},
+        ],
+        "categories": categories,
+        "metrics": {"ending_hook_type": hook_type},
+        "blockers": blockers,
+        "warnings": warnings,
+        "human_acceptance": None,
+    }
+    for rel_path in (f"reviews/{chapter}/dialogue_function.json", f"reviews/{chapter}/chapter_shape.json"):
+        if (repo / rel_path).exists():
+            report["input_hashes"].append({"path": rel_path, "sha256": file_sha(repo, rel_path)})
+    write(repo, f"reviews/{chapter}/prose_risk.json", json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+    md = (
+        f"# Prose Risk Review: {chapter}\n\n"
+        f"status: {status}\n"
+        f"official_chapter_sha256: {file_sha(repo, chapter_rel)}\n"
+        "review_sha256:\n\n"
+        "## Evidence Quotes\n\n"
+        f"- {quote}\n"
+    )
+    write(repo, f"reviews/{chapter}/prose_risk.md", bind_review_hash(md))
+
+
+def write_prose_risk_index(repo: Path, chapter: str, *, status: str = "READY") -> None:
+    entries = []
+    for number in range(1, int(chapter[-3:]) + 1):
+        item_chapter = f"{chapter[:3]}_c{number:03d}"
+        prose_rel = f"reviews/{item_chapter}/prose_risk.json"
+        if not (repo / prose_rel).exists():
+            continue
+        prose = json.loads((repo / prose_rel).read_text(encoding="utf-8"))
+        shape_rel = f"reviews/{item_chapter}/chapter_shape.json"
+        entry = {
+            "chapter": item_chapter,
+            "prose_risk": {"path": prose_rel, "sha256": file_sha(repo, prose_rel), "exists": True},
+            "category_flags": {key: False for key in PROSE_RISK_CATEGORIES},
+            "hook_type": prose.get("metrics", {}).get("ending_hook_type", "choice"),
+            "hook_repeat_run": 1,
+            "blockers": [],
+            "warnings": [],
+        }
+        if (repo / shape_rel).exists():
+            entry["chapter_shape"] = {"path": shape_rel, "sha256": file_sha(repo, shape_rel), "exists": True}
+        entries.append(entry)
+    report = {
+        "schema_version": 1,
+        "generated_at": "2000-01-01T00:00:00+00:00",
+        "status": status,
+        "through": chapter,
+        "chapters_checked": int(chapter[-3:]),
+        "window": 3,
+        "category_statuses": {key: "READY" for key in PROSE_RISK_CATEGORIES},
+        "category_blockers": {key: [] for key in PROSE_RISK_CATEGORIES},
+        "category_warnings": {key: [] for key in PROSE_RISK_CATEGORIES},
+        "chapters": entries,
+        "source_event_ledger": {"path": "state/event_ledger.jsonl", "sha256": file_sha(repo, "state/event_ledger.jsonl"), "exists": True},
+        "blockers": [],
+        "warnings": [],
+    }
+    write(repo, "state/derived/prose_risk/latest.json", json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+    write(repo, "state/derived/prose_risk/latest.md", f"# Prose Risk Index\n\nstatus: {status}\nthrough: {chapter}\n")
+
+
 def write_long_health_ready(repo: Path, chapter: str, number: int) -> None:
     rolling_refs = []
     if number >= 10:
@@ -2572,6 +2678,8 @@ def write_complete_chapter_evidence(repo: Path, chapter: str, number: int) -> No
     write_revision_plan(repo, chapter)
     write_gray_consequence(repo, chapter)
     write_chapter_shape(repo, chapter)
+    write_prose_risk(repo, chapter)
+    write_prose_risk_index(repo, chapter)
     write_reader_reward_gate(repo, chapter)
     write_reader_reward_index(repo)
     write_reader_feedback(repo, chapter)
@@ -2604,6 +2712,7 @@ def write_human_events(repo: Path, count: int) -> None:
             )
         )
     write(repo, "state/event_ledger.jsonl", "\n".join(lines) + "\n")
+    write_prose_risk_index(repo, f"v01_c{count:03d}")
     if (repo / "state/project_reader_promise.json").exists():
         write_reader_risk_index(repo, f"v01_c{count:03d}")
         if count >= 10:
@@ -2743,6 +2852,8 @@ class WorkflowGuardTests(unittest.TestCase):
                 "gray_consequence.json",
                 "chapter_shape.md",
                 "chapter_shape.json",
+                "prose_risk.md",
+                "prose_risk.json",
                 "reader_reward_gate.md",
                 "reader_reward_gate.json",
                 "reader_feedback.md",
@@ -3636,6 +3747,9 @@ class WorkflowGuardTests(unittest.TestCase):
             self.assertIn("# Editor Audit Report", result.stdout)
             self.assertIn("core-freeze-check: NOT_READY", result.stdout)
             self.assertIn("brief-check:", result.stdout)
+            self.assertIn("prose-risk-check:", result.stdout)
+            self.assertIn("prose-risk-index:", result.stdout)
+            self.assertIn("- prose_risk:", result.stdout)
             self.assertIn("next_prompt:", result.stdout)
             self.assertIn("deepseek-preflight", result.stdout)
             self.assertIn("code: CORE_FREEZE_CHECK_NOT_READY", result.stdout)
@@ -5159,6 +5273,8 @@ print("OK: stub deepseek idea")
             write_revision_plan(repo, "v01_c001")
             write_gray_consequence(repo, "v01_c001")
             write_chapter_shape(repo, "v01_c001")
+            write_prose_risk(repo, "v01_c001")
+            write_prose_risk_index(repo, "v01_c001")
             write_reader_reward_gate(repo, "v01_c001")
             write_reader_reward_index(repo)
             write_reader_feedback(repo, "v01_c001")
@@ -6048,6 +6164,48 @@ print("OK: stub deepseek idea")
 
             self.assertNotEqual(stale.returncode, 0)
             self.assertIn("reader_reward_gate.json official chapter hash is stale", stale.stdout)
+
+    def test_chapter_evidence_rejects_stale_prose_risk_sources(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_complete_chapter_evidence(repo, "v01_c001", 1)
+            with (repo / "state/event_ledger.jsonl").open("a", encoding="utf-8", newline="\n") as handle:
+                handle.write(
+                    json.dumps(
+                        {
+                            "event_id": "v01_c001_late_event",
+                            "chapter": "v01_c001",
+                            "type": "chapter_anchor",
+                            "fact": "late editor event",
+                            "evidence_quote": "Official chapter v01_c001",
+                            "consequence": "index must refresh",
+                            "verified_by": "human",
+                            "importance": "P1",
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+                )
+
+            result = run(repo, "scripts/novel.py", "chapter-evidence", "v01_c001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("prose risk source_event_ledger hash is stale", result.stdout)
+
+    def test_chapter_evidence_rejects_prose_risk_without_evidence_quotes(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_complete_chapter_evidence(repo, "v01_c001", 1)
+            path = repo / "reviews/v01_c001/prose_risk.json"
+            data = json.loads(path.read_text(encoding="utf-8"))
+            for category in data["categories"].values():
+                category["evidence_quotes"] = []
+            path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+            result = run(repo, "scripts/novel.py", "chapter-evidence", "v01_c001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("prose_risk.json has no evidence quotes", result.stdout)
 
     def test_reader_reward_index_blocks_core_silence_over_threshold(self) -> None:
         with copy_repo() as temp:
@@ -7387,9 +7545,15 @@ print("OK: stub deepseek idea")
             data = json.loads(result.stdout)
             step_names = [item["name"] for item in data["steps"]]
             self.assertIn("long-health", step_names)
+            self.assertIn("prose-risk-check", step_names)
+            self.assertIn("prose-risk-index", step_names)
             self.assertIn("reader-risk-index", step_names)
+            self.assertLess(step_names.index("chapter-shape-check"), step_names.index("prose-risk-check"))
+            self.assertLess(step_names.index("prose-risk-check"), step_names.index("prose-risk-index"))
+            self.assertLess(step_names.index("prose-risk-index"), step_names.index("reader-reward-check"))
             self.assertLess(step_names.index("reader-reward-index"), step_names.index("long-health"))
             self.assertLess(step_names.index("long-health"), step_names.index("chapter-evidence"))
+            self.assertLess(step_names.index("prose-risk-index"), step_names.index("chapter-evidence"))
             self.assertLess(step_names.index("reader-risk-index"), step_names.index("chapter-evidence"))
 
     def test_receive_chapter_resume_reruns_stale_reader_risk_index(self) -> None:
@@ -7416,9 +7580,12 @@ print("OK: stub deepseek idea")
 
             result = run(repo, "scripts/novel.py", "receive-chapter", "v01_c001", "--resume")
             report = json.loads((repo / "reviews/v01_c001/receive_chapter.json").read_text(encoding="utf-8"))
+            prose_step = next(step for step in report["steps"] if step["name"] == "prose-risk-index")
             risk_step = next(step for step in report["steps"] if step["name"] == "reader-risk-index")
 
             self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(prose_step["status"], "READY")
+            self.assertIn("resume reran because prose-risk-index source_event_ledger hash changed", prose_step["output"])
             self.assertEqual(risk_step["status"], "READY")
             self.assertIn("resume reran because reader-risk-index source_event_ledger hash changed", risk_step["output"])
 
@@ -7574,6 +7741,135 @@ print("OK: stub deepseek idea")
 
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn("status: WARNING", result.stdout)
+
+    def test_candidate_style_requirements_includes_prose_risk_budget(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_complete_chapter_evidence(repo, "v01_c001", 1)
+            write_ready_style_contract(repo)
+
+            result = run(repo, "scripts/candidate_style_requirements.py", "--chapter", "v01_c001")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("# This Chapter Prose Risk Budget", result.stdout)
+            self.assertIn("Q&A", result.stdout)
+            self.assertIn("brief", result.stdout)
+
+    def test_prose_risk_check_not_ready_without_official_chapter(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            result = run(repo, "scripts/novel.py", "prose-risk-check", "v01_c001", "--json")
+
+            self.assertNotEqual(result.returncode, 0)
+            data = json.loads(result.stdout)
+            self.assertEqual(data["status"], "NOT_READY")
+            self.assertIn("missing non-empty official chapter", data["blockers"][0])
+
+    def test_prose_risk_check_blocks_unauthorized_anomaly_breaker(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            chapter = "v01_c001"
+            write(repo, f"outline/chapter_briefs/{chapter}.md", "# Brief\n\n允许新增元素：普通场景细节；不得使用机制破局。\n")
+            write(repo, "chapters/v01/c001.md", "# 异常破局\n\n许临用 L3 规则破解了门外异常，局势立刻扭转。\n")
+
+            result = run(repo, "scripts/novel.py", "prose-risk-check", chapter, "--json")
+
+            self.assertNotEqual(result.returncode, 0)
+            data = json.loads(result.stdout)
+            self.assertEqual(data["status"], "BLOCKED")
+            self.assertEqual(data["categories"]["anomaly_density"]["severity"], "P0")
+            self.assertFalse(data["categories"]["anomaly_density"]["human_acceptance_allowed"])
+
+    def test_prose_risk_check_allows_qa_with_power_or_emotion_change(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            chapter = "v01_c001"
+            write(repo, f"outline/chapter_briefs/{chapter}.md", COMPLETE_BRIEF.format(chapter=chapter))
+            write(
+                repo,
+                "chapters/v01/c001.md",
+                "# 窗口问答\n\n"
+                "“你看见了什么？”许临问。\n"
+                "“我可以说，但你先把记录交给我。”窗口人员反问。\n"
+                "“为什么？”\n"
+                "“因为刚才三秒沉默以后，权力已经换边了。”\n"
+                "许临判断错了顺序，只能先求助同事，承担信任风险。\n",
+            )
+
+            result = run(repo, "scripts/novel.py", "prose-risk-check", chapter, "--json")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            data = json.loads(result.stdout)
+            self.assertNotEqual(data["categories"]["qa_dialogue"]["status"], "BLOCKED")
+
+    def test_prose_risk_index_warmup_repeated_hook_only_warns(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            for number in range(1, 4):
+                chapter = f"v01_c{number:03d}"
+                write(repo, f"outline/chapter_briefs/{chapter}.md", COMPLETE_BRIEF.format(chapter=chapter))
+                write(repo, f"chapters/v01/c{number:03d}.md", f"# 重复尾声\n\nOfficial chapter {chapter} ends with a file.\n")
+                write_prose_risk(
+                    repo,
+                    chapter,
+                    status="WARNING",
+                    hook_type="new_file",
+                    overrides={"homogeneous_hook": {"status": "WARNING", "severity": "P2", "issue": "repeated file hook", "human_acceptance_allowed": True}},
+                )
+
+            result = run(repo, "scripts/novel.py", "prose-risk-index", "--to", "v01_c003", "--write")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("status: WARNING", result.stdout)
+
+    def test_prose_risk_index_blocks_repeated_hook_from_chapter_six(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            for number in range(1, 7):
+                chapter = f"v01_c{number:03d}"
+                write(repo, f"outline/chapter_briefs/{chapter}.md", COMPLETE_BRIEF.format(chapter=chapter))
+                write(repo, f"chapters/v01/c{number:03d}.md", f"# 重复尾声\n\nOfficial chapter {chapter} ends with a file.\n")
+                write_prose_risk(
+                    repo,
+                    chapter,
+                    status="WARNING",
+                    hook_type="new_file",
+                    overrides={"homogeneous_hook": {"status": "WARNING", "severity": "P2", "issue": "repeated file hook", "human_acceptance_allowed": True}},
+                )
+
+            result = run(repo, "scripts/novel.py", "prose-risk-index", "--to", "v01_c006", "--write")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("status: BLOCKED", result.stdout)
+            self.assertIn("homogeneous_hook", result.stdout)
+
+    def test_prose_risk_index_blocks_consecutive_no_cost_from_chapter_six(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            for number in range(1, 7):
+                chapter = f"v01_c{number:03d}"
+                write(repo, f"outline/chapter_briefs/{chapter}.md", COMPLETE_BRIEF.format(chapter=chapter))
+                write(repo, f"chapters/v01/c{number:03d}.md", f"# 无代价推进\n\nOfficial chapter {chapter} keeps the protagonist clean.\n")
+                write_prose_risk(
+                    repo,
+                    chapter,
+                    status="WARNING",
+                    hook_type=f"choice_{number}",
+                    overrides={
+                        "protagonist_invulnerable": {
+                            "status": "WARNING",
+                            "severity": "P2",
+                            "issue": "no visible protagonist cost",
+                            "human_acceptance_allowed": True,
+                        }
+                    },
+                )
+
+            result = run(repo, "scripts/novel.py", "prose-risk-index", "--to", "v01_c006", "--write")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("status: BLOCKED", result.stdout)
+            self.assertIn("protagonist_invulnerable", result.stdout)
 
     def test_long_health_blocks_fatigued_recent_five_chapter_window(self) -> None:
         with copy_repo() as temp:

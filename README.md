@@ -204,6 +204,8 @@ python scripts/novel.py codex-review-start v01_c001
 python scripts/novel.py review v01_c001 --deepseek
 python scripts/novel.py ai-taste-check v01_c001
 python scripts/novel.py dialogue-function-check v01_c001
+python scripts/novel.py prose-risk-check v01_c001 --write
+python scripts/novel.py prose-risk-index --to v01_c001 --write
 python scripts/novel.py codex-anti-ai-review-start v01_c001
 python scripts/novel.py deepseek-anti-ai-review v01_c001
 python scripts/novel.py evidence v01_c001
@@ -235,6 +237,8 @@ Style and series-feel evidence:
 - `python scripts/novel.py style-check {chapter}` writes `reviews/{chapter}/style_metrics.json`.
 - `python scripts/novel.py ai-taste-check {chapter}` writes `reviews/{chapter}/ai_taste.md` and `ai_taste.json`.
 - `python scripts/novel.py dialogue-function-check {chapter}` writes `reviews/{chapter}/dialogue_function.md` and `dialogue_function.json`.
+- `python scripts/novel.py prose-risk-check {chapter} --write` writes `reviews/{chapter}/prose_risk.md/json` for the seven finished-prose risks: subject repetition, process bloat, invulnerable protagonist, flat side characters, homogeneous hooks, Q&A dialogue, and anomaly density.
+- `python scripts/novel.py prose-risk-index --to {chapter} --write` writes `state/derived/prose_risk/latest.md/json`; chapters 1-3 warn, chapters 4-5 carry next-chapter obligations, and chapter 6+ repeated blockers stop Ship.
 - `python scripts/novel.py review-context {chapter} --write` writes review-only structured state and key quotes; it is for reviewers and excludes previous chapters as full text.
 - `python scripts/novel.py codex-anti-ai-review-start {chapter}` writes an isolated Codex subagent prompt and manifest; the subagent must write `reviews/{chapter}/codex_anti_ai_review.md/json`.
 - `python scripts/novel.py deepseek-anti-ai-review {chapter}` writes `reviews/{chapter}/deepseek_anti_ai_review.md` and `deepseek_anti_ai_review.json`; this is required Ship evidence, not optional style advice.
@@ -259,6 +263,8 @@ python scripts/novel.py revision-plan v01_c001
 python scripts/novel.py accept-review v01_c001 --artifact ai_taste --reason "intentional style"
 python scripts/novel.py gray-consequence v01_c001 --write
 python scripts/novel.py chapter-shape-check v01_c006 --write
+python scripts/novel.py prose-risk-check v01_c006 --write
+python scripts/novel.py prose-risk-index --to v01_c006 --write
 python scripts/novel.py reader-feedback summarize v01_c001
 python scripts/novel.py reader-risk-index --to v01_c010 --write --json
 python scripts/novel.py deepseek-manifest-check v01_c001 --kind anti_ai_review
@@ -271,11 +277,13 @@ DeepSeek review, anti-AI review, semantic reader review, and style review now re
 
 `semantic-reader-review` is a real Codex/DeepSeek LLM aggregate, not a keyword heuristic. First run `codex-semantic-reader-review-start`, complete the isolated Codex LLM review into `codex_semantic_reader_review.md/json`, then run `deepseek-semantic-reader-review` to produce `deepseek_semantic_reader_review.md/json` and its DeepSeek run manifest. The aggregate `semantic_reader_review.md/json` is accepted only when both source reviews are current, quote-bound, and clear.
 
-Revision plans, review arbitration, gray consequence reports, chapter-shape reports, emotion/relationship gates, semantic reader reviews, memorable-scene checks, reader-feedback summaries, reader-reward gates, and the cross-chapter `reader-risk-index` are part of the receive evidence chain. High-impact gray behavior must be covered by human-verified event/fact evidence. Chapter-shape repetition is advisory during warmup and hard from chapter 6 when it repeats the same shape. Reader feedback is reader-experience evidence only and never a canon or event-ledger source.
+Revision plans, review arbitration, gray consequence reports, chapter-shape reports, prose-risk reports, emotion/relationship gates, semantic reader reviews, memorable-scene checks, reader-feedback summaries, reader-reward gates, the cross-chapter `prose-risk-index`, and the cross-chapter `reader-risk-index` are part of the receive evidence chain. High-impact gray behavior must be covered by human-verified event/fact evidence. Chapter-shape and prose-risk repetition are advisory during warmup and hard from chapter 6 when they repeat the same risk shape. Reader feedback is reader-experience evidence only and never a canon or event-ledger source.
 
 Reader Promise v2 is the project-level reader-experience contract. `reader-promise-land --ready` must declare positive promises, negative failure modes, release-valve policy, protagonist agency policy, information clarity, language experience, structural efficiency, and R-level reward policy. Missing fields, placeholder arrays, and empty thresholds keep it out of `READY`.
 
 `reader-risk-index` aggregates pace, repetition, suspense, protagonist agency, worldview, perspective, language, and structural efficiency through a target chapter, including suspense age budgets for P0/P1 threads. `BLOCKED` reader risk blocks `chapter-evidence` and release audit; `WARNING` remains visible in `desk/status` and audit reports.
+
+`prose-risk-index` aggregates the seven finished-prose risks through a target chapter. `BLOCKED` prose risk blocks `chapter-evidence`; `WARNING` remains visible in `desk/status` and audit reports.
 
 ## Gate
 

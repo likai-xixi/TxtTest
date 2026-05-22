@@ -675,6 +675,20 @@ def reader_risk_snapshot() -> dict[str, Any]:
     }
 
 
+def prose_risk_snapshot() -> dict[str, Any]:
+    data = _latest_json("state/derived/prose_risk/latest.json")
+    if not data:
+        return {"status": "MISSING", "through": "", "blocker_count": 0, "warning_count": 0, "category_statuses": {}}
+    return {
+        "status": data.get("status", "UNKNOWN"),
+        "through": data.get("through", ""),
+        "blocker_count": len(data.get("blockers") or []),
+        "warning_count": len(data.get("warnings") or []),
+        "category_statuses": data.get("category_statuses", {}),
+        "path": "state/derived/prose_risk/latest.json",
+    }
+
+
 def long_health_snapshot() -> dict[str, Any]:
     data = _latest_json("state/derived/long_health/latest.json")
     if not data:
@@ -884,6 +898,11 @@ def dashboard(chapter: str | None = None) -> dict[str, Any]:
         risk_flags.append("reader_risk_blocked")
     elif reader_risk.get("status") == "WARNING":
         risk_flags.append("reader_risk_warning")
+    prose_risk = prose_risk_snapshot()
+    if prose_risk.get("status") == "BLOCKED":
+        risk_flags.append("prose_risk_blocked")
+    elif prose_risk.get("status") == "WARNING":
+        risk_flags.append("prose_risk_warning")
     long_health = long_health_snapshot()
     if long_health.get("status") == "BLOCKED":
         risk_flags.append("long_health_blocked")
@@ -909,7 +928,7 @@ def dashboard(chapter: str | None = None) -> dict[str, Any]:
         evidence_paths.append(rel(paths["codex_anti_ai"]))
     if paths["deepseek_anti_ai"].exists():
         evidence_paths.append(rel(paths["deepseek_anti_ai"]))
-    for runtime_path in ("state/derived/reader_risk/latest.json", "state/derived/long_health/latest.json"):
+    for runtime_path in ("state/derived/reader_risk/latest.json", "state/derived/prose_risk/latest.json", "state/derived/long_health/latest.json"):
         if (ROOT / runtime_path).exists():
             evidence_paths.append(runtime_path)
     idea_id = idea.get("idea_id")
@@ -953,6 +972,7 @@ def dashboard(chapter: str | None = None) -> dict[str, Any]:
         "advisory": advisory,
         "contracts": contracts,
         "reader_risk": reader_risk,
+        "prose_risk": prose_risk,
         "long_health": long_health,
         "gate_countdown": gate_countdown_snapshot(chapter),
         "evidence_paths": evidence_paths,

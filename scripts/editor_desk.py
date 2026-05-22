@@ -18,6 +18,7 @@ def bullet_list(items: list[str], fallback: str = "none") -> None:
 
 def dashboard_markdown(state: dict) -> str:
     risk = state.get("reader_risk", {})
+    prose = state.get("prose_risk", {})
     health = state.get("long_health", {})
     lines = [
         "# 总编台 Dashboard",
@@ -27,6 +28,7 @@ def dashboard_markdown(state: dict) -> str:
         f"- next: {state.get('human_action')}",
         f"- risk_flags: {', '.join(state.get('risk_flags', [])) or 'none'}",
         f"- reader_risk: {risk.get('status', 'UNKNOWN')} through {risk.get('through', '')} blockers={risk.get('blocker_count', 0)}",
+        f"- prose_risk: {prose.get('status', 'UNKNOWN')} through {prose.get('through', '')} blockers={prose.get('blocker_count', 0)}",
         f"- long_health: {health.get('status', 'UNKNOWN')} through {health.get('through', '')} blockers={health.get('rolling_blocker_count', 0)}",
         "",
         "## Gate Countdown",
@@ -41,11 +43,16 @@ def dashboard_markdown(state: dict) -> str:
 
 def dashboard_html(state: dict) -> str:
     risk = state.get("reader_risk", {})
+    prose = state.get("prose_risk", {})
     health = state.get("long_health", {})
     flags = state.get("risk_flags", [])
     category_rows = "".join(
         f"<tr><td>{html.escape(str(key))}</td><td>{html.escape(str(value))}</td></tr>"
         for key, value in (risk.get("category_statuses") or {}).items()
+    ) or "<tr><td colspan='2'>none</td></tr>"
+    prose_category_rows = "".join(
+        f"<tr><td>{html.escape(str(key))}</td><td>{html.escape(str(value))}</td></tr>"
+        for key, value in (prose.get("category_statuses") or {}).items()
     ) or "<tr><td colspan='2'>none</td></tr>"
     gate_rows = "".join(
         "<tr><td>Gate {gate}</td><td>{remaining}</td><td>{decision}</td></tr>".format(
@@ -77,11 +84,14 @@ def dashboard_html(state: dict) -> str:
   <div class="grid">
     <section class="panel"><h2>当前卡点</h2><p class="status">{html.escape(str(state.get('phase_id')))}</p><p>{html.escape(str(state.get('blocker')))}</p></section>
     <section class="panel"><h2>Reader Risk</h2><p class="status">{html.escape(str(risk.get('status', 'UNKNOWN')))}</p><p>through {html.escape(str(risk.get('through', '')))}, blockers {html.escape(str(risk.get('blocker_count', 0)))}</p></section>
+    <section class="panel"><h2>Prose Risk</h2><p class="status">{html.escape(str(prose.get('status', 'UNKNOWN')))}</p><p>through {html.escape(str(prose.get('through', '')))}, blockers {html.escape(str(prose.get('blocker_count', 0)))}</p></section>
     <section class="panel"><h2>Long Health</h2><p class="status">{html.escape(str(health.get('status', 'UNKNOWN')))}</p><p>through {html.escape(str(health.get('through', '')))}, blockers {html.escape(str(health.get('rolling_blocker_count', 0)))}</p></section>
     <section class="panel"><h2>风险标记</h2><p>{html.escape(', '.join(flags) or 'none')}</p></section>
   </div>
   <h2>Reader Risk Categories</h2>
   <table><tr><th>Category</th><th>Status</th></tr>{category_rows}</table>
+  <h2>Prose Risk Categories</h2>
+  <table><tr><th>Category</th><th>Status</th></tr>{prose_category_rows}</table>
   <h2>Gate Countdown</h2>
   <table><tr><th>Gate</th><th>Remaining</th><th>Decision</th></tr>{gate_rows}</table>
   <h2>Evidence Paths</h2>
@@ -172,14 +182,19 @@ def main() -> int:
     print(f"- 章末状态变化: {advisory.get('end_state_change', 'unknown')}")
     print(f"- 润色状态: {advisory.get('polish', 'unknown')}")
     print()
-    print("## Reader Risk / Long Health")
+    print("## Reader Risk / Prose Risk / Long Health")
     risk = state.get("reader_risk", {})
+    prose = state.get("prose_risk", {})
     health = state.get("long_health", {})
     print(f"- reader risk: {risk.get('status', 'UNKNOWN')} through {risk.get('through', '')} blockers={risk.get('blocker_count', 0)}")
+    print(f"- prose risk: {prose.get('status', 'UNKNOWN')} through {prose.get('through', '')} blockers={prose.get('blocker_count', 0)}")
     print(f"- long health: {health.get('status', 'UNKNOWN')} through {health.get('through', '')} blockers={health.get('rolling_blocker_count', 0)}")
     categories = risk.get("category_statuses") or {}
     if categories:
         print("- reader risk categories: " + ", ".join(f"{key}={value}" for key, value in categories.items()))
+    prose_categories = prose.get("category_statuses") or {}
+    if prose_categories:
+        print("- prose risk categories: " + ", ".join(f"{key}={value}" for key, value in prose_categories.items()))
     print()
     print("## Gates / Locks")
     print(f"- stop locks: {len(state['locks'])}")

@@ -94,7 +94,7 @@ def chapter_number_safe(chapter: Any) -> int:
 
 
 def derived_artifact_failures(name: str, primary: Path, chapter: str) -> list[str]:
-    if name not in {"reader-reward-index", "reader-risk-index", "long-health"}:
+    if name not in {"reader-reward-index", "reader-risk-index", "prose-risk-index", "long-health"}:
         return []
     data = read_json(primary, {}) if primary.exists() else {}
     if not isinstance(data, dict) or not data:
@@ -113,8 +113,20 @@ def derived_artifact_failures(name: str, primary: Path, chapter: str) -> list[st
     through = str(data.get("through") or "")
     if chapter_number_safe(through) < chapter_number_safe(chapter):
         failures.append(f"{name} only covers {through or 'none'}, not {chapter}")
-    failures.extend(current_ref_failures(data.get("source_reader_promise"), f"{name} source_reader_promise", ROOT / "state" / "project_reader_promise.json"))
     failures.extend(current_ref_failures(data.get("source_event_ledger"), f"{name} source_event_ledger", ROOT / "state" / "event_ledger.jsonl"))
+    if name == "prose-risk-index":
+        for item in data.get("chapters", []):
+            if not isinstance(item, dict):
+                failures.append("prose_risk chapter entry is not an object")
+                continue
+            item_chapter = item.get("chapter") or "chapter"
+            for key in ("prose_risk", "chapter_shape"):
+                if key in item:
+                    failures.extend(current_ref_failures(item.get(key), f"prose_risk {item_chapter} {key}"))
+        return failures
+
+    failures.extend(current_ref_failures(data.get("source_reader_promise"), f"{name} source_reader_promise", ROOT / "state" / "project_reader_promise.json"))
+
     if name == "reader-risk-index":
         for item in data.get("chapters", []):
             if not isinstance(item, dict):
@@ -172,6 +184,8 @@ def planned_steps(chapter: str, *, run_deepseek: bool) -> list[dict[str, Any]]:
         {"name": "review-arbitration", "command": ["review-arbitration", chapter], "writes": [f"reviews/{chapter}/review_arbitration.json"]},
         {"name": "gray-consequence", "command": ["gray-consequence", chapter, "--write"], "writes": [f"reviews/{chapter}/gray_consequence.json"]},
         {"name": "chapter-shape-check", "command": ["chapter-shape-check", chapter, "--write"], "writes": [f"reviews/{chapter}/chapter_shape.json"]},
+        {"name": "prose-risk-check", "command": ["prose-risk-check", chapter, "--write"], "writes": [f"reviews/{chapter}/prose_risk.json"]},
+        {"name": "prose-risk-index", "command": ["prose-risk-index", "--to", chapter, "--write"], "writes": ["state/derived/prose_risk/latest.json"]},
         {"name": "reader-reward-check", "command": ["reader-reward-check", chapter, "--write"], "writes": [f"reviews/{chapter}/reader_reward_gate.json"]},
         {"name": "reader-reward-index", "command": ["reader-reward-index", "--write"], "writes": ["state/derived/pacing/reader_reward_index.json"]},
         {"name": "reader-feedback", "command": ["reader-feedback", "summarize", chapter], "writes": [f"reviews/{chapter}/reader_feedback.json"]},
@@ -243,6 +257,8 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         ("review-arbitration", ["review-arbitration", args.chapter], review_dir / "review_arbitration.json"),
         ("gray-consequence", ["gray-consequence", args.chapter, "--write"], review_dir / "gray_consequence.json"),
         ("chapter-shape-check", ["chapter-shape-check", args.chapter, "--write"], review_dir / "chapter_shape.json"),
+        ("prose-risk-check", ["prose-risk-check", args.chapter, "--write"], review_dir / "prose_risk.json"),
+        ("prose-risk-index", ["prose-risk-index", "--to", args.chapter, "--write"], ROOT / "state" / "derived" / "prose_risk" / "latest.json"),
         ("reader-reward-check", ["reader-reward-check", args.chapter, "--write"], review_dir / "reader_reward_gate.json"),
         ("reader-reward-index", ["reader-reward-index", "--write"], ROOT / "state" / "derived" / "pacing" / "reader_reward_index.json"),
         *(

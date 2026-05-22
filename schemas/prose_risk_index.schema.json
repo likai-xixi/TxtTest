@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ProseRiskIndex",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "generated_at",
+    "status",
+    "through",
+    "chapters_checked",
+    "window",
+    "category_statuses",
+    "category_blockers",
+    "category_warnings",
+    "chapters",
+    "source_event_ledger",
+    "blockers",
+    "warnings"
+  ],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "generated_at": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["READY", "WARNING", "BLOCKED"] },
+    "through": { "type": "string", "pattern": "^v[0-9]{2}_c[0-9]{3}$" },
+    "chapters_checked": { "type": "integer" },
+    "window": { "type": "integer" },
+    "category_statuses": { "type": "object" },
+    "category_blockers": { "type": "object" },
+    "category_warnings": { "type": "object" },
+    "chapters": { "type": "array" },
+    "source_event_ledger": { "type": "object" },
+    "blockers": { "type": "array", "items": { "type": "string" } },
+    "warnings": { "type": "array", "items": { "type": "string" } }
+  }
+}

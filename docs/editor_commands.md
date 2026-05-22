@@ -189,16 +189,19 @@ python scripts/novel.py review-arbitration v01_c001
 python scripts/novel.py accept-review v01_c001 --artifact ai_taste --reason "intentional house style"
 python scripts/novel.py gray-consequence v01_c001 --write
 python scripts/novel.py chapter-shape-check v01_c006 --write
+python scripts/novel.py prose-risk-check v01_c006 --write
+python scripts/novel.py prose-risk-index --to v01_c006 --write --json
 python scripts/novel.py emotion-relationship-gate v01_c001 --write
 python scripts/novel.py semantic-reader-review v01_c001 --write
 python scripts/novel.py memorable-scene-check v01_c001 --write
 python scripts/novel.py reader-feedback add v01_c001 --reader reader_001 --target-reader "pilot reader" --stuck-point "..." --continue-reason "..." --promise-gap "..." --favorite-moment "..." --skip-moment "..." --next-click-intent "..." --protagonist-charm "..." --author-explanation-feel "..." --suspense-feel "..."
 python scripts/novel.py reader-feedback summarize v01_c001
+python scripts/novel.py prose-risk-index --to v01_c010 --write --json
 python scripts/novel.py reader-risk-index --to v01_c010 --write --json
 python scripts/novel.py deepseek-manifest-check v01_c001 --kind anti_ai_review
 ```
 
-`receive-chapter` is an orchestrator, not an auto-Ship command. It may run deterministic local checks and report the next editor action, but it does not write canon, does not write event ledger entries, and does not replace the human editor decision.
+`receive-chapter` is an orchestrator, not an auto-Ship command. It may run deterministic local checks and report the next editor action, including `prose-risk-check` and `prose-risk-index`, but it does not write canon, does not write event ledger entries, and does not replace the human editor decision.
 
 `reader-feedback summarize` only counts recorded reader responses as real feedback. Responses saved with `--allow-incomplete` remain visible as ignored drafts and cannot satisfy Gate evidence by themselves.
 
@@ -208,7 +211,7 @@ Codex anti-AI subagent review leaves `reviews/{chapter}/codex_anti_ai_review_pro
 
 第 3、10、25、125 章完成后，必须优先进入对应 Gate。Gate 只检查证据，不会自动通过，最终由人类总编裁决。
 
-第 3 章前后可用 `pilot-reader-experience A --write` 汇总前三章体验证据，并查看 `continue/rework/reopen_direction/stop` 建议；第 10 章后，Ship evidence 还会要求当前 `long-health --to {chapter} --write` 报告不为 `BLOCKED`。每章收章前可跑 `reader-risk-index --to {chapter} --write` 汇总节奏、重复、悬念、人物、世界观、视角、语言和结构效率风险。
+第 3 章前后可用 `pilot-reader-experience A --write` 汇总前三章体验证据，并查看 `continue/rework/reopen_direction/stop` 建议；第 10 章后，Ship evidence 还会要求当前 `long-health --to {chapter} --write` 报告不为 `BLOCKED`。每章收章前可跑 `prose-risk-index --to {chapter} --write` 汇总主语重复、流程注水、主角零失误、配角标签化、章末同质化、Q&A 对白和异常密度风险；也可跑 `reader-risk-index --to {chapter} --write` 汇总节奏、重复、悬念、人物、世界观、视角、语言和结构效率风险。
 
 ## P0.6 / P0.7 Contracts
 

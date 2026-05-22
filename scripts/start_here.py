@@ -27,6 +27,7 @@ def report() -> dict[str, Any]:
         "next_prompt": state.get("next_prompt") or state.get("human_action"),
         "reader_promise_v2": state.get("contracts", {}).get("reader_promise", "unknown"),
         "reader_risk": state.get("reader_risk", {}),
+        "prose_risk": state.get("prose_risk", {}),
         "required_agents_confirmed": os.environ.get("CODEX_REQUIRED_AGENTS_READY") == "1",
         "template_check_detail": readiness.get("template_check_detail", ""),
         "env_blockers": env_blockers,
@@ -55,7 +56,9 @@ def print_text(data: dict[str, Any]) -> None:
     print("## Reader Governance")
     print(f"- reader promise v2: {data.get('reader_promise_v2')}")
     risk = data.get("reader_risk") or {}
+    prose = data.get("prose_risk") or {}
     print(f"- reader risk index: {risk.get('status', 'MISSING')}")
+    print(f"- prose risk index: {prose.get('status', 'MISSING')}")
     print(f"- agents confirmed: {str(bool(data.get('required_agents_confirmed'))).lower()}")
 
 

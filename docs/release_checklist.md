@@ -16,16 +16,17 @@ Before publishing or copying this template:
 - Confirm `new-chapter` and `record_idea_selection` produce `schema_version: 2` briefs with `Story Card` first and `Machine Contract Appendix` second.
 - Confirm v1 legacy briefs still pass the compatibility path, while v2 `brief-check` blocks missing `Story Card.before -> after` and missing `reader_reward_intensity`.
 - Confirm `deepseek-brief --dry-run` emits a v2 brief prompt and `codex-draft-prompt` sends `Story Card + Hard Boundaries`, not the old long audit contract list.
-- Confirm `new-chapter` also scaffolds `revision_plan`, `review_arbitration`, `gray_consequence`, `chapter_shape`, `reader_reward_gate`, `reader_feedback`, and `receive_chapter` Markdown/JSON artifacts.
-- Confirm `receive-chapter --preview` writes nothing and lists the full control-plane sequence, including `reader-risk-index` before `chapter-evidence`.
-- Confirm `revision-plan`, `review-arbitration`, `gray-consequence`, `chapter-shape-check`, `reader-reward-check`, `reader-reward-index`, `reader-risk-index`, `long-health`, and `reader-feedback summarize --no-write` return `NOT_READY`/`BLOCKED` cleanly on an unopened template, not tracebacks.
+- Confirm `new-chapter` also scaffolds `revision_plan`, `review_arbitration`, `gray_consequence`, `chapter_shape`, `prose_risk`, `reader_reward_gate`, `reader_feedback`, and `receive_chapter` Markdown/JSON artifacts.
+- Confirm `receive-chapter --preview` writes nothing and lists the full control-plane sequence, including `prose-risk-check`, `prose-risk-index`, and `reader-risk-index` before `chapter-evidence`.
+- Confirm `revision-plan`, `review-arbitration`, `gray-consequence`, `chapter-shape-check`, `prose-risk-check`, `prose-risk-index`, `reader-reward-check`, `reader-reward-index`, `reader-risk-index`, `long-health`, and `reader-feedback summarize --no-write` return `NOT_READY`/`BLOCKED` cleanly on an unopened template, not tracebacks.
 - Confirm `deepseek-manifest-check` rejects missing, stale, and forbidden-input DeepSeek run manifests.
 - Confirm `accept-review` writes current human metadata and rejects infrastructure blockers.
 - Confirm `chapter-evidence` rejects missing, stale, quote-less, or `BLOCKED` auxiliary reviews unless `ACCEPTED_BY_HUMAN` is bound to the current official chapter hash and current review body hash.
 - Confirm `chapter-evidence` rejects missing, stale, malformed, or contaminated review context at `state/context_pack/{chapter}_review_context.md/json`, and that the review context does not include previous chapters as full text.
-- Confirm `chapter-evidence` rejects missing, stale, quote-less, or `BLOCKED` `reader_reward_gate.json/md`, rejects stale `reader_reward_index.json`, and rejects missing/stale/`BLOCKED` `state/derived/reader_risk/latest.json`.
+- Confirm `chapter-evidence` rejects missing, stale, quote-less, or `BLOCKED` `prose_risk.json/md`, rejects stale `state/derived/prose_risk/latest.json`, rejects missing/stale/`BLOCKED` `reader_reward_gate.json/md`, rejects stale `reader_reward_index.json`, and rejects missing/stale/`BLOCKED` `state/derived/reader_risk/latest.json`.
 - Confirm `reader-reward-check` blocks R2+ chapters with no matched reward quote, v2 chapters with no matched protagonist action, and v2 world rules that only explain instead of being tested in scene.
 - Confirm `reader-risk-index --to v01_c006 --write --json` can BLOCK all 8 reader risk categories on synthetic bad chapters: pace, repetition, suspense, protagonist, worldview, perspective, language, and structural efficiency.
+- Confirm `prose-risk-check` catches all seven finished-prose risks on synthetic bad chapters, and `prose-risk-index --to v01_c006 --write --json` blocks repeated chapter 6+ prose risks while warning only during chapters 1-3.
 - Confirm `reader-feedback add` requires answers for next-click intent, memorable moment, frustration, protagonist charm, author-explanation feel, and suspense expectation/fatigue unless explicitly recorded as incomplete.
 - Confirm `pacing-check` blocks a 3-chapter window with no effective progress.
 - Confirm `chapter-shape-check` treats repeated shape as warmup warning for chapters 1-3 and as BLOCKED from chapter 6.
@@ -47,7 +48,7 @@ Before publishing or copying this template:
 - Confirm high-impact gray behavior without fact-card/event coverage blocks `gray-consequence`.
 - Confirm chapter 6+ repeated shape blocks `chapter-shape-check`.
 - Confirm per-chapter reader feedback writes only `reader_tests/`, `reviews/`, and `state/derived/reader_feedback.json`.
-- Confirm `desk --write-report --html` writes `state/audit/dashboard.md/html` with reader risk, long-health, suspense debt, shape repetition, agency/release-valve signals, and Gate countdown.
+- Confirm `desk --write-report --html` writes `state/audit/dashboard.md/html` with reader risk, prose risk, long-health, suspense debt, shape repetition, agency/release-valve signals, and Gate countdown.
 - Confirm high-explanation/low-scene-anchor samples make `style-check` return `NOT_READY`.
 - Confirm `python scripts/novel.py series-style-check v01_c004` is documented as the post-warmup series-style evidence path.
 - Confirm `python scripts/novel.py deepseek-style-review v01_c004 --dry-run` writes only a prompt when no live API call is intended.
@@ -58,6 +59,7 @@ Explicit report writes are derived artifacts by default:
 - `python scripts/novel.py audit --write-report` writes under `state/audit/`, which is ignored.
 - `python scripts/novel.py long-health --write` writes under `state/derived/long_health/`, which is ignored.
 - `python scripts/novel.py reader-risk-index --write` writes under `state/derived/reader_risk/`, which is ignored.
+- `python scripts/novel.py prose-risk-index --write` writes under `state/derived/prose_risk/`, which is ignored.
 - `python scripts/novel.py desk --write-report --html` writes under `state/audit/`, which is ignored.
 - Chapter evidence artifacts such as `reviews/{chapter}/element_usage.json`, `reviews/{chapter}/fact_cards.json`, `reviews/{chapter}/style_metrics.json`, and `reviews/{chapter}/series_style.json` are part of the chapter workflow and may be tracked with the chapter.
 - Reader/personality derived artifacts such as `state/derived/personality/protagonist.json`, `state/derived/protagonist_progression.json`, `state/derived/world_reveal_ledger.json`, and `state/derived/suspense_ledger.json` are regenerated from core freeze, brief, and event ledger.

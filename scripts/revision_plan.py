@@ -18,6 +18,7 @@ SOURCE_FILES = (
     "continuity.md",
     "ai_taste.json",
     "dialogue_function.json",
+    "prose_risk.json",
     "emotion_relationship_gate.json",
     "codex_semantic_reader_review.json",
     "deepseek_semantic_reader_review.json",
@@ -94,13 +95,16 @@ def structured_findings(path: Path) -> tuple[list[dict[str, str]], list[dict[str
         for name, value in categories.items():
             if not isinstance(value, dict):
                 continue
+            category_status = str(value.get("status", "")).upper()
+            if category_status == "CLEAR":
+                continue
             severity = str(value.get("severity") or "P2").upper()
             issue = str(value.get("issue") or name)
             action_values = value.get("revision_actions") or []
             action = "; ".join(map(str, action_values)) if isinstance(action_values, list) else str(action_values)
             quote_values = value.get("evidence_quotes") or []
             quote = str(quote_values[0]) if isinstance(quote_values, list) and quote_values else ""
-            target = must if value.get("status") == "BLOCKED" or severity in {"P0", "P1"} else should
+            target = must if category_status == "BLOCKED" or severity in {"P0", "P1"} else should
             target.append(item(source, severity, f"{name}: {issue}", action or "Revise this review category.", quote))
     samples = data.get("samples") or data.get("dialogue_samples")
     if isinstance(samples, list):
@@ -162,7 +166,7 @@ def evaluate(chapter: str) -> dict[str, Any]:
         must_fix.append(item("chapter_evidence", severity, failure, "Fix the evidence blocker or rerun the affected workflow step."))
 
     for found in should_fix:
-        if any(token in found["source"] for token in ("ai_taste", "dialogue_function", "series_style", "codex_anti_ai", "deepseek_anti_ai", "chapter_shape", "reader_feedback")):
+        if any(token in found["source"] for token in ("ai_taste", "dialogue_function", "prose_risk", "series_style", "codex_anti_ai", "deepseek_anti_ai", "chapter_shape", "reader_feedback")):
             human_acceptance_allowed.append(
                 item(found["source"], found["severity"], found["issue"], "Use accept-review only if the human editor intentionally accepts this taste risk.", found.get("evidence_quote", ""))
             )
