@@ -25,6 +25,9 @@ python scripts/novel.py workflow-map --format mermaid
 python scripts/novel.py brief-precheck v01_c001
 python scripts/novel.py brief-diagnose v01_c001
 python scripts/novel.py health-report
+python scripts/novel.py opening-preflight --agents-ready --json
+python scripts/novel.py pilot-reader-experience A --write
+python scripts/novel.py long-health --to v01_c010 --write
 python scripts/novel.py event-suggest v01_c001
 python scripts/novel.py pacing-dashboard v01_c001 --write
 python scripts/novel.py desk --json
@@ -133,32 +136,16 @@ python scripts/novel.py land-brief v01_c001 --source Codex --from-candidate Code
 python scripts/novel.py start v01_c001
 ```
 
-## 连续性、节奏与新元素授权
+## Story Card / Machine Appendix
 
-每章 brief 必须写清：
+新 brief 默认是 `schema_version: 2`：
 
-- `上章章末锚点`：记录上一章最后可见状态；首章写“开篇章，无上章”。
-- `本章开场落点`：记录本章第一场的时间、地点、在场人物、主角状态和第一动作。
-- `场景承接说明`：写清原地承接、明示跳切、省略过桥或开篇起始；换地点时必须说明时间差、离开原因和动作。
-- `主线牵引档位`：`S0`-`S4`，说明本章如何维持或推进主线牵引。
-- `外部压力档位`：`W0`-`W4`，说明外部世界如何对本章行动产生压力或回声。
-- `本章继承变化`：写本章承接的状态、关系、信息或限制。
-- `本章节奏用途` / `节奏说明`：写推进、缓冲、兑现、铺垫、转场、蓄压或爆发，并说明不会空转或强行加速。
-- `本章进展契约`：写进展类型、有效推进类型、有效推进单位 `before -> after`、有效推进证据目标、推进对象、起始状态依据、结束状态变化、最低落账事件、进展重要度和低牵引功能。
-- `本章代价与后果契约`：写推进重量 `C0`-`C4`、后果等级、已支付代价、延后代价、后果承接义务、消化窗口和冷却范围。
-- `本章解决边界`：写新开伏笔、推进伏笔、解决伏笔、禁止解决，以及解决是否需要代价。
-- `本章可用道具 IDs`：只列本章允许使用的 `bible/objects.yaml` ID。
-- `本章可用技能 IDs`：只列本章允许使用的 `bible/abilities.yaml` ID。
-- `本章允许新增元素`：按 L0/L1/L2/L3/L4 标明哪些新元素可出现。
-- `本章禁止临场解决`：禁止靠未授权新道具、新能力或新规则解决本章核心问题。
-- `本章留存合同`：钩子、核心问题、手动 `reader_reward_intensity`、回报类型、回报交付、回报证据、低戏剧载体、核心机制状态、中段加压、小兑现、章末钩子和点击理由。
-- `本章主角魅力合同`：主动目标、过人之处、弱点误判、特殊资源、刻度变化和喜欢主角的瞬间。
-- `本章初始人格挑战合同`：压迫哪些 initial_personality 字段，是否需要人格变化落账。
-- `本章世界观展示合同` / `本章名词预算`：控制新名词，要求场景化展示。
-- `本章悬念推进合同`：旧问题、新线索、部分解答、新问题和悬念状态。
-- `本章语言记忆点`：金句、梗/反差句、标志动作和禁止语气。
+- 写作入口看 `Story Card`：第一屏扰动、主角想要、主角主动动作、最大阻力、中段变化点、本章小兑现、`before -> after`、章末点击理由、一条世界规则和禁止临场破局。
+- 机器治理看 `Machine Contract Appendix`：上章锚点、开场落点、场景承接、S/W 档位、继承变化、节奏用途、进展契约、代价后果、解决边界、R 档回报、低戏剧载体、核心机制状态、可用道具/技能 ID、允许新增元素和最低落账事件。
+- v1 旧 brief 仍可兼容读取，但新生成、新模板、新提示和开书试点 brief 都用 v2。
+- 六段长审计合同不再放在 brief 主体；防 AI 味、对白功能、句式、细节、私心和情绪越界由正文风格要求与收章 review 检查。
 
-`brief-precheck` 在生成候选 brief 前检查核心冻结、上一章锚点、Gate、stop lock、后果债务和关键源占位；`brief-check` 做正式 brief 的单章硬检查，并硬拦缺标题、缺 R 档、缺有效推进单位和缺下一章点击理由；`reader-reward-check --write` 生成单章 reader reward gate；`reader-reward-index --write` 汇总跨章等待、核心机制沉默、小兑现间隔和低戏剧载体重复。`pacing-check` 会硬拦连续小事、高推进无消化和缺少进展契约的窗口，可用 `--write` 归档节奏证据。`pacing-dashboard` 汇总最近 5 章节奏和 active/overdue/resolved 后果债务，给总编复盘用，不替代 `pacing-check`。收章时用 `chapter_anchor` 事件确认章末锚点，并用 brief 中的 `最低落账事件` 约束 `state/event_ledger.jsonl`；下一章 brief pack 和 context pack 会自动带入章末锚点与后果承接债务。
+`brief-precheck` 在生成候选 brief 前检查核心冻结、上一章锚点、Gate、stop lock、后果债务和关键源占位；`brief-check` 做正式 brief 的单章硬检查，并硬拦缺标题、缺 `before -> after`、缺 R 档、缺小兑现、缺主角主动动作和缺下一章点击理由；`reader-reward-check --write` 生成单章 reader reward gate，并拦 R2+ 无正文回报 quote、主角无主动动作 evidence、世界规则只有解释没有场景测试；`reader-reward-index --write` 汇总跨章等待、核心机制沉默、三章无小兑现、低戏剧载体重复和章末钩子重复。`pacing-check` 会硬拦三章窗口无有效推进、连续小事和高推进无消化。10 章后用 `long-health --to {chapter} --write` 看最近 5 章滚动健康窗。
 
 DeepSeek 和 Codex 可以创造新鲜细节，但重要新元素必须有授权、伏笔或后续归档。
 
@@ -202,18 +189,26 @@ python scripts/novel.py review-arbitration v01_c001
 python scripts/novel.py accept-review v01_c001 --artifact ai_taste --reason "intentional house style"
 python scripts/novel.py gray-consequence v01_c001 --write
 python scripts/novel.py chapter-shape-check v01_c006 --write
-python scripts/novel.py reader-feedback add v01_c001 --reader reader_001 --target-reader "pilot reader" --stuck-point "..." --continue-reason "..." --promise-gap "..." --favorite-moment "..." --skip-moment "..."
+python scripts/novel.py emotion-relationship-gate v01_c001 --write
+python scripts/novel.py semantic-reader-review v01_c001 --write
+python scripts/novel.py memorable-scene-check v01_c001 --write
+python scripts/novel.py reader-feedback add v01_c001 --reader reader_001 --target-reader "pilot reader" --stuck-point "..." --continue-reason "..." --promise-gap "..." --favorite-moment "..." --skip-moment "..." --next-click-intent "..." --protagonist-charm "..." --author-explanation-feel "..." --suspense-feel "..."
 python scripts/novel.py reader-feedback summarize v01_c001
+python scripts/novel.py reader-risk-index --to v01_c010 --write --json
 python scripts/novel.py deepseek-manifest-check v01_c001 --kind anti_ai_review
 ```
 
 `receive-chapter` is an orchestrator, not an auto-Ship command. It may run deterministic local checks and report the next editor action, but it does not write canon, does not write event ledger entries, and does not replace the human editor decision.
 
-Codex anti-AI subagent review leaves `reviews/{chapter}/codex_anti_ai_review_prompt.md` and `codex_anti_ai_review_manifest.json`; Ship evidence rejects missing manifest inputs, stale hashes, forbidden inputs, and missing final `codex_anti_ai_review.md/json`. DeepSeek review, anti-AI review, and style review leave run manifests under `external_runs/deepseek/{chapter}/`. Ship evidence rejects missing manifests, stale hashes, and forbidden inputs such as Codex review files being included in DeepSeek anti-AI review inputs.
+`reader-feedback summarize` only counts recorded reader responses as real feedback. Responses saved with `--allow-incomplete` remain visible as ignored drafts and cannot satisfy Gate evidence by themselves.
+
+Codex anti-AI subagent review leaves `reviews/{chapter}/codex_anti_ai_review_prompt.md` and `codex_anti_ai_review_manifest.json`; Ship evidence rejects missing manifest inputs, stale hashes, forbidden inputs, and missing final `codex_anti_ai_review.md/json`. Codex semantic reader review uses the same prompt/manifest pattern at `codex_semantic_reader_review_prompt.md` and `codex_semantic_reader_review_manifest.json`. DeepSeek review, anti-AI review, semantic reader review, and style review leave run manifests under `external_runs/deepseek/{chapter}/`. Ship evidence rejects missing manifests, stale hashes, and forbidden inputs such as Codex review files being included in DeepSeek anti-AI or semantic reader review inputs.
 
 ## Gate 提醒
 
 第 3、10、25、125 章完成后，必须优先进入对应 Gate。Gate 只检查证据，不会自动通过，最终由人类总编裁决。
+
+第 3 章前后可用 `pilot-reader-experience A --write` 汇总前三章体验证据，并查看 `continue/rework/reopen_direction/stop` 建议；第 10 章后，Ship evidence 还会要求当前 `long-health --to {chapter} --write` 报告不为 `BLOCKED`。每章收章前可跑 `reader-risk-index --to {chapter} --write` 汇总节奏、重复、悬念、人物、世界观、视角、语言和结构效率风险。
 
 ## P0.6 / P0.7 Contracts
 
@@ -234,8 +229,12 @@ python scripts/novel.py style-check v01_c001
 python scripts/novel.py series-style-check v01_c004
 python scripts/novel.py deepseek-style-review v01_c004 --dry-run
 python scripts/novel.py deepseek-anti-ai-review v01_c004 --dry-run
+python scripts/novel.py codex-semantic-reader-review-start v01_c004
+python scripts/novel.py deepseek-semantic-reader-review v01_c004 --dry-run
 python scripts/novel.py style-drift-report
 ```
+
+`semantic-reader-review` is a Codex/DeepSeek LLM aggregate. Run the Codex semantic start command, complete the isolated Codex review into `reviews/{chapter}/codex_semantic_reader_review.md/json`, run the DeepSeek semantic reader review, then run `semantic-reader-review --write`.
 
 Series-style policy:
 
@@ -245,4 +244,4 @@ Series-style policy:
 - `deepseek-style-review` is optional by default, but `series-style-check --require-deepseek` can make the external style review a required input.
 
 `start` and `write` are blocked until `core_setting_freeze`, `outline/book_outline.json`, and `state/project_style_contract.json` are READY. `context_pack` may include the book outline only as `strategic_plan_not_fact_source`, and style assets only as `style_instruction_not_fact_source`.
-`start` and `write` are also blocked until `state/project_reader_promise.json` is `READY`. Reader promise is an instruction source only; it is included in context pack as `reader_promise_instruction_not_fact_source`, while initial/current personality and reader experience ledgers are derived state.
+`start` and `write` are also blocked until `state/project_reader_promise.json` is `READY`. Reader Promise v2 must declare positive promises, negative failure modes, release-valve policy, protagonist agency, information clarity, language experience, structural efficiency, and R-level reward policy. Reader promise is an instruction source only; it is included in context pack as `reader_promise_instruction_not_fact_source`, while initial/current personality and reader experience ledgers are derived state.

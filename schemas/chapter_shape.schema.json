@@ -12,6 +12,7 @@
     "shape": {"type": "object"},
     "shape_key": {"type": "string"},
     "repeat_count": {"type": "integer"},
+    "component_repeats": {"type": "object"},
     "blockers": {"type": "array"},
     "warnings": {"type": "array"},
     "human_acceptance": {"type": ["object", "null"]}

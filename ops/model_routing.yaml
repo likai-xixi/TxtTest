@@ -76,6 +76,17 @@ models:
       - external_runs/deepseek/{chapter}/anti_ai_review.prompt.md
       - external_runs/deepseek/{chapter}/anti_ai_review.raw.json
 
+  deepseek_semantic_reader_review:
+    provider: deepseek
+    model: deepseek-v4-pro
+    mode: independent_semantic_reader_review
+    api_model_can_modify_files: false
+    local_wrapper_writes:
+      - reviews/{chapter}/deepseek_semantic_reader_review.json
+      - reviews/{chapter}/deepseek_semantic_reader_review.md
+      - external_runs/deepseek/{chapter}/semantic_reader_review.prompt.md
+      - external_runs/deepseek/{chapter}/semantic_reader_review.raw.json
+
   deepseek_preflight:
     provider: deepseek
     model: deepseek-v4-pro

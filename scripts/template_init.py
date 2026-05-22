@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 from pathlib import Path
 
@@ -21,6 +22,7 @@ DIRS = [
     "state/derived/suspense",
     "state/derived/world_reveal",
     "state/derived/progression",
+    "state/derived/reader_risk",
     "state/context_pack",
     "state/reader_promise",
     "state/snapshots",
@@ -52,6 +54,8 @@ GENERATED_PATTERNS = [
     "state/derived/world_reveal/*.json",
     "state/derived/progression/*.json",
     "state/derived/protagonist_progression.json",
+    "state/derived/reader_risk/*.json",
+    "state/derived/reader_risk/*.md",
     "state/derived/concept_index.json",
     "state/derived/world_reveal_ledger.json",
     "state/derived/suspense_ledger.json",
@@ -130,7 +134,10 @@ def main() -> int:
     print(f"root: {ROOT}")
     print(f"generated files removed: {removed}")
     print(f"git initialized: {'yes' if git_created else 'no'}")
-    print("next: run `python scripts/novel.py idea --text \"...\"` to start the DeepSeek + multi-agent opening lab")
+    print(f"DEEPSEEK_API_KEY: {'set' if os.environ.get('DEEPSEEK_API_KEY') else 'missing'}")
+    print(f"required agents: {'confirmed' if os.environ.get('CODEX_REQUIRED_AGENTS_READY') == '1' else 'unconfirmed'}")
+    print("reader promise: v2 schema required before opening chapters")
+    print("next: run `python scripts/novel.py opening-preflight --agents-ready`, then `python scripts/novel.py idea --text \"...\"`")
     return 0
 
 

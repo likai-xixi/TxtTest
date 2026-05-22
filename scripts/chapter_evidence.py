@@ -41,6 +41,7 @@ from review_binding import (
     accepted_by_human_is_current,
     validate_markdown_review_binding,
 )
+from revision_closure import evaluate as evaluate_revision_closure
 
 
 PLACEHOLDERS = (
@@ -68,6 +69,9 @@ REQUIRED_MODEL_DISAGREEMENT_SECTIONS = (
 AUXILIARY_REVIEWS = (
     "ai_taste.md",
     "dialogue_function.md",
+    "emotion_relationship_gate.md",
+    "semantic_reader_review.md",
+    "memorable_scene.md",
     "web_satisfaction.md",
     "retention_risk.md",
     "originality.md",
@@ -75,6 +79,12 @@ AUXILIARY_REVIEWS = (
     *READER_EXPERIENCE_REVIEWS,
 )
 ALLOWED_AUXILIARY_STATUS = {"CLEAR", "ACCEPTED_BY_HUMAN"}
+SEMANTIC_READER_CATEGORIES = {
+    "process_record_voice",
+    "sermon_or_author_voice",
+    "tool_character_risk",
+    "information_without_drama",
+}
 END_STATE_CHANGE_SECTIONS = ("章末状态变化", "End State Change")
 
 
@@ -93,6 +103,20 @@ def continuity_has_blocker(chapter: str) -> bool:
 
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def validate_current_file_ref(ref: object, expected_path: Path, label: str) -> list[str]:
+    if not isinstance(ref, dict):
+        return [f"{label} missing file reference"]
+    expected_rel = expected_path.relative_to(ROOT).as_posix()
+    failures: list[str] = []
+    if ref.get("path") != expected_rel:
+        failures.append(f"{label} path mismatch: expected {expected_rel}")
+    if not expected_path.exists():
+        failures.append(f"{label} missing source file: {expected_rel}")
+    elif ref.get("sha256") != sha256(expected_path):
+        failures.append(f"{label} hash is stale: {expected_rel}")
+    return failures
 
 
 def normalized_text(path: Path) -> str:
@@ -760,6 +784,64 @@ def validate_codex_anti_ai_manifest(chapter: str) -> list[str]:
     return failures
 
 
+def validate_codex_semantic_reader_manifest(chapter: str) -> list[str]:
+    path = ROOT / "reviews" / chapter / "codex_semantic_reader_review_manifest.json"
+    if not path.exists():
+        return [f"{chapter}: missing Codex semantic reader review manifest {path.relative_to(ROOT)}"]
+    data = read_json(path, {})
+    if not isinstance(data, dict):
+        return [f"{chapter}: Codex semantic reader review manifest must be a JSON object"]
+    volume, chapter_file = chapter_parts(chapter)
+    required = {
+        f"chapters/{volume}/{chapter_file}",
+        f"outline/chapter_briefs/{chapter}.md",
+        f"state/context_pack/{chapter}.md",
+        f"state/context_pack/{chapter}_review_context.md",
+        f"state/context_pack/{chapter}_review_context.json",
+        "state/project_style_contract.json",
+        "state/project_reader_promise.json",
+    }
+    failures: list[str] = []
+    if data.get("chapter") != chapter:
+        failures.append(f"{chapter}: Codex semantic reader review manifest chapter mismatch")
+    if data.get("reviewer") != "codex_semantic_reader_subagent":
+        failures.append(f"{chapter}: Codex semantic reader review manifest reviewer must be codex_semantic_reader_subagent")
+    prompt = data.get("prompt")
+    if not isinstance(prompt, dict):
+        failures.append(f"{chapter}: Codex semantic reader review manifest missing prompt")
+    else:
+        prompt_path = ROOT / str(prompt.get("path", ""))
+        if not prompt_path.exists():
+            failures.append(f"{chapter}: Codex semantic reader review prompt is missing")
+        elif prompt.get("sha256") != sha256(prompt_path):
+            failures.append(f"{chapter}: Codex semantic reader review prompt hash is stale")
+    inputs = data.get("inputs")
+    if not isinstance(inputs, list):
+        failures.append(f"{chapter}: Codex semantic reader review manifest inputs must be a list")
+        return failures
+    paths = {item.get("path"): item for item in inputs if isinstance(item, dict)}
+    failures.extend(f"{chapter}: Codex semantic reader review manifest missing input {item}" for item in sorted(required - set(paths)))
+    failures.extend(input_hash_failures(chapter, path, data, "inputs"))
+    forbidden = data.get("forbidden_inputs")
+    if not isinstance(forbidden, list) or not forbidden:
+        failures.append(f"{chapter}: Codex semantic reader review manifest missing forbidden_inputs")
+    else:
+        required_forbidden = {
+            f"reviews/{chapter}/deepseek_semantic_reader_review.md",
+            f"reviews/{chapter}/deepseek_semantic_reader_review.json",
+            f"reviews/{chapter}/semantic_reader_review.md",
+            f"reviews/{chapter}/semantic_reader_review.json",
+            f"reviews/{chapter}/ai_taste.json",
+            f"reviews/{chapter}/dialogue_function.json",
+        }
+        missing = required_forbidden - set(map(str, forbidden))
+        failures.extend(f"{chapter}: Codex semantic reader review manifest forbidden_inputs missing {item}" for item in sorted(missing))
+    attestation = str(data.get("isolation_attestation", "")).strip()
+    if not attestation:
+        failures.append(f"{chapter}: Codex semantic reader review manifest missing isolation_attestation")
+    return failures
+
+
 def validate_ai_taste_json(chapter: str) -> list[str]:
     path = ROOT / "reviews" / chapter / "ai_taste.json"
     if not path.exists():
@@ -926,6 +1008,103 @@ def validate_agent_anti_ai_review(chapter: str, stem: str, label: str) -> list[s
     return failures
 
 
+def validate_agent_semantic_reader_review(chapter: str, stem: str, label: str) -> list[str]:
+    path = ROOT / "reviews" / chapter / f"{stem}.json"
+    md_path = ROOT / "reviews" / chapter / f"{stem}.md"
+    failures: list[str] = []
+    if not md_path.exists() or not read_text(md_path).strip():
+        failures.append(f"{chapter}: missing {label} semantic reader review {md_path.relative_to(ROOT)}")
+    else:
+        failures.extend(validate_markdown_review_binding(chapter=chapter, review_path=md_path))
+    if not path.exists():
+        return failures + [f"{chapter}: missing {label} semantic reader review {path.relative_to(ROOT)}"]
+    data = read_json(path, {})
+    if not isinstance(data, dict):
+        return failures + [f"{chapter}: {label} semantic reader review must be a JSON object"]
+    failures.extend(validate_structured_official_binding(chapter, path, data))
+    status = data.get("status")
+    if status not in {"CLEAR", "ACCEPTED_BY_HUMAN"}:
+        failures.append(
+            f"{chapter}: {stem}.json status is {status or 'MISSING'}; "
+            "expected CLEAR or ACCEPTED_BY_HUMAN"
+        )
+    if status == "ACCEPTED_BY_HUMAN":
+        failures.extend(validate_structured_human_acceptance(chapter, path, data))
+    blockers = data.get("blockers")
+    if isinstance(blockers, list) and blockers and status != "ACCEPTED_BY_HUMAN":
+        failures.extend(f"{chapter}: {stem}.json blocker: {item}" for item in blockers)
+
+    categories = data.get("categories")
+    if not isinstance(categories, dict):
+        failures.append(f"{chapter}: {stem}.json missing categories")
+    else:
+        missing = sorted(SEMANTIC_READER_CATEGORIES - set(categories))
+        failures.extend(f"{chapter}: {stem}.json missing category {item}" for item in missing)
+        for key in SEMANTIC_READER_CATEGORIES:
+            item = categories.get(key)
+            if not isinstance(item, dict):
+                continue
+            item_status = item.get("status")
+            severity = item.get("severity")
+            if status != "ACCEPTED_BY_HUMAN" and item_status == "BLOCKED":
+                failures.append(f"{chapter}: {stem}.json category {key} is BLOCKED")
+            if status != "ACCEPTED_BY_HUMAN" and severity in {"P0", "P1"} and item_status != "CLEAR":
+                failures.append(f"{chapter}: {stem}.json category {key} has unresolved {severity}")
+            if not isinstance(item.get("revision_actions"), list) or not item.get("revision_actions"):
+                failures.append(f"{chapter}: {stem}.json category {key} missing revision_actions")
+            if not isinstance(item.get("issue"), str) or not item.get("issue", "").strip():
+                failures.append(f"{chapter}: {stem}.json category {key} missing issue")
+
+    quotes = collect_structured_quotes(data)
+    if not quotes:
+        failures.append(f"{chapter}: {stem}.json has no evidence quotes")
+    elif not any_quote_matches_official(quotes, official_chapter_path(chapter)):
+        failures.append(f"{chapter}: {stem}.json evidence quotes do not match the official chapter")
+    return failures
+
+
+def validate_semantic_reader_review(chapter: str) -> list[str]:
+    failures = validate_agent_semantic_reader_review(chapter, "semantic_reader_review", "aggregate")
+    path = ROOT / "reviews" / chapter / "semantic_reader_review.json"
+    if not path.exists():
+        return failures
+    data = read_json(path, {})
+    if not isinstance(data, dict):
+        return failures
+    source_reviews = data.get("source_reviews")
+    if not isinstance(source_reviews, dict):
+        failures.append(f"{chapter}: semantic_reader_review.json missing source_reviews")
+        return failures
+    for stem in ("codex_semantic_reader_review", "deepseek_semantic_reader_review"):
+        item = source_reviews.get(stem)
+        if not isinstance(item, dict):
+            failures.append(f"{chapter}: semantic_reader_review.json missing source review {stem}")
+            continue
+        json_ref = item.get("json")
+        md_ref = item.get("markdown")
+        if not isinstance(json_ref, dict):
+            failures.append(f"{chapter}: semantic_reader_review.json source {stem} missing json ref")
+        else:
+            failures.extend(
+                validate_current_file_ref(
+                    json_ref,
+                    ROOT / "reviews" / chapter / f"{stem}.json",
+                    f"{chapter}: semantic_reader_review source {stem} json",
+                )
+            )
+        if not isinstance(md_ref, dict):
+            failures.append(f"{chapter}: semantic_reader_review.json source {stem} missing markdown ref")
+        else:
+            failures.extend(
+                validate_current_file_ref(
+                    md_ref,
+                    ROOT / "reviews" / chapter / f"{stem}.md",
+                    f"{chapter}: semantic_reader_review source {stem} markdown",
+                )
+            )
+    return failures
+
+
 def validate_codex_anti_ai_review(chapter: str) -> list[str]:
     failures = validate_agent_anti_ai_review(chapter, "codex_anti_ai_review", "Codex")
     failures.extend(validate_codex_anti_ai_manifest(chapter))
@@ -936,9 +1115,19 @@ def validate_deepseek_anti_ai_review(chapter: str) -> list[str]:
     return validate_agent_anti_ai_review(chapter, "deepseek_anti_ai_review", "DeepSeek")
 
 
+def validate_codex_semantic_reader_review(chapter: str) -> list[str]:
+    failures = validate_agent_semantic_reader_review(chapter, "codex_semantic_reader_review", "Codex")
+    failures.extend(validate_codex_semantic_reader_manifest(chapter))
+    return failures
+
+
+def validate_deepseek_semantic_reader_review(chapter: str) -> list[str]:
+    return validate_agent_semantic_reader_review(chapter, "deepseek_semantic_reader_review", "DeepSeek")
+
+
 def validate_deepseek_run_manifests(chapter: str) -> list[str]:
     failures: list[str] = []
-    for kind in ("review", "anti_ai_review"):
+    for kind in ("review", "anti_ai_review", "semantic_reader_review"):
         failures.extend(f"{chapter}: {item}" for item in validate_run_manifest(chapter, kind))
     return failures
 
@@ -992,8 +1181,21 @@ def validate_revision_plan(chapter: str) -> list[str]:
     elif official_chapter_path(chapter).exists() and official.get("sha256") != sha256(official_chapter_path(chapter)):
         failures.append(f"{chapter}: revision_plan.json official chapter hash is stale")
     failures.extend(input_hash_failures(chapter, path, data))
-    if decision_value(chapter) == "Revise once" and not data.get("must_fix") and data.get("status") not in {"READY", "NOT_READY"}:
-        failures.append(f"{chapter}: revision_plan.json malformed for Revise once")
+    must_fix = data.get("must_fix")
+    if not isinstance(must_fix, list):
+        failures.append(f"{chapter}: revision_plan.json malformed must_fix")
+    elif must_fix:
+        failures.append(f"{chapter}: revision_plan.json still has must_fix items")
+    if data.get("status") != "READY":
+        failures.append(f"{chapter}: revision_plan.json status must be READY before Ship")
+    return failures
+
+
+def validate_revision_closure(chapter: str) -> list[str]:
+    report = evaluate_revision_closure(chapter)
+    failures = [f"{chapter}: revision closure blocker: {item}" for item in report.get("blockers", []) if item]
+    if str(report.get("status", "")).upper() != "READY":
+        failures.append(f"{chapter}: revision closure status is {report.get('status') or 'MISSING'}")
     return failures
 
 
@@ -1210,6 +1412,140 @@ def validate_reader_reward_index(chapter: str) -> list[str]:
     return failures
 
 
+def validate_reader_risk_index(chapter: str) -> list[str]:
+    path = ROOT / "state" / "derived" / "reader_risk" / "latest.json"
+    if not path.exists():
+        return [f"{chapter}: missing reader risk index; run reader-risk-index --to {chapter} --write"]
+    data = read_json(path, {})
+    if not isinstance(data, dict):
+        return [f"{chapter}: reader risk index latest.json must be a JSON object"]
+    failures: list[str] = []
+    through = str(data.get("through", ""))
+    try:
+        through_number = chapter_number(through)
+    except ValueError:
+        through_number = -1
+    if through[:3] != chapter[:3] or through_number < chapter_number(chapter):
+        failures.append(f"{chapter}: reader risk index is stale; expected through {chapter} or later")
+    status = str(data.get("status", "")).strip().upper()
+    if status == "BLOCKED":
+        failures.append(f"{chapter}: reader risk index is BLOCKED")
+    elif status not in {"READY", "WARNING"}:
+        failures.append(f"{chapter}: reader risk index status is {status or 'MISSING'}")
+    blockers = data.get("blockers")
+    if isinstance(blockers, list) and blockers:
+        failures.extend(f"{chapter}: reader risk blocker: {item}" for item in blockers[:10])
+    failures.extend(
+        validate_current_file_ref(
+            data.get("source_reader_promise"),
+            ROOT / "state" / "project_reader_promise.json",
+            f"{chapter}: reader risk source_reader_promise",
+        )
+    )
+    failures.extend(
+        validate_current_file_ref(
+            data.get("source_event_ledger"),
+            ROOT / "state" / "event_ledger.jsonl",
+            f"{chapter}: reader risk source_event_ledger",
+        )
+    )
+    for item in data.get("chapters", []):
+        if not isinstance(item, dict):
+            continue
+        item_chapter = str(item.get("chapter", ""))
+        if not item_chapter:
+            continue
+        try:
+            if chapter_number(item_chapter) > chapter_number(chapter):
+                continue
+        except ValueError:
+            continue
+        failures.extend(
+            validate_current_file_ref(
+                item.get("reader_reward_gate"),
+                ROOT / "reviews" / item_chapter / "reader_reward_gate.json",
+                f"{chapter}: reader risk {item_chapter} reader_reward_gate",
+            )
+        )
+        failures.extend(
+            validate_current_file_ref(
+                item.get("chapter_shape"),
+                ROOT / "reviews" / item_chapter / "chapter_shape.json",
+                f"{chapter}: reader risk {item_chapter} chapter_shape",
+            )
+        )
+        failures.extend(
+            validate_current_file_ref(
+                item.get("reader_feedback"),
+                ROOT / "reviews" / item_chapter / "reader_feedback.json",
+                f"{chapter}: reader risk {item_chapter} reader_feedback",
+            )
+        )
+    return failures
+
+
+def validate_long_health(chapter: str) -> list[str]:
+    if chapter_number(chapter) < 10:
+        return []
+    path = ROOT / "state" / "derived" / "long_health" / "latest.json"
+    if not path.exists():
+        return [f"{chapter}: chapter 10+ requires long_health latest report; run long-health --to {chapter} --write"]
+    data = read_json(path, {})
+    if not isinstance(data, dict):
+        return [f"{chapter}: long_health latest.json must be a JSON object"]
+    failures: list[str] = []
+    through = str(data.get("through", ""))
+    try:
+        through_number = chapter_number(through)
+    except ValueError:
+        through_number = -1
+    if through[:3] != chapter[:3] or through_number < chapter_number(chapter):
+        failures.append(f"{chapter}: long_health latest.json is stale; expected through {chapter} or later in the same volume")
+    status = str(data.get("status", "")).strip().upper()
+    if status == "BLOCKED":
+        failures.append(f"{chapter}: long_health is BLOCKED")
+    elif status not in {"READY", "WARNING"}:
+        failures.append(f"{chapter}: long_health status is {status or 'MISSING'}")
+    blockers = data.get("rolling_blockers")
+    if isinstance(blockers, list) and blockers:
+        failures.extend(f"{chapter}: long_health blocker: {item}" for item in blockers)
+    failures.extend(
+        validate_current_file_ref(
+            data.get("source_reader_promise"),
+            ROOT / "state" / "project_reader_promise.json",
+            f"{chapter}: long_health source_reader_promise",
+        )
+    )
+    failures.extend(
+        validate_current_file_ref(
+            data.get("source_event_ledger"),
+            ROOT / "state" / "event_ledger.jsonl",
+            f"{chapter}: long_health source_event_ledger",
+        )
+    )
+    for item in data.get("rolling_input_refs", []):
+        if not isinstance(item, dict):
+            continue
+        item_chapter = str(item.get("chapter", ""))
+        if not item_chapter:
+            continue
+        failures.extend(
+            validate_current_file_ref(
+                item.get("reader_reward_gate"),
+                ROOT / "reviews" / item_chapter / "reader_reward_gate.json",
+                f"{chapter}: long_health {item_chapter} reader_reward_gate",
+            )
+        )
+        failures.extend(
+            validate_current_file_ref(
+                item.get("chapter_shape"),
+                ROOT / "reviews" / item_chapter / "chapter_shape.json",
+                f"{chapter}: long_health {item_chapter} chapter_shape",
+            )
+        )
+    return failures
+
+
 def validate_auxiliary_review(chapter: str, name: str) -> list[str]:
     path = ROOT / "reviews" / chapter / name
     if not path.exists() or not read_text(path).strip():
@@ -1406,7 +1742,7 @@ def validate_progress_contract(chapter: str) -> list[str]:
     return failures
 
 
-def chapter_evidence_failures(chapter: str) -> list[str]:
+def chapter_evidence_failures(chapter: str, *, include_revision_closure: bool = True) -> list[str]:
     failures: list[str] = []
     selection = read_json(ROOT / "state" / "selections" / f"{chapter}.json", {})
     landing = read_json(ROOT / "reviews" / chapter / "chapter_landing.json", {})
@@ -1428,13 +1764,20 @@ def chapter_evidence_failures(chapter: str) -> list[str]:
     failures.extend(validate_dialogue_function_json(chapter))
     failures.extend(validate_codex_anti_ai_review(chapter))
     failures.extend(validate_deepseek_anti_ai_review(chapter))
+    failures.extend(validate_codex_semantic_reader_review(chapter))
+    failures.extend(validate_deepseek_semantic_reader_review(chapter))
+    failures.extend(validate_semantic_reader_review(chapter))
     failures.extend(validate_deepseek_run_manifests(chapter))
     failures.extend(validate_review_arbitration(chapter))
-    failures.extend(validate_revision_plan(chapter))
+    if include_revision_closure:
+        failures.extend(validate_revision_plan(chapter))
+        failures.extend(validate_revision_closure(chapter))
     failures.extend(validate_gray_consequence(chapter))
     failures.extend(validate_chapter_shape(chapter))
     failures.extend(validate_reader_reward_gate(chapter))
     failures.extend(validate_reader_reward_index(chapter))
+    failures.extend(validate_reader_risk_index(chapter))
+    failures.extend(validate_long_health(chapter))
 
     required_reviews = [
         "codex_integrated_review.md",

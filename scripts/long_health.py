@@ -7,6 +7,7 @@ from statistics import mean
 from typing import Any
 
 from _common import ROOT, chapter_number, now_iso, read_json, write_json, write_text
+from artifact_integrity import file_ref, validate_chapter_shape, validate_reader_reward_gate
 from health_report import gate_risks, infer_last_chapter, load_events
 
 
@@ -53,11 +54,85 @@ def evaluate(to_chapter: str | None = None) -> dict[str, Any]:
         reader_ledgers[key] = {"path": rel_path, "exists": path.exists(), "blockers": blockers}
         if blockers:
             risks.append(f"{key}_blocker")
+    rolling_blockers: list[str] = []
+    rolling_warnings: list[str] = []
+    if max_chapter >= 10:
+        volume = target[:3]
+        start = max(1, max_chapter - 4)
+        window_chapters = [f"{volume}_c{number:03d}" for number in range(start, max_chapter + 1)]
+        gate_items = [validate_reader_reward_gate(chapter) for chapter in window_chapters]
+        shape_items = [validate_chapter_shape(chapter) for chapter in window_chapters]
+        for chapter, (_, failures) in zip(window_chapters, gate_items):
+            rolling_blockers.extend(f"{chapter}: cannot trust reader_reward_gate: {failure}" for failure in failures)
+        for chapter, (_, failures) in zip(window_chapters, shape_items):
+            rolling_blockers.extend(f"{chapter}: cannot trust chapter_shape: {failure}" for failure in failures)
+        gates = [data for data, failures in gate_items if not failures]
+        shapes = [data for data, failures in shape_items if not failures]
+        no_payoff = sum(
+            1
+            for gate in gates
+            if not (isinstance(gate, dict) and gate.get("matched_evidence_quotes"))
+        ) + (len(window_chapters) - len(gates))
+        passive = sum(
+            1
+            for event_chapter in window_chapters
+            if not any(event.get("chapter") == event_chapter and event.get("type") == "character_decision" for event in events)
+        )
+        low_carriers = [str((gate.get("contract") or {}).get("low_drama_carrier", "")).strip().lower() for gate in gates]
+        low_drama_repeat = max((low_carriers.count(item) for item in set(low_carriers) if item and item not in {"none", "无"}), default=0)
+        high_pressure_no_release = sum(
+            1
+            for gate in gates
+            if any(marker in str((gate.get("contract") or {}).get("pressure_level", "")) for marker in ("H3", "H4", "W3", "W4", "高压", "强压", "爆发"))
+            and not str((gate.get("contract") or {}).get("release_valve", "")).strip()
+        )
+        shape_bodies = [shape.get("shape") if isinstance(shape.get("shape"), dict) else {} for shape in shapes]
+        hook_types = [str(shape.get("hook", "")).strip() for shape in shape_bodies]
+        hook_repeat = max((hook_types.count(item) for item in set(hook_types) if item and item != "unclear"), default=0)
+        shape_keys = [str(shape.get("shape_key", "")).strip() for shape in shapes]
+        shape_repeat = max((shape_keys.count(item) for item in set(shape_keys) if item), default=0)
+        reactive_shapes = sum(1 for shape in shape_bodies if shape.get("protagonist_position") == "reactive")
+        explanation_only = sum(1 for shape in shape_bodies if shape.get("exposition_load") == "explanation_only")
+        opened = sum(1 for event in events if event.get("chapter") in window_chapters and event.get("type") == "thread_opened")
+        advanced_or_paid = sum(1 for event in events if event.get("chapter") in window_chapters and event.get("type") in {"thread_advanced", "thread_paid_off"})
+        world_test = sum(1 for event in events if event.get("chapter") in window_chapters and event.get("type") == "rule_reveal")
+        if high_pressure_no_release >= 3:
+            rolling_blockers.append("recent 5-chapter window has 3+ high-pressure chapters without release valves")
+        if passive >= 3:
+            rolling_blockers.append(f"recent 5-chapter window has {passive} chapters without character_decision")
+        if reactive_shapes >= 2:
+            rolling_blockers.append("recent 5-chapter window has 2+ reactive protagonist chapter shapes")
+        if no_payoff >= 3:
+            rolling_blockers.append(f"recent 5-chapter window has {no_payoff} chapters without matched reader payoff evidence")
+        if low_drama_repeat >= 3:
+            rolling_blockers.append("recent 5-chapter window repeats the same low-drama carrier 3+ times")
+        if hook_repeat >= 3:
+            rolling_blockers.append("recent 5-chapter window repeats the same chapter-hook type 3+ times")
+        if shape_repeat >= 3:
+            rolling_blockers.append("recent 5-chapter window repeats the same full chapter shape 3+ times")
+        if explanation_only >= 2:
+            rolling_blockers.append("recent 5-chapter window has 2+ explanation-only chapter shapes")
+        if opened >= 3 and advanced_or_paid == 0:
+            rolling_blockers.append("recent 5-chapter window opens suspense threads without advancement or payoff")
+        if world_test == 0:
+            rolling_warnings.append("recent 5-chapter window has no rule_reveal event; world rules may be explanation-only")
+    status = "BLOCKED" if rolling_blockers else ("WARNING" if risks or rolling_warnings else "READY")
     return {
         "schema_version": 1,
         "generated_at": now_iso(),
+        "status": status,
         "through": target,
         "chapters": max_chapter,
+        "source_event_ledger": file_ref(ROOT / "state" / "event_ledger.jsonl"),
+        "source_reader_promise": file_ref(ROOT / "state" / "project_reader_promise.json"),
+        "rolling_input_refs": [
+            {
+                "chapter": f"{target[:3]}_c{number:03d}",
+                "reader_reward_gate": file_ref(ROOT / "reviews" / f"{target[:3]}_c{number:03d}" / "reader_reward_gate.json"),
+                "chapter_shape": file_ref(ROOT / "reviews" / f"{target[:3]}_c{number:03d}" / "chapter_shape.json"),
+            }
+            for number in range(max(1, max_chapter - 4), max_chapter + 1)
+        ] if max_chapter >= 10 else [],
         "events": len(events),
         "counts_by_type": dict(sorted(counts.items())),
         "unresolved_thread_count": len(unresolved_ages),
@@ -67,6 +142,8 @@ def evaluate(to_chapter: str | None = None) -> dict[str, Any]:
         "setting_debt_index": setting_debt,
         "gate_risks": gate_risks(max_chapter),
         "reader_experience_ledgers": reader_ledgers,
+        "rolling_blockers": rolling_blockers,
+        "rolling_warnings": rolling_warnings,
         "risk_flags": risks,
     }
 
@@ -75,6 +152,7 @@ def render_markdown(report: dict[str, Any]) -> str:
     lines = [
         f"# Long Health: through {report['through']}",
         "",
+        f"status: {report['status']}",
         f"generated_at: {report['generated_at']}",
         f"chapters: {report['chapters']}",
         f"events: {report['events']}",
@@ -87,6 +165,10 @@ def render_markdown(report: dict[str, Any]) -> str:
         "",
     ]
     lines.extend(f"- {item}" for item in report["risk_flags"]) if report["risk_flags"] else lines.append("- none")
+    lines.extend(["", "## Rolling Blockers", ""])
+    lines.extend(f"- {item}" for item in report.get("rolling_blockers", [])) if report.get("rolling_blockers") else lines.append("- none")
+    lines.extend(["", "## Rolling Warnings", ""])
+    lines.extend(f"- {item}" for item in report.get("rolling_warnings", [])) if report.get("rolling_warnings") else lines.append("- none")
     lines.extend(["", "## Gate Risks", ""])
     lines.extend(f"- {item}" for item in report["gate_risks"]) if report["gate_risks"] else lines.append("- none")
     lines.extend(["", "## Reader Experience Ledgers", ""])
@@ -114,7 +196,7 @@ def main() -> int:
         print(json.dumps(report, ensure_ascii=False, indent=2))
     else:
         print(render_markdown(report), end="")
-    return 0
+    return 1 if report.get("status") == "BLOCKED" else 0
 
 
 if __name__ == "__main__":

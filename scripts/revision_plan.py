@@ -18,6 +18,11 @@ SOURCE_FILES = (
     "continuity.md",
     "ai_taste.json",
     "dialogue_function.json",
+    "emotion_relationship_gate.json",
+    "codex_semantic_reader_review.json",
+    "deepseek_semantic_reader_review.json",
+    "semantic_reader_review.json",
+    "memorable_scene.json",
     "codex_anti_ai_review.json",
     "deepseek_anti_ai_review.json",
     "review_arbitration.json",
@@ -152,7 +157,7 @@ def evaluate(chapter: str) -> dict[str, Any]:
             for found in markdown_findings(path):
                 (must_fix if found["severity"] in {"P0", "P1"} else should_fix).append(found)
 
-    for failure in chapter_evidence_failures(chapter):
+    for failure in chapter_evidence_failures(chapter, include_revision_closure=False):
         severity = "P1" if any(token in failure for token in ("missing", "BLOCKED", "P0", "P1", "hash", "stale")) else "P2"
         must_fix.append(item("chapter_evidence", severity, failure, "Fix the evidence blocker or rerun the affected workflow step."))
 

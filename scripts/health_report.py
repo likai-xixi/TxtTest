@@ -7,7 +7,7 @@ from collections import Counter
 from _common import ROOT, chapter_number, gate_decision
 
 
-def load_events(max_chapter: int) -> list[dict]:
+def load_events(max_chapter: int, *, verified_only: bool = True) -> list[dict]:
     ledger = ROOT / "state" / "event_ledger.jsonl"
     events: list[dict] = []
     if not ledger.exists():
@@ -20,6 +20,8 @@ def load_events(max_chapter: int) -> list[dict]:
         try:
             number = chapter_number(chapter)
         except ValueError:
+            continue
+        if verified_only and item.get("verified_by") != "human":
             continue
         if number <= max_chapter:
             events.append(item)
@@ -39,7 +41,7 @@ def gate_risks(max_chapter: int) -> list[str]:
     return risks
 
 
-def infer_last_chapter() -> str:
+def infer_last_chapter(*, verified_only: bool = True) -> str:
     ledger = ROOT / "state" / "event_ledger.jsonl"
     highest = 1
     if ledger.exists():
@@ -47,7 +49,10 @@ def infer_last_chapter() -> str:
             if not line.strip():
                 continue
             try:
-                chapter = str(json.loads(line).get("chapter", ""))
+                item = json.loads(line)
+                if verified_only and item.get("verified_by") != "human":
+                    continue
+                chapter = str(item.get("chapter", ""))
                 highest = max(highest, chapter_number(chapter))
             except (json.JSONDecodeError, ValueError):
                 continue

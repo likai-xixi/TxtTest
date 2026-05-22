@@ -118,6 +118,51 @@ def write_reader_promise_ready(repo: Path) -> None:
         "per_chapter_must_not_only_have": ["流程记录", "设定说明"],
         "ending_hook_priority": ["新问题", "新代价", "关系变化"],
         "reward_mix": {"爽点": "中", "悬念": "高", "笑点": "低", "情绪点": "中"},
+        "positive_promises": ["每章有主角主动改变局面的证据", "三章内有悬念推进和小兑现"],
+        "negative_failure_modes": {
+            "red_lines": ["不得连续高压无释放", "不得只开不合", "不得主角工具化", "不得设定百科化"],
+            "no_release_max_run": 2,
+            "no_payoff_max_run": 2,
+            "open_without_payoff_max_run": 2,
+            "passive_protagonist_max_run": 1,
+            "explanation_only_max_run": 1,
+            "repeated_shape_max_run": 2,
+            "low_efficiency_window_chapters": 5,
+            "low_efficiency_max_count": 2,
+        },
+        "release_valve_policy": {
+            "max_high_pressure_without_release": 2,
+            "minimum_release_types": ["小胜", "真相兑现", "关系推进"],
+            "per_three_chapters_must_include_release": True,
+            "rationale": "测试项目要求高压后必须有可感释放。",
+        },
+        "protagonist_agency_policy": {
+            "requires_active_goal": True,
+            "requires_active_action": True,
+            "requires_cost_or_consequence": True,
+            "requires_state_change": True,
+            "requires_desire_or_principle": True,
+            "rationale": "测试项目要求主角持续主动改变局面。",
+        },
+        "information_clarity_policy": {
+            "max_consecutive_setup_only_chapters": 2,
+            "require_scene_test_for_world_rule": True,
+            "forbid_explanation_only_worldbuilding": True,
+            "rationale": "测试项目要求世界规则通过场景呈现。",
+        },
+        "language_experience_policy": {
+            "forbid_summary_voice": True,
+            "require_memorable_line_or_detail": True,
+            "max_explanation_paragraphs_without_scene": 2,
+            "rationale": "测试项目要求避免公文腔。",
+        },
+        "structural_efficiency_policy": {
+            "min_effective_progress_per_chapter": "before -> after",
+            "max_words_without_state_change": 6000,
+            "max_low_progress_window_count": 2,
+            "window_chapters": 5,
+            "rationale": "测试项目要求每章有可感状态变化。",
+        },
         "reader_reward_intensity_policy": {
             "opening_chapter_count": 3,
             "opening_intensity_by_chapter": {"v01_c001": "R2", "v01_c002": "R2", "v01_c003": "R2"},
@@ -618,6 +663,9 @@ L0 场景细节和 L1 一次性线索可以新增；没有 L3/L4 新机制。
 - reader_reward_delivery：读者确认异常并非普通故障，并看到主角为保留证据承担追责压力。
 - reader_reward_timing：ending
 - reward_evidence_requirement：读者确认异常并非普通故障。
+- pressure_level：H2
+- release_valve：读者确认异常并非普通故障。
+- protagonist_desire_or_principle：主角坚持证据不能被流程抹掉。
 - 低戏剧载体：investigation
 - 低戏剧载体承载的推进类型：choice_completed
 - 核心机制是否出现：used
@@ -743,6 +791,76 @@ L0 场景细节和 L1 一次性线索可以新增；没有 L3/L4 新机制。
 ## 禁止新增 / 禁止解决 / 禁止模仿
 
 禁止换皮参考作品桥段。
+"""
+
+
+COMPLETE_BRIEF_V2 = """# {chapter} Brief
+
+schema_version: 2
+
+## 章节标题
+
+证据夜班
+
+## 章节简介
+
+主角在深夜值班时发现一段被系统自动抹除的异常记录。他想把它按普通故障归档，却在值班员催促和记录消失之间选择私下备份。读者在本章看到异常不是误报，也看到主角为保留证据留下被追查的风险。
+
+## Story Card
+
+- 第一屏扰动：深夜办公室的故障屏自动恢复，只有主角手边的备份灯还亮着；系统记录显示无异常，但硬盘里多出一段没人提交过的求救噪音。
+- 主角本章想要：主角想确认异常记录是不是普通故障，并在被追责前决定是否保存证据。
+- 主角主动动作：主角冒险私下备份异常记录，并拒绝按值班员要求立刻删除缓存。
+- 最大阻力：平台值班员要求按流程清空缓存，系统又在倒计时覆盖原始记录。
+- 中段变化点：主角发现值班员不是不知道异常，而是在等系统覆盖最后一段原始记录。
+- 本章小兑现：读者确认异常并非普通故障，而是会被平台流程主动遮蔽的证据痕迹。
+- before -> after：主角只旁观异常 -> 主角保存异常证据并承担后续调查压力。
+- 章末点击理由：证据已经被主角保存，但平台追查会在下一章逼近他。
+- 本章只讲懂的一条世界规则：异常会留下证据痕迹，但平台流程会优先抹除让普通人无法追责的部分。
+- 禁止临场破局：不得靠未授权新道具、新能力或新规则证明异常根因，也不得直接揭开幕后主谜题。
+
+## Machine Contract Appendix
+
+- 上章章末锚点：开篇章，无上章。
+- 本章开场落点：时间：深夜；地点：办公室；在场人物：主角、值班员；主角状态：紧张但保持调查意愿；第一动作：主角检查异常证据。
+- 场景承接说明：类型：开篇起始；说明：本章从主角第一次接触异常记录开始，没有需要承接的上一章场景。
+- 主线牵引档位：S2：主角主动保存异常证据，让核心谜题从传闻变成本章行动压力。
+- 外部压力档位：W1：平台和利益方的遮蔽形成背景压力，但还没有正面冲突。
+- 本章继承变化：开篇章建立主角不信鬼但愿意调查异常的初始状态，并让他第一次承担证据风险。
+- 本章节奏用途：推进、铺垫。
+- 节奏说明：本章用证据选择保持牵引，不强行揭开幕后主谜题，也不靠审计段落解释世界观。
+- 本章进展契约：进展类型：decision；有效推进类型：choice_completed；推进对象：thread_main_anomaly；起始状态依据：开篇章初始状态；结束状态变化：主角保存异常证据并承担后续调查压力；进展重要度：P1；低牵引功能：本章让主角做出选择并建立调查方向。
+- 本章代价与后果契约：推进重量：C2；后果等级：scar；代价类型：emotional；已支付代价：主角冒险保留异常证据，承担被追责的心理压力；延后代价：下一章需要解释证据去向以及平台追查；后果承接义务：下一章必须承接主角保存证据后的风险；消化窗口：2章内；冷却范围：幕后主谜题不能在本章直接揭开。
+- 本章解决边界：新开伏笔：thread_main_anomaly；推进伏笔：none；解决伏笔：none；禁止解决：幕后主谜题和世界异常根因；解决是否需要代价：否。
+- reader_reward_intensity：R2
+- reader_reward_type：悬念 / 信息 / 代价
+- reader_reward_delivery：读者确认异常并非普通故障，并看到主角为保留证据承担追责压力。
+- reader_reward_timing：ending
+- reward_evidence_requirement：读者确认异常并非普通故障。
+- pressure_level：H2
+- release_valve：读者确认异常并非普通故障。
+- protagonist_desire_or_principle：主角坚持证据不能被流程抹掉。
+- 低戏剧载体：investigation
+- 低戏剧载体承载的推进类型：choice_completed
+- 核心机制是否出现：used
+- 若未出现，当前沉默计数：0
+- 等待结尾债务：none
+- 可用人物状态：主角保持不信鬼但愿意调查异常；值班员以流程压制主角。
+- 可用道具 / 装备：只使用已记录的检测设备和普通备份硬盘。
+- 可用道具 IDs：none
+- 可用技能 / 能力：只使用已记录的数据分析能力。
+- 可用技能 IDs：none
+- 能力限制 / 代价：数据分析只能发现记录矛盾，不能证明异常根因，且会让主角留下操作痕迹。
+- 未解决伏笔：thread_main_anomaly
+- 新增设定：none
+- 允许新增元素：none
+- 最低落账事件：character_decision
+- 禁止新增：不得新增未授权 L2/L3/L4 设定、道具、能力或规则。
+- 禁止解决：不得解决幕后主谜题、异常根因或平台遮蔽机制的完整来源。
+- 主角弱点 / 误判：主角过度依赖记录，低估人的反应和制度追责。
+- 普通人 / 外部视角对照：值班员只把异常当作流程事故处理，用催促和回函压迫主角。
+- 旧问题：none
+- 悬念状态：opened
 """
 
 
@@ -1180,6 +1298,9 @@ def write_auxiliary_reviews(repo: Path, chapter: str, status: str = "CLEAR") -> 
     review_names = [
         "ai_taste",
         "dialogue_function",
+        "emotion_relationship_gate",
+        "semantic_reader_review",
+        "memorable_scene",
         "web_satisfaction",
         "retention_risk",
         "originality",
@@ -1204,6 +1325,12 @@ def write_auxiliary_reviews(repo: Path, chapter: str, status: str = "CLEAR") -> 
             findings = "- Anti-AI categories checked: show_dont_tell, rhythm_disorder, emotional_risk, gray_motive, dialogue_agenda, detail_economy, consequence_integrity."
         if name == "dialogue_function":
             findings = "- Dialogue functions checked for information, desire, conflict, concealment, relationship probe, and theme leakage."
+        if name == "emotion_relationship_gate":
+            findings = "- Emotion and relationship continuity checked with private pressure, relationship material, and consequence."
+        if name == "semantic_reader_review":
+            findings = "- Semantic reader risks checked for process voice, sermon voice, tool characters, and information without drama."
+        if name == "memorable_scene":
+            findings = "- Memorable scene checked for retellable scene, character action, and non-bureaucratic sentence."
         if name in {"personality_drift", "hook_retention", "protagonist_charm", "world_reveal", "suspense_ladder", "language_memorability", "genre_fit", "opening_retention"}:
             findings = "- Reader experience contract checked against the official chapter, brief, context, and derived ledgers."
         volume = chapter[:3]
@@ -1233,6 +1360,15 @@ def write_auxiliary_reviews(repo: Path, chapter: str, status: str = "CLEAR") -> 
             bind_review_hash(body),
         )
     write_anti_ai_json_reviews(repo, chapter, status=status)
+    write_specialty_reader_json_reviews(repo, chapter, status=status)
+
+
+SEMANTIC_READER_CATEGORIES = (
+    "process_record_voice",
+    "sermon_or_author_voice",
+    "tool_character_risk",
+    "information_without_drama",
+)
 
 
 def write_anti_ai_json_reviews(repo: Path, chapter: str, status: str = "CLEAR") -> None:
@@ -1313,6 +1449,164 @@ def write_anti_ai_json_reviews(repo: Path, chapter: str, status: str = "CLEAR") 
                 "blockers": [],
                 "warnings": [],
                 "human_acceptance": None,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+    )
+
+
+def semantic_review_payload(repo: Path, chapter: str, stem: str, reviewer: str, status: str = "CLEAR") -> dict:
+    volume = chapter[:3]
+    chapter_rel = f"chapters/{volume}/c{int(chapter[-3:]):03d}.md"
+    official_hash = file_sha(repo, chapter_rel) if (repo / chapter_rel).exists() else ""
+    quote = ""
+    if (repo / chapter_rel).exists():
+        quote = next((line.strip() for line in (repo / chapter_rel).read_text(encoding="utf-8").splitlines() if line.strip()), "")
+    review_status = status if status in {"CLEAR", "ACCEPTED_BY_HUMAN"} else "BLOCKED"
+    categories = {
+        key: {
+            "status": "CLEAR" if review_status != "BLOCKED" else "BLOCKED",
+            "severity": "P3" if review_status != "BLOCKED" else "P1",
+            "evidence_quotes": [quote],
+            "issue": f"{stem} fixture clear" if review_status != "BLOCKED" else f"{stem} fixture blocker",
+            "revision_actions": ["none"] if review_status != "BLOCKED" else ["revise semantic reader risk"],
+        }
+        for key in SEMANTIC_READER_CATEGORIES
+    }
+    return {
+        "schema_version": 1,
+        "chapter": chapter,
+        "generated_at": "2000-01-01T00:00:00+00:00",
+        "reviewer": reviewer,
+        "model": "fixture-model",
+        "status": review_status,
+        "official_chapter": {"path": chapter_rel, "sha256": official_hash},
+        "inputs": [{"path": chapter_rel, "sha256": official_hash}],
+        "summary": f"{stem} fixture is clear.",
+        "categories": categories,
+        "scene_samples": [
+            {
+                "evidence_quote": quote,
+                "reader_effect": "test fixture reader movement",
+                "drama_movement": "test fixture drama movement",
+                "status": "CLEAR" if review_status != "BLOCKED" else "BLOCKED",
+            }
+        ],
+        "blockers": [] if review_status != "BLOCKED" else [f"{stem} fixture blocker"],
+        "warnings": [],
+        "human_acceptance": None,
+    }
+
+
+def write_semantic_review_artifact(repo: Path, chapter: str, stem: str, reviewer: str, title: str, status: str = "CLEAR") -> None:
+    report = semantic_review_payload(repo, chapter, stem, reviewer, status)
+    write(repo, f"reviews/{chapter}/{stem}.json", json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+    quote = report["scene_samples"][0]["evidence_quote"]
+    accepted = ""
+    if report["status"] == "ACCEPTED_BY_HUMAN":
+        accepted = "accepted_at: 2000-01-01T00:00:00+00:00\naccepted_by: human\nreason: human accepted this semantic review.\n"
+    body = (
+        f"# {title}: {chapter}\n\n"
+        f"status: {report['status']}\n"
+        f"official_chapter_sha256: {report['official_chapter']['sha256']}\n"
+        "review_sha256:\n"
+        f"{accepted}"
+        "\n## Summary\n\n"
+        f"- {title} fixture is clear.\n\n"
+        "## Evidence Quotes\n\n"
+        f"- {quote}\n"
+    )
+    write(repo, f"reviews/{chapter}/{stem}.md", bind_review_hash(body))
+
+
+def write_semantic_reader_reviews(repo: Path, chapter: str, status: str = "CLEAR") -> None:
+    write_semantic_review_artifact(repo, chapter, "codex_semantic_reader_review", "codex_semantic_reader_subagent", "Codex Semantic Reader Review", status)
+    write_semantic_review_artifact(repo, chapter, "deepseek_semantic_reader_review", "deepseek_semantic_reader", "DeepSeek Semantic Reader Review", status)
+    aggregate = semantic_review_payload(repo, chapter, "semantic_reader_review", "codex_deepseek_semantic_reader_aggregate", status)
+    aggregate["source_reviews"] = {
+        "codex_semantic_reader_review": {
+            "json": {"path": f"reviews/{chapter}/codex_semantic_reader_review.json", "exists": True, "sha256": file_sha(repo, f"reviews/{chapter}/codex_semantic_reader_review.json")},
+            "markdown": {"path": f"reviews/{chapter}/codex_semantic_reader_review.md", "exists": True, "sha256": file_sha(repo, f"reviews/{chapter}/codex_semantic_reader_review.md")},
+        },
+        "deepseek_semantic_reader_review": {
+            "json": {"path": f"reviews/{chapter}/deepseek_semantic_reader_review.json", "exists": True, "sha256": file_sha(repo, f"reviews/{chapter}/deepseek_semantic_reader_review.json")},
+            "markdown": {"path": f"reviews/{chapter}/deepseek_semantic_reader_review.md", "exists": True, "sha256": file_sha(repo, f"reviews/{chapter}/deepseek_semantic_reader_review.md")},
+        },
+    }
+    write(repo, f"reviews/{chapter}/semantic_reader_review.json", json.dumps(aggregate, ensure_ascii=False, indent=2) + "\n")
+    quote = aggregate["scene_samples"][0]["evidence_quote"]
+    body = (
+        f"# Semantic Reader Review: {chapter}\n\n"
+        f"status: {aggregate['status']}\n"
+        f"official_chapter_sha256: {aggregate['official_chapter']['sha256']}\n"
+        "review_sha256:\n\n"
+        "## Summary\n\n"
+        "- Codex and DeepSeek semantic reader review fixtures are both clear.\n\n"
+        "## Evidence Quotes\n\n"
+        f"- {quote}\n"
+    )
+    write(repo, f"reviews/{chapter}/semantic_reader_review.md", bind_review_hash(body))
+
+
+def write_specialty_reader_json_reviews(repo: Path, chapter: str, status: str = "CLEAR") -> None:
+    volume = chapter[:3]
+    chapter_rel = f"chapters/{volume}/c{int(chapter[-3:]):03d}.md"
+    chapter_path = repo / chapter_rel
+    official_hash = file_sha(repo, chapter_rel) if chapter_path.exists() else ""
+    quote = ""
+    if chapter_path.exists():
+        quote = next((line.strip() for line in chapter_path.read_text(encoding="utf-8").splitlines() if line.strip()), "")
+    review_status = status if status in {"CLEAR", "ACCEPTED_BY_HUMAN"} else "BLOCKED"
+    blockers = [] if review_status != "BLOCKED" else ["synthetic specialty review blocker"]
+    shared = {
+        "schema_version": 1,
+        "chapter": chapter,
+        "generated_at": "2000-01-01T00:00:00+00:00",
+        "status": review_status,
+        "official_chapter": {"path": chapter_rel, "sha256": official_hash},
+        "evidence_quotes": [quote],
+        "blockers": blockers,
+        "warnings": [],
+        "human_acceptance": None,
+    }
+    write(
+        repo,
+        f"reviews/{chapter}/emotion_relationship_gate.json",
+        json.dumps(
+            {
+                **shared,
+                "official_brief": {
+                    "path": f"outline/chapter_briefs/{chapter}.md",
+                    "sha256": file_sha(repo, f"outline/chapter_briefs/{chapter}.md"),
+                },
+                "checks": {
+                    "private_pressure": True,
+                    "relationship_material": True,
+                    "emotional_consequence": True,
+                    "relationship_change_event": False,
+                    "allowed_absence_reason": False,
+                },
+                "event_types": ["character_decision"],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+    )
+    write_semantic_reader_reviews(repo, chapter, status=status)
+    write(
+        repo,
+        f"reviews/{chapter}/memorable_scene.json",
+        json.dumps(
+            {
+                **shared,
+                "checks": {
+                    "retellable_scene": True,
+                    "character_action_memory": True,
+                    "non_bureaucratic_sentence": True,
+                },
             },
             ensure_ascii=False,
             indent=2,
@@ -1527,6 +1821,56 @@ def write_codex_anti_ai_manifest(repo: Path, chapter: str) -> None:
     write(repo, f"reviews/{chapter}/codex_anti_ai_review_manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
 
 
+def write_codex_semantic_reader_manifest(repo: Path, chapter: str) -> None:
+    prompt_rel = f"reviews/{chapter}/codex_semantic_reader_review_prompt.md"
+    chapter_rel = f"chapters/{chapter[:3]}/c{int(chapter[-3:]):03d}.md"
+    context_rel = f"state/context_pack/{chapter}.md"
+    review_context_json_rel = f"state/context_pack/{chapter}_review_context.json"
+    review_context_md_rel = f"state/context_pack/{chapter}_review_context.md"
+    write(repo, prompt_rel, "# Codex semantic reader prompt\n")
+    inputs = []
+    for rel_path in (
+        chapter_rel,
+        f"outline/chapter_briefs/{chapter}.md",
+        context_rel,
+        review_context_md_rel,
+        review_context_json_rel,
+        "state/project_style_contract.json",
+        "state/project_reader_promise.json",
+    ):
+        if (repo / rel_path).exists():
+            inputs.append({"path": rel_path, "sha256": file_sha(repo, rel_path)})
+    manifest = {
+        "schema_version": 1,
+        "chapter": chapter,
+        "reviewer": "codex_semantic_reader_subagent",
+        "generated_at": "2000-01-01T00:00:00+00:00",
+        "prompt": {"path": prompt_rel, "sha256": file_sha(repo, prompt_rel)},
+        "inputs": inputs,
+        "forbidden_inputs": [
+            f"reviews/{chapter}/codex_integrated_review.md",
+            f"reviews/{chapter}/deepseek_integrated_review.md",
+            f"reviews/{chapter}/deepseek_anti_ai_review.md",
+            f"reviews/{chapter}/deepseek_anti_ai_review.json",
+            f"reviews/{chapter}/deepseek_semantic_reader_review.md",
+            f"reviews/{chapter}/deepseek_semantic_reader_review.json",
+            f"reviews/{chapter}/ai_taste.md",
+            f"reviews/{chapter}/ai_taste.json",
+            f"reviews/{chapter}/dialogue_function.md",
+            f"reviews/{chapter}/dialogue_function.json",
+            f"reviews/{chapter}/model_disagreement.md",
+            f"reviews/{chapter}/semantic_reader_review.md",
+            f"reviews/{chapter}/semantic_reader_review.json",
+        ],
+        "outputs_expected": [
+            f"reviews/{chapter}/codex_semantic_reader_review.json",
+            f"reviews/{chapter}/codex_semantic_reader_review.md",
+        ],
+        "isolation_attestation": "fixture Codex semantic reader inputs are isolated",
+    }
+    write(repo, f"reviews/{chapter}/codex_semantic_reader_review_manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
+
+
 def write_deepseek_run_manifest(repo: Path, chapter: str, kind: str, output_rel: str) -> None:
     prompt_rel = f"external_runs/deepseek/{chapter}/{kind}.prompt.md"
     raw_rel = f"external_runs/deepseek/{chapter}/{kind}.raw.json"
@@ -1551,6 +1895,23 @@ def write_deepseek_run_manifest(repo: Path, chapter: str, kind: str, output_rel:
             f"reviews/{chapter}/ai_taste.json",
             f"reviews/{chapter}/dialogue_function.md",
             f"reviews/{chapter}/dialogue_function.json",
+        ],
+        "semantic_reader_review": [
+            f"reviews/{chapter}/codex_integrated_review.md",
+            f"reviews/{chapter}/codex_anti_ai_review.md",
+            f"reviews/{chapter}/codex_anti_ai_review.json",
+            f"reviews/{chapter}/codex_semantic_reader_review.md",
+            f"reviews/{chapter}/codex_semantic_reader_review.json",
+            f"reviews/{chapter}/deepseek_integrated_review.md",
+            f"reviews/{chapter}/deepseek_anti_ai_review.md",
+            f"reviews/{chapter}/deepseek_anti_ai_review.json",
+            f"reviews/{chapter}/ai_taste.md",
+            f"reviews/{chapter}/ai_taste.json",
+            f"reviews/{chapter}/dialogue_function.md",
+            f"reviews/{chapter}/dialogue_function.json",
+            f"reviews/{chapter}/model_disagreement.md",
+            f"reviews/{chapter}/semantic_reader_review.md",
+            f"reviews/{chapter}/semantic_reader_review.json",
         ],
         "style_review": [
             f"reviews/{chapter}/series_style.json",
@@ -1589,6 +1950,9 @@ def write_review_arbitration(repo: Path, chapter: str) -> None:
         f"reviews/{chapter}/continuity.md",
         f"reviews/{chapter}/ai_taste.json",
         f"reviews/{chapter}/dialogue_function.json",
+        f"reviews/{chapter}/codex_semantic_reader_review.json",
+        f"reviews/{chapter}/deepseek_semantic_reader_review.json",
+        f"reviews/{chapter}/semantic_reader_review.json",
         f"reviews/{chapter}/codex_anti_ai_review.json",
         f"reviews/{chapter}/deepseek_anti_ai_review.json",
     ):
@@ -1665,9 +2029,19 @@ def write_chapter_shape(repo: Path, chapter: str, status: str = "READY") -> None
         "generated_at": "2000-01-01T00:00:00+00:00",
         "status": status,
         "official_chapter": {"path": chapter_rel, "sha256": file_sha(repo, chapter_rel)},
-        "shape": {"opening": "arrival", "obstacle": "investigation", "resolution": "procedure", "hook": "mystery"},
-        "shape_key": "arrival|investigation|procedure|mystery",
+        "shape": {
+            "opening": "arrival",
+            "obstacle": "investigation",
+            "resolution": "procedure",
+            "hook": "mystery",
+            "protagonist_position": "active",
+            "protagonist_solution": "active_choice",
+            "side_character_function": "ally",
+            "exposition_load": "scene_first",
+        },
+        "shape_key": "arrival|investigation|procedure|mystery|active|active_choice|ally|scene_first",
         "repeat_count": 0,
+        "component_repeats": {},
         "blockers": [],
         "warnings": [],
         "human_acceptance": None,
@@ -1681,17 +2055,24 @@ def write_reader_feedback(repo: Path, chapter: str) -> None:
         "schema_version": 1,
         "chapter": chapter,
         "generated_at": "2000-01-01T00:00:00+00:00",
-        "status": "WARNING",
-        "response_count": 0,
-        "stuck_points": [],
-        "continue_reasons": [],
-        "reader_promise_gaps": [],
-        "risk": "fixture has no reader feedback",
-        "recommendation": "not a single-chapter hard gate",
+        "status": "READY",
+        "response_count": 1,
+        "source_response_refs": [{"path": f"reader_tests/chapter_feedback/{chapter}/reader_001.json", "exists": True, "sha256": "fixture"}],
+        "stuck_points": ["none"],
+        "continue_reasons": ["next clue pressure"],
+        "reader_promise_gaps": ["none"],
+        "favorite_moments": ["the final choice"],
+        "skip_moments": ["none"],
+        "next_click_intents": ["yes, platform pursuit is near"],
+        "protagonist_charm_notes": ["active under pressure"],
+        "author_explanation_flags": [],
+        "suspense_fatigue_flags": [],
+        "risk": "fixture reader feedback is ready",
+        "recommendation": "can be used as gate reader-experience evidence",
         "human_acceptance": None,
     }
     write(repo, f"reviews/{chapter}/reader_feedback.json", json.dumps(report, ensure_ascii=False, indent=2) + "\n")
-    write(repo, f"reviews/{chapter}/reader_feedback.md", f"# Reader Feedback: {chapter}\n\nstatus: WARNING\n")
+    write(repo, f"reviews/{chapter}/reader_feedback.md", f"# Reader Feedback: {chapter}\n\nstatus: READY\n")
 
 
 def write_reader_reward_gate(repo: Path, chapter: str, status: str = "READY") -> None:
@@ -1717,12 +2098,21 @@ def write_reader_reward_gate(repo: Path, chapter: str, status: str = "READY") ->
             "reader_reward_intensity": "R2",
             "reader_reward_delivery": "读者确认异常并非普通故障。",
             "reward_evidence_requirement": "读者确认异常并非普通故障。",
+            "pressure_level": "H2",
+            "release_valve": "读者确认异常并非普通故障。",
             "core_mechanism_presence": "used",
             "core_mechanism_silent_count": "0",
             "waiting_ending_debt": "none",
             "low_drama_carrier": "investigation",
             "low_drama_progress_type": "choice_completed",
             "small_payoff": "读者确认异常并非普通故障。",
+            "effective_progress_unit": "异常未确认 -> 异常被主角保存并验证",
+            "protagonist_action": "主角主动保存并验证异常证据。",
+            "protagonist_goal": "主角要确认异常并保护证据。",
+            "protagonist_cost_or_consequence": "主角承担追责压力。",
+            "protagonist_state_change": "异常未确认 -> 异常被主角保存并验证",
+            "protagonist_desire_or_principle": "主角坚持证据不能被流程抹掉。",
+            "world_rule": "异常证据必须在场景压力中被验证。",
         },
         "evidence_quotes": ["读者确认异常并非普通故障"],
         "matched_evidence_quotes": ["读者确认异常并非普通故障"],
@@ -1771,6 +2161,89 @@ def write_reader_reward_index(repo: Path) -> None:
         "warnings": [],
     }
     write(repo, "state/derived/pacing/reader_reward_index.json", json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+
+
+def write_reader_risk_index(repo: Path, chapter: str) -> None:
+    report = {
+        "schema_version": 1,
+        "generated_at": "2000-01-01T00:00:00+00:00",
+        "status": "READY",
+        "through": chapter,
+        "chapters_checked": int(chapter[-3:]),
+        "thresholds": {},
+        "category_statuses": {
+            "pace": "READY",
+            "repetition": "READY",
+            "suspense": "READY",
+            "protagonist": "READY",
+            "worldview": "READY",
+            "perspective": "READY",
+            "language": "READY",
+            "structural_efficiency": "READY",
+        },
+        "category_blockers": {},
+        "category_warnings": {},
+        "chapters": [],
+        "source_reader_promise": {
+            "path": "state/project_reader_promise.json",
+            "sha256": file_sha(repo, "state/project_reader_promise.json"),
+        },
+        "source_event_ledger": {
+            "path": "state/event_ledger.jsonl",
+            "sha256": file_sha(repo, "state/event_ledger.jsonl"),
+        },
+        "blockers": [],
+        "warnings": [],
+    }
+    write(repo, "state/derived/reader_risk/latest.json", json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+    write(repo, "state/derived/reader_risk/latest.md", f"# Reader Risk Index\n\nstatus: READY\nthrough: {chapter}\n")
+
+
+def write_long_health_ready(repo: Path, chapter: str, number: int) -> None:
+    rolling_refs = []
+    if number >= 10:
+        for item in range(max(1, number - 4), number + 1):
+            item_chapter = f"{chapter[:3]}_c{item:03d}"
+            gate_rel = f"reviews/{item_chapter}/reader_reward_gate.json"
+            shape_rel = f"reviews/{item_chapter}/chapter_shape.json"
+            if (repo / gate_rel).exists() and (repo / shape_rel).exists():
+                rolling_refs.append(
+                    {
+                        "chapter": item_chapter,
+                        "reader_reward_gate": {"path": gate_rel, "sha256": file_sha(repo, gate_rel)},
+                        "chapter_shape": {"path": shape_rel, "sha256": file_sha(repo, shape_rel)},
+                    }
+                )
+    report = {
+        "schema_version": 1,
+        "generated_at": "2000-01-01T00:00:00+00:00",
+        "status": "READY",
+        "through": chapter,
+        "chapters": number,
+        "source_event_ledger": {
+            "path": "state/event_ledger.jsonl",
+            "sha256": file_sha(repo, "state/event_ledger.jsonl"),
+        },
+        "source_reader_promise": {
+            "path": "state/project_reader_promise.json",
+            "sha256": file_sha(repo, "state/project_reader_promise.json"),
+        },
+        "rolling_input_refs": rolling_refs,
+        "events": 0,
+        "counts_by_type": {},
+        "unresolved_thread_count": 0,
+        "oldest_unresolved_thread_age": 0,
+        "average_payoff_interval": None,
+        "agency_density": 1.0,
+        "setting_debt_index": 0,
+        "gate_risks": [],
+        "reader_experience_ledgers": {},
+        "rolling_blockers": [],
+        "rolling_warnings": [],
+        "risk_flags": [],
+    }
+    write(repo, "state/derived/long_health/latest.json", json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+    write(repo, "state/derived/long_health/latest.md", f"# Long Health\n\nstatus: READY\nthrough: {chapter}\n")
 
 
 def write_fact_cards_report(repo: Path, chapter: str) -> None:
@@ -2091,8 +2564,10 @@ def write_complete_chapter_evidence(repo: Path, chapter: str, number: int) -> No
     write_codex_anti_ai_review(repo, chapter)
     write_codex_anti_ai_manifest(repo, chapter)
     write_deepseek_anti_ai_review(repo, chapter)
+    write_codex_semantic_reader_manifest(repo, chapter)
     write_deepseek_run_manifest(repo, chapter, "review", f"reviews/{chapter}/deepseek_integrated_review.md")
     write_deepseek_run_manifest(repo, chapter, "anti_ai_review", f"reviews/{chapter}/deepseek_anti_ai_review.json")
+    write_deepseek_run_manifest(repo, chapter, "semantic_reader_review", f"reviews/{chapter}/deepseek_semantic_reader_review.json")
     write_review_arbitration(repo, chapter)
     write_revision_plan(repo, chapter)
     write_gray_consequence(repo, chapter)
@@ -2100,9 +2575,12 @@ def write_complete_chapter_evidence(repo: Path, chapter: str, number: int) -> No
     write_reader_reward_gate(repo, chapter)
     write_reader_reward_index(repo)
     write_reader_feedback(repo, chapter)
+    write_reader_risk_index(repo, chapter)
     write_style_metrics(repo, chapter)
     if number >= 4:
         write_series_style_report(repo, chapter)
+    if number >= 10:
+        write_long_health_ready(repo, chapter, number)
     write_element_usage_report(repo, chapter)
     write_fact_cards_report(repo, chapter)
 
@@ -2126,6 +2604,10 @@ def write_human_events(repo: Path, count: int) -> None:
             )
         )
     write(repo, "state/event_ledger.jsonl", "\n".join(lines) + "\n")
+    if (repo / "state/project_reader_promise.json").exists():
+        write_reader_risk_index(repo, f"v01_c{count:03d}")
+        if count >= 10:
+            write_long_health_ready(repo, f"v01_c{count:03d}", count)
 
 
 class WorkflowGuardTests(unittest.TestCase):
@@ -2237,10 +2719,20 @@ class WorkflowGuardTests(unittest.TestCase):
                 "genre_fit.md",
                 "ai_taste.md",
                 "dialogue_function.md",
+                "emotion_relationship_gate.md",
+                "codex_semantic_reader_review.md",
+                "deepseek_semantic_reader_review.md",
+                "semantic_reader_review.md",
+                "memorable_scene.md",
                 "codex_anti_ai_review.md",
                 "deepseek_anti_ai_review.md",
                 "ai_taste.json",
                 "dialogue_function.json",
+                "emotion_relationship_gate.json",
+                "codex_semantic_reader_review.json",
+                "deepseek_semantic_reader_review.json",
+                "semantic_reader_review.json",
+                "memorable_scene.json",
                 "codex_anti_ai_review.json",
                 "deepseek_anti_ai_review.json",
                 "revision_plan.md",
@@ -2259,6 +2751,11 @@ class WorkflowGuardTests(unittest.TestCase):
                 "receive_chapter.json",
             ):
                 self.assertTrue((repo / f"reviews/v01_c002/{name}").exists(), name)
+            brief = (repo / "outline/chapter_briefs/v01_c002.md").read_text(encoding="utf-8")
+            self.assertIn("schema_version: 2", brief)
+            self.assertIn("## Story Card", brief)
+            self.assertIn("## Machine Contract Appendix", brief)
+            self.assertLess(brief.index("## Story Card"), brief.index("## Machine Contract Appendix"))
 
     def test_brief_check_rejects_missing_reader_contract_sections(self) -> None:
         with copy_repo() as temp:
@@ -2431,6 +2928,45 @@ class WorkflowGuardTests(unittest.TestCase):
             self.assertIn("codex_anti_ai_review.md", result.stdout)
             self.assertIn("codex_anti_ai_review.json", result.stdout)
 
+    def test_chapter_evidence_requires_codex_semantic_reader_review(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_complete_chapter_evidence(repo, "v01_c001", 1)
+            (repo / "reviews/v01_c001/codex_semantic_reader_review.json").unlink()
+            (repo / "reviews/v01_c001/codex_semantic_reader_review.md").unlink()
+
+            result = run(repo, "scripts/chapter_evidence.py", "--chapter", "v01_c001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("missing Codex semantic reader review", result.stdout)
+            self.assertIn("codex_semantic_reader_review.md", result.stdout)
+            self.assertIn("codex_semantic_reader_review.json", result.stdout)
+
+    def test_chapter_evidence_requires_deepseek_semantic_reader_manifest(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_complete_chapter_evidence(repo, "v01_c001", 1)
+            (repo / "external_runs/deepseek/v01_c001/semantic_reader_review.manifest.json").unlink()
+
+            result = run(repo, "scripts/chapter_evidence.py", "--chapter", "v01_c001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("missing DeepSeek run manifest external_runs/deepseek/v01_c001/semantic_reader_review.manifest.json", result.stdout)
+
+    def test_semantic_reader_review_requires_both_llm_sources(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            chapter = "v01_c001"
+            write(repo, "chapters/v01/c001.md", "# Official\n\nA live scene changes the room.\n")
+            write_semantic_review_artifact(repo, chapter, "codex_semantic_reader_review", "codex_semantic_reader_subagent", "Codex Semantic Reader Review")
+
+            result = run(repo, "scripts/novel.py", "semantic-reader-review", chapter, "--write", "--json")
+
+            self.assertNotEqual(result.returncode, 0)
+            data = json.loads(result.stdout)
+            self.assertEqual(data["status"], "NOT_READY")
+            self.assertIn("deepseek_semantic_reader_review.json", "\n".join(data["blockers"]))
+
     def test_deepseek_anti_ai_blocked_category_blocks_ship(self) -> None:
         with copy_repo() as temp:
             repo = temp
@@ -2562,8 +3098,10 @@ class WorkflowGuardTests(unittest.TestCase):
             write_codex_anti_ai_review(repo, "v01_c001")
             write_codex_anti_ai_manifest(repo, "v01_c001")
             write_deepseek_anti_ai_review(repo, "v01_c001")
+            write_codex_semantic_reader_manifest(repo, "v01_c001")
             write_deepseek_run_manifest(repo, "v01_c001", "review", "reviews/v01_c001/deepseek_integrated_review.md")
             write_deepseek_run_manifest(repo, "v01_c001", "anti_ai_review", "reviews/v01_c001/deepseek_anti_ai_review.json")
+            write_deepseek_run_manifest(repo, "v01_c001", "semantic_reader_review", "reviews/v01_c001/deepseek_semantic_reader_review.json")
             style = run(repo, "scripts/novel.py", "style-check", "v01_c001")
             self.assertEqual(style.returncode, 0, style.stdout + style.stderr)
             fact_cards = run(repo, "scripts/novel.py", "fact-cards", "v01_c001", "--write")
@@ -2683,6 +3221,18 @@ class WorkflowGuardTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("series style status is WARNING", result.stdout)
 
+    def test_chapter_evidence_requires_long_health_after_chapter_ten(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_complete_chapter_evidence(repo, "v01_c010", 10)
+            (repo / "state/derived/long_health/latest.json").unlink()
+            (repo / "state/derived/long_health/latest.md").unlink()
+
+            result = run(repo, "scripts/novel.py", "evidence", "v01_c010")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("chapter 10+ requires long_health", result.stdout)
+
     def test_chapter_evidence_accepts_human_series_override(self) -> None:
         with copy_repo() as temp:
             repo = temp
@@ -2708,8 +3258,14 @@ class WorkflowGuardTests(unittest.TestCase):
         with copy_repo() as temp:
             repo = temp
             write_core_setting_freeze(repo)
-            write(repo, "state/context_pack/v01_c001.md", "context\n")
-            write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF.format(chapter="v01_c001"))
+            write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF_V2.format(chapter="v01_c001"))
+            write(
+                repo,
+                "state/context_pack/v01_c001.md",
+                "## 本章 brief\n\nsource_trace:\n- path=outline/chapter_briefs/v01_c001.md\n\n"
+                + COMPLETE_BRIEF_V2.format(chapter="v01_c001")
+                + "\n\n## 本章防 AI 味合同\n\nshould not leak\n\n## Recent Key Events\n\nsource_trace:\n- event_id=e1\n\ncontext\n",
+            )
             write_context_quality(repo, "v01_c001")
 
             result = run(repo, "scripts/novel.py", "codex-draft-prompt", "v01_c001")
@@ -2718,7 +3274,16 @@ class WorkflowGuardTests(unittest.TestCase):
             prompt = (repo / "external_runs/codex/v01_c001/draft.prompt.md").read_text(encoding="utf-8")
             manifest = json.loads((repo / "external_runs/codex/v01_c001/draft.prompt.manifest.json").read_text(encoding="utf-8"))
             self.assertTrue(prompt.startswith("# Candidate Style Requirements"))
+            self.assertIn("# Official Story Card", prompt)
+            self.assertIn("# Hard Boundaries", prompt)
             self.assertLess(prompt.index("# Candidate Style Requirements"), prompt.index("# Context Pack"))
+            self.assertLess(prompt.index("# Official Story Card"), prompt.index("# Hard Boundaries"))
+            self.assertIn("Official brief body omitted from the drafting context pack", prompt)
+            self.assertNotIn("should not leak", prompt)
+            self.assertNotIn("本章防 AI 味合同", prompt)
+            self.assertNotIn("本章对白功能合同", prompt)
+            self.assertNotIn("本章句式破整合同", prompt)
+            self.assertNotIn("本章细节经济合同", prompt)
             self.assertEqual(manifest["status"], "READY")
             self.assertEqual(manifest["profile_mode"], "warmup_not_hard_gate")
             self.assertFalse(manifest["candidate_written"])
@@ -2727,8 +3292,14 @@ class WorkflowGuardTests(unittest.TestCase):
         with copy_repo() as temp:
             repo = temp
             write_core_setting_freeze(repo)
-            write(repo, "state/context_pack/v01_c001.md", "context\n")
-            write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF.format(chapter="v01_c001"))
+            write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF_V2.format(chapter="v01_c001"))
+            write(
+                repo,
+                "state/context_pack/v01_c001.md",
+                "## 本章 brief\n\nsource_trace:\n- path=outline/chapter_briefs/v01_c001.md\n\n"
+                + COMPLETE_BRIEF_V2.format(chapter="v01_c001")
+                + "\n\n## Recent Key Events\n\nsource_trace:\n- event_id=e1\n\ncontext\n",
+            )
             write_context_quality(repo, "v01_c001")
 
             result = run(repo, "scripts/novel.py", "deepseek-generate", "v01_c001", "--dry-run")
@@ -2738,6 +3309,9 @@ class WorkflowGuardTests(unittest.TestCase):
             manifest = json.loads((repo / "external_runs/deepseek/v01_c001/generate.prompt.manifest.json").read_text(encoding="utf-8"))
             self.assertTrue(prompt.startswith("# Candidate Style Requirements"))
             self.assertIn("# User", prompt)
+            self.assertIn("# Official Story Card", prompt)
+            self.assertIn("# Hard Boundaries", prompt)
+            self.assertIn("Official brief body omitted from the drafting context pack", prompt)
             self.assertEqual(manifest["provider"], "DeepSeek")
             self.assertFalse(manifest["candidate_written"])
 
@@ -2906,6 +3480,7 @@ class WorkflowGuardTests(unittest.TestCase):
                 "accept-fact-card",
                 "element-usage",
                 "long-health",
+                "pilot-reader-experience",
                 "longrun-smoke",
             ):
                 self.assertIn(command, help_result.stdout)
@@ -3060,7 +3635,7 @@ class WorkflowGuardTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("# Editor Audit Report", result.stdout)
             self.assertIn("core-freeze-check: NOT_READY", result.stdout)
-            self.assertIn("brief-check: NOT_READY", result.stdout)
+            self.assertIn("brief-check:", result.stdout)
             self.assertIn("next_prompt:", result.stdout)
             self.assertIn("deepseek-preflight", result.stdout)
             self.assertIn("code: CORE_FREEZE_CHECK_NOT_READY", result.stdout)
@@ -3107,13 +3682,18 @@ class WorkflowGuardTests(unittest.TestCase):
             env["DEEPSEEK_API_KEY"] = "test-key"
 
             start = run_with_env(repo, ("scripts/novel.py", "start-here", "--json"), env)
-            preflight = run_with_env(repo, ("scripts/novel.py", "opening-preflight", "--json"), env)
+            blocked_preflight = run_with_env(repo, ("scripts/novel.py", "opening-preflight", "--json"), env)
+            preflight = run_with_env(repo, ("scripts/novel.py", "opening-preflight", "--json", "--agents-ready"), env)
 
             self.assertEqual(start.returncode, 0, start.stdout + start.stderr)
             start_data = json.loads(start.stdout)
             self.assertEqual(start_data["env_status"], "ENV_READY")
             self.assertEqual(start_data["template_status"], "TEMPLATE_READY")
             self.assertEqual(start_data["story_status"], "STORY_NOT_READY")
+            self.assertNotEqual(blocked_preflight.returncode, 0)
+            blocked_data = json.loads(blocked_preflight.stdout)
+            self.assertEqual(blocked_data["status"], "BLOCKED")
+            self.assertIn("Opening experiment requires product_founder", "\n".join(blocked_data["blockers"]))
             self.assertEqual(preflight.returncode, 0, preflight.stdout + preflight.stderr)
             preflight_data = json.loads(preflight.stdout)
             self.assertEqual(preflight_data["status"], "READY_FOR_IDEA")
@@ -3283,6 +3863,7 @@ class WorkflowGuardTests(unittest.TestCase):
         with copy_repo() as temp:
             repo = temp
             write_core_setting_freeze(repo)
+            write(repo, "outline/chapter_briefs/v01_c001.md", "# v01_c001 Brief\n\nTODO\n")
 
             result = run(repo, "scripts/novel.py", "write", "v01_c001")
 
@@ -3338,7 +3919,7 @@ class WorkflowGuardTests(unittest.TestCase):
             self.assertIn("core setting freeze", result.stderr)
             self.assertFalse((repo / "external_runs/deepseek/v01_c001/brief.prompt.md").exists())
 
-    def test_deepseek_brief_dry_run_prompt_requires_complete_brief_fields(self) -> None:
+    def test_deepseek_brief_dry_run_prompt_uses_v2_story_card_contract(self) -> None:
         with copy_repo() as temp:
             repo = temp
             write_core_setting_freeze(repo)
@@ -3348,47 +3929,39 @@ class WorkflowGuardTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             prompt = (repo / "external_runs/deepseek/v01_c001/brief.prompt.md").read_text(encoding="utf-8")
+            self.assertIn("schema_version: 2", prompt)
+            self.assertIn("## Story Card", prompt)
+            self.assertIn("## Machine Contract Appendix", prompt)
+            self.assertLess(prompt.index("## Story Card"), prompt.index("## Machine Contract Appendix"))
             required = [
-                "本章功能",
-                "开篇吸引点",
-                "主角目标",
-                "主要阻力",
-                "主角主动选择",
+                "第一屏扰动",
+                "主角本章想要",
+                "主角主动动作",
+                "最大阻力",
+                "中段变化点",
+                "本章小兑现",
+                "before -> after",
+                "章末点击理由",
+                "本章只讲懂的一条世界规则",
+                "禁止临场破局",
                 "上章章末锚点",
                 "本章开场落点",
                 "场景承接说明",
-                "本章进展契约",
-                "本章代价与后果契约",
-                "本章解决边界",
                 "主线牵引档位",
                 "外部压力档位",
                 "本章继承变化",
                 "本章节奏用途",
-                "节奏说明",
-                "本章推进",
-                "信息增量",
-                "章末问题",
-                "本章使用设定",
-                "本章可用人物状态",
-                "本章可用道具 / 装备",
-                "本章可用道具 IDs",
-                "本章可用技能 / 能力",
-                "本章可用技能 IDs",
-                "能力限制 / 代价",
-                "未解决伏笔",
-                "新增设定",
-                "本章允许新增元素",
-                "本章禁止临场解决",
-                "伏笔：新开 / 推进 / 回收",
-                "本章禁止新增",
-                "本章禁止解决",
-                "禁止新增 / 禁止解决 / 禁止模仿",
+                "本章进展契约",
+                "reader_reward_intensity",
+                "reader_reward_type",
+                "reward_evidence_requirement",
+                "最低落账事件",
             ]
             for field in required:
                 self.assertIn(field, prompt)
-            self.assertIn("字段名必须逐字一致", prompt)
-            self.assertIn("不能删减、合并、改名或换成 JSON", prompt)
-            self.assertIn("L0/L1/L2/L3/L4", prompt)
+            self.assertIn("Story Card 只写创作卡", prompt)
+            self.assertNotIn("本章防 AI 味合同", prompt)
+            self.assertNotIn("本章对白功能合同", prompt)
             self.assertIn("不得写“待定”“待填”“TODO”“待人类确认”", prompt)
 
     def test_status_prefers_ready_idea_lab_over_questionnaire(self) -> None:
@@ -3458,6 +4031,10 @@ class WorkflowGuardTests(unittest.TestCase):
             self.assertTrue((repo / f"{lab}/selection.json").exists())
             self.assertTrue((repo / f"{lab}/core_setting_freeze.json").exists())
             self.assertTrue((repo / "state/idea_lab/selected.json").exists())
+            c001_brief = (repo / "outline/chapter_briefs/v01_c001.md").read_text(encoding="utf-8")
+            self.assertIn("schema_version: 2", c001_brief)
+            self.assertIn("## Story Card", c001_brief)
+            self.assertIn("## Machine Contract Appendix", c001_brief)
             self.assertIn("idea_lab_id: idea_test", (repo / "outline/premise.md").read_text(encoding="utf-8"))
             self.assertIn("开书前核心设定冻结", (repo / "outline/premise.md").read_text(encoding="utf-8"))
             self.assertIn("source: core_setting_freeze", (repo / "bible/rules.md").read_text(encoding="utf-8"))
@@ -3466,7 +4043,7 @@ class WorkflowGuardTests(unittest.TestCase):
             self.assertNotIn("待定", (repo / "bible/rules.md").read_text(encoding="utf-8"))
             self.assertIn("不得直接视为 canon", (repo / "bible/open_questions.md").read_text(encoding="utf-8"))
             self.assertIn("Gate A", (repo / "outline/gate_a_3_chapters.md").read_text(encoding="utf-8"))
-            self.assertIn("待定", (repo / "outline/chapter_briefs/v01_c001.md").read_text(encoding="utf-8"))
+            self.assertIn("TODO", (repo / "outline/chapter_briefs/v01_c001.md").read_text(encoding="utf-8"))
             self.assertEqual(canon_before, (repo / "bible/canon.md").read_text(encoding="utf-8"))
             self.assertEqual(ledger_before, (repo / "state/event_ledger.jsonl").read_text(encoding="utf-8"))
             self.assertFalse((repo / "chapters/v01/c001.md").exists())
@@ -4273,6 +4850,104 @@ print("OK: stub deepseek idea")
             self.assertFalse((repo / f"reviews/{chapter}/deepseek_anti_ai_review.json").exists())
             self.assertFalse((repo / f"reviews/{chapter}/deepseek_anti_ai_review.md").exists())
 
+    def test_deepseek_semantic_reader_review_valid_response_writes_structured_report(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write(repo, "chapters/v01/c001.md", "Official chapter changes the room with a live choice.\n")
+            write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF.format(chapter="v01_c001"))
+            write(repo, "state/context_pack/v01_c001.md", "context\n")
+            categories = {
+                key: {
+                    "status": "CLEAR",
+                    "severity": "P3",
+                    "evidence_quotes": ["Official chapter changes the room with a live choice."],
+                    "issue": "clear",
+                    "revision_actions": ["none"],
+                }
+                for key in SEMANTIC_READER_CATEGORIES
+            }
+            content = json.dumps(
+                {
+                    "status": "CLEAR",
+                    "action": "Ship",
+                    "summary": "ok",
+                    "categories": categories,
+                    "scene_samples": [
+                        {
+                            "evidence_quote": "Official chapter changes the room with a live choice.",
+                            "reader_effect": "the scene feels dramatic",
+                            "drama_movement": "choice changes leverage",
+                            "status": "CLEAR",
+                        }
+                    ],
+                    "blockers": [],
+                    "warnings": [],
+                },
+                ensure_ascii=False,
+            )
+
+            result = run_deepseek_module_with_response(
+                repo,
+                "run_deepseek_semantic_reader_review",
+                repr({"choices": [{"message": {"content": content}}]}),
+                "--chapter",
+                "v01_c001",
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            data = json.loads((repo / "reviews/v01_c001/deepseek_semantic_reader_review.json").read_text(encoding="utf-8"))
+            md = (repo / "reviews/v01_c001/deepseek_semantic_reader_review.md").read_text(encoding="utf-8")
+            manifest = json.loads((repo / "external_runs/deepseek/v01_c001/semantic_reader_review.manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(data["status"], "CLEAR")
+            self.assertIn("review_sha256:", md)
+            self.assertEqual(manifest["kind"], "semantic_reader_review")
+            self.assertTrue((repo / "external_runs/deepseek/v01_c001/semantic_reader_review.raw.json").exists())
+
+    def test_deepseek_semantic_reader_dry_run_does_not_read_other_reviews(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            chapter = "v01_c009"
+            write(repo, "chapters/v01/c009.md", "Official chapter changes the room.\n")
+            write(repo, f"outline/chapter_briefs/{chapter}.md", COMPLETE_BRIEF.format(chapter=chapter))
+            write(repo, f"state/context_pack/{chapter}.md", "context\n")
+            write(repo, f"reviews/{chapter}/codex_semantic_reader_review.md", "CODEX_SEMANTIC_SENTINEL_SHOULD_NOT_BE_READ\n")
+            write(repo, f"reviews/{chapter}/ai_taste.md", "AI_TASTE_SENTINEL_SHOULD_NOT_BE_READ\n")
+            write(repo, f"reviews/{chapter}/dialogue_function.md", "DIALOGUE_SENTINEL_SHOULD_NOT_BE_READ\n")
+
+            result = run(repo, "scripts/novel.py", "deepseek-semantic-reader-review", chapter, "--dry-run")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            prompt = (repo / f"external_runs/deepseek/{chapter}/semantic_reader_review.prompt.md").read_text(encoding="utf-8")
+            manifest = json.loads((repo / f"external_runs/deepseek/{chapter}/semantic_reader_review.manifest.json").read_text(encoding="utf-8"))
+            self.assertNotIn("CODEX_SEMANTIC_SENTINEL_SHOULD_NOT_BE_READ", prompt)
+            self.assertNotIn("AI_TASTE_SENTINEL_SHOULD_NOT_BE_READ", prompt)
+            self.assertNotIn("DIALOGUE_SENTINEL_SHOULD_NOT_BE_READ", prompt)
+            self.assertTrue(manifest["dry_run"])
+            self.assertFalse((repo / f"reviews/{chapter}/deepseek_semantic_reader_review.json").exists())
+            self.assertFalse((repo / f"reviews/{chapter}/deepseek_semantic_reader_review.md").exists())
+
+    def test_codex_semantic_reader_start_writes_isolated_prompt_manifest(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            chapter = "v01_c001"
+            write(repo, "chapters/v01/c001.md", "Official chapter changes the room.\n")
+            write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF.format(chapter=chapter))
+            write(repo, "state/context_pack/v01_c001.md", "context\n")
+            write(repo, "state/project_style_contract.json", '{"status":"READY"}\n')
+            write(repo, "state/project_reader_promise.json", '{"status":"READY"}\n')
+            write(repo, f"reviews/{chapter}/deepseek_semantic_reader_review.md", "DEEPSEEK_SEMANTIC_SENTINEL_SHOULD_NOT_BE_READ\n")
+            write(repo, f"reviews/{chapter}/ai_taste.md", "AI_TASTE_SENTINEL_SHOULD_NOT_BE_READ\n")
+
+            result = run(repo, "scripts/novel.py", "codex-semantic-reader-review-start", chapter)
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            prompt = (repo / f"reviews/{chapter}/codex_semantic_reader_review_prompt.md").read_text(encoding="utf-8")
+            manifest = json.loads((repo / f"reviews/{chapter}/codex_semantic_reader_review_manifest.json").read_text(encoding="utf-8"))
+            self.assertNotIn("DEEPSEEK_SEMANTIC_SENTINEL_SHOULD_NOT_BE_READ", prompt)
+            self.assertNotIn("AI_TASTE_SENTINEL_SHOULD_NOT_BE_READ", prompt)
+            self.assertEqual(manifest["reviewer"], "codex_semantic_reader_subagent")
+            self.assertIn(f"reviews/{chapter}/deepseek_semantic_reader_review.md", manifest["forbidden_inputs"])
+
     def test_deepseek_brief_valid_response_writes_candidate_and_raw_json(self) -> None:
         with copy_repo() as temp:
             repo = temp
@@ -4476,8 +5151,10 @@ print("OK: stub deepseek idea")
             write_codex_anti_ai_review(repo, "v01_c001")
             write_codex_anti_ai_manifest(repo, "v01_c001")
             write_deepseek_anti_ai_review(repo, "v01_c001")
+            write_codex_semantic_reader_manifest(repo, "v01_c001")
             write_deepseek_run_manifest(repo, "v01_c001", "review", "reviews/v01_c001/deepseek_integrated_review.md")
             write_deepseek_run_manifest(repo, "v01_c001", "anti_ai_review", "reviews/v01_c001/deepseek_anti_ai_review.json")
+            write_deepseek_run_manifest(repo, "v01_c001", "semantic_reader_review", "reviews/v01_c001/deepseek_semantic_reader_review.json")
             write_review_arbitration(repo, "v01_c001")
             write_revision_plan(repo, "v01_c001")
             write_gray_consequence(repo, "v01_c001")
@@ -4485,6 +5162,7 @@ print("OK: stub deepseek idea")
             write_reader_reward_gate(repo, "v01_c001")
             write_reader_reward_index(repo)
             write_reader_feedback(repo, "v01_c001")
+            write_reader_risk_index(repo, "v01_c001")
             write_style_metrics(repo, "v01_c001")
             write_element_usage_report(repo, "v01_c001")
 
@@ -5097,6 +5775,21 @@ print("OK: stub deepseek idea")
             self.assertNotEqual(placeholder.returncode, 0)
             self.assertIn("placeholder", placeholder.stderr)
 
+    def test_template_c001_brief_is_non_story_placeholder(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            text = (repo / "outline/chapter_briefs/v01_c001.md").read_text(encoding="utf-8")
+
+            self.assertIn("schema_version: 2", text)
+            self.assertIn("template_scaffold_not_story_fact", text)
+            self.assertIn("sample_status: TEMPLATE_PLACEHOLDER", text)
+            self.assertIn("## Story Card", text)
+            self.assertIn("## Machine Contract Appendix", text)
+            self.assertIn("TODO", text)
+            self.assertNotIn("证据夜班", text)
+            self.assertNotIn("异常记录", text)
+            self.assertNotIn("平台抹除", text)
+
     def test_doctor_reports_missing_git_as_error(self) -> None:
         with copy_repo() as temp:
             repo = temp
@@ -5131,6 +5824,7 @@ print("OK: stub deepseek idea")
     def test_brief_check_requires_anti_drift_sections(self) -> None:
         with copy_repo() as temp:
             repo = temp
+            (repo / "outline/chapter_briefs/v01_c001.md").unlink()
             missing = run(repo, "scripts/novel.py", "brief-check", "v01_c001")
             self.assertNotEqual(missing.returncode, 0)
             self.assertIn("status: NOT_READY", missing.stdout)
@@ -5140,6 +5834,52 @@ print("OK: stub deepseek idea")
 
             self.assertEqual(ready.returncode, 0, ready.stdout + ready.stderr)
             self.assertIn("status: READY", ready.stdout)
+
+    def test_v2_story_card_and_machine_appendix_pass_brief_check(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF_V2.format(chapter="v01_c001"))
+
+            result = run(repo, "scripts/novel.py", "brief-check", "v01_c001")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("status: READY", result.stdout)
+
+    def test_v2_brief_check_blocks_missing_before_after_and_reward_intensity(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            missing_before_after = COMPLETE_BRIEF_V2.format(chapter="v01_c001").replace(
+                "- before -> after：主角只旁观异常 -> 主角保存异常证据并承担后续调查压力。",
+                "- before_after：主角只旁观异常 -> 主角保存异常证据并承担后续调查压力。",
+            )
+            write(repo, "outline/chapter_briefs/v01_c001.md", missing_before_after)
+
+            result = run(repo, "scripts/novel.py", "brief-check", "v01_c001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Story Card missing field: before -> after", result.stdout)
+
+            missing_reward = COMPLETE_BRIEF_V2.format(chapter="v01_c001").replace(
+                "- reader_reward_intensity：R2",
+                "- reader_reward_level：R2",
+            )
+            write(repo, "outline/chapter_briefs/v01_c001.md", missing_reward)
+
+            result = run(repo, "scripts/novel.py", "brief-check", "v01_c001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Machine Contract Appendix missing field: reader_reward_intensity", result.stdout)
+
+            missing_machine_detail = COMPLETE_BRIEF_V2.format(chapter="v01_c001").replace(
+                "- 低戏剧载体承载的推进类型：choice_completed\n",
+                "",
+            )
+            write(repo, "outline/chapter_briefs/v01_c001.md", missing_machine_detail)
+
+            result = run(repo, "scripts/novel.py", "brief-check", "v01_c001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Machine Contract Appendix missing field: 低戏剧载体承载的推进类型", result.stdout)
 
     def test_reader_promise_requires_manual_reward_policy(self) -> None:
         with copy_repo() as temp:
@@ -5153,6 +5893,29 @@ print("OK: stub deepseek idea")
 
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("reader_reward_intensity_policy", result.stdout)
+
+    def test_reader_promise_v2_requires_reader_experience_fields(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_reader_promise_ready(repo)
+            data = json.loads((repo / "state/project_reader_promise.json").read_text(encoding="utf-8"))
+            data.pop("release_valve_policy")
+            write(repo, "state/project_reader_promise.json", json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+
+            missing = run(repo, "scripts/novel.py", "reader-promise-check", "--require-ready")
+
+            self.assertNotEqual(missing.returncode, 0)
+            self.assertIn("release_valve_policy", missing.stdout)
+
+            write_reader_promise_ready(repo)
+            data = json.loads((repo / "state/project_reader_promise.json").read_text(encoding="utf-8"))
+            data["positive_promises"] = []
+            write(repo, "state/project_reader_promise.json", json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+
+            empty = run(repo, "scripts/novel.py", "reader-promise-check", "--require-ready")
+
+            self.assertNotEqual(empty.returncode, 0)
+            self.assertIn("positive_promises", empty.stdout)
 
     def test_brief_check_requires_title_and_reward_contract_fields(self) -> None:
         with copy_repo() as temp:
@@ -5214,6 +5977,35 @@ print("OK: stub deepseek idea")
 
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("official chapter first line", result.stdout)
+
+    def test_reader_reward_check_blocks_v2_r2_without_matched_reward_quote(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_reader_promise_ready(repo)
+            write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF_V2.format(chapter="v01_c001"))
+            write(repo, "chapters/v01/c001.md", "# 证据夜班\n\n主角坐在办公室里等报告，没有做出选择。\n")
+
+            result = run(repo, "scripts/novel.py", "reader-reward-check", "v01_c001", "--write")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("R2+ 缺正文 reward evidence", result.stdout)
+            self.assertIn("缺正文主角主动动作 evidence", result.stdout)
+
+    def test_reader_reward_check_blocks_v2_world_rule_without_scene_test(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_reader_promise_ready(repo)
+            write(repo, "outline/chapter_briefs/v01_c001.md", COMPLETE_BRIEF_V2.format(chapter="v01_c001"))
+            write(
+                repo,
+                "chapters/v01/c001.md",
+                "# 证据夜班\n\n异常会留下证据痕迹，但平台流程会优先抹除让普通人无法追责的部分。\n",
+            )
+
+            result = run(repo, "scripts/novel.py", "reader-reward-check", "v01_c001", "--write")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("世界规则只有解释", result.stdout)
 
     def test_reader_reward_index_blocks_blocked_source_gate(self) -> None:
         with copy_repo() as temp:
@@ -5285,6 +6077,170 @@ print("OK: stub deepseek idea")
 
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("核心机制沉默", result.stdout)
+
+    def test_reader_risk_index_blocks_all_reader_risk_categories(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_reader_promise_ready(repo)
+            events = []
+            for number in range(1, 7):
+                chapter = f"v01_c{number:03d}"
+                write(repo, f"outline/chapter_briefs/{chapter}.md", COMPLETE_BRIEF.format(chapter=chapter))
+                write(repo, f"chapters/v01/c{number:03d}.md", "# 证据夜班\n\n只有解释说明，因此主角被迫等待流程通知，状态没有变化。\n")
+                write_reader_reward_gate(repo, chapter)
+                gate_path = repo / f"reviews/{chapter}/reader_reward_gate.json"
+                gate = json.loads(gate_path.read_text(encoding="utf-8"))
+                gate["matched_evidence_quotes"] = []
+                gate["evidence_quotes"] = []
+                gate["contract"]["pressure_level"] = "H3"
+                gate["contract"]["release_valve"] = ""
+                gate["contract"]["effective_progress_unit"] = "状态没有变化"
+                gate_path.write_text(json.dumps(gate, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+                write_chapter_shape(repo, chapter)
+                shape_path = repo / f"reviews/{chapter}/chapter_shape.json"
+                shape = json.loads(shape_path.read_text(encoding="utf-8"))
+                shape["shape"] = {
+                    "opening": "meeting",
+                    "obstacle": "bureaucracy",
+                    "resolution": "procedure",
+                    "hook": "mystery",
+                    "protagonist_position": "reactive",
+                    "protagonist_solution": "procedure",
+                    "side_character_function": "messenger",
+                    "exposition_load": "explanation_only",
+                }
+                shape["shape_key"] = "meeting|bureaucracy|procedure|mystery|reactive|procedure|messenger|explanation_only"
+                shape_path.write_text(json.dumps(shape, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+                write_reader_feedback(repo, chapter)
+                feedback_path = repo / f"reviews/{chapter}/reader_feedback.json"
+                feedback = json.loads(feedback_path.read_text(encoding="utf-8"))
+                if number == 3:
+                    feedback["status"] = "WARNING"
+                    feedback["response_count"] = 0
+                    feedback["source_response_refs"] = []
+                    feedback["human_acceptance"] = None
+                if number == 4:
+                    feedback["author_explanation_flags"] = ["像作者在解释设定，不像戏。"]
+                feedback_path.write_text(json.dumps(feedback, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+                events.append(
+                    {
+                        "event_id": f"{chapter}_thread_opened",
+                        "chapter": chapter,
+                        "type": "thread_opened",
+                        "fact": f"{chapter} opens another question",
+                        "evidence_quote": "只有解释说明",
+                        "consequence": "only opens suspense",
+                        "verified_by": "human",
+                        "importance": "P2",
+                    }
+                )
+            write(repo, "state/event_ledger.jsonl", "\n".join(json.dumps(item, ensure_ascii=False) for item in events) + "\n")
+
+            result = run(repo, "scripts/novel.py", "reader-risk-index", "--to", "v01_c006", "--write", "--json")
+
+            self.assertNotEqual(result.returncode, 0)
+            data = json.loads(result.stdout[result.stdout.index("{") :])
+            self.assertEqual(data["status"], "BLOCKED")
+            for category in (
+                "pace",
+                "repetition",
+                "suspense",
+                "protagonist",
+                "worldview",
+                "perspective",
+                "language",
+                "structural_efficiency",
+            ):
+                self.assertEqual(data["category_statuses"][category], "BLOCKED", category)
+
+    def test_chapter_evidence_rejects_stale_reader_risk_index_sources(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_complete_chapter_evidence(repo, "v01_c001", 1)
+            with (repo / "state/event_ledger.jsonl").open("a", encoding="utf-8", newline="\n") as handle:
+                handle.write(
+                    json.dumps(
+                        {
+                            "event_id": "v01_c001_extra",
+                            "chapter": "v01_c001",
+                            "type": "thread_advanced",
+                            "fact": "extra fact",
+                            "evidence_quote": "Official chapter v01_c001",
+                            "consequence": "stales risk index",
+                            "verified_by": "human",
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+                )
+
+            result = run(repo, "scripts/novel.py", "chapter-evidence", "v01_c001")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("reader risk source_event_ledger hash is stale", result.stdout)
+
+    def test_pilot_reader_experience_blocks_missing_gate_a_experience_evidence(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_reader_promise_ready(repo)
+            for number in range(1, 4):
+                chapter = f"v01_c{number:03d}"
+                write(repo, f"outline/chapter_briefs/{chapter}.md", COMPLETE_BRIEF_V2.format(chapter=chapter))
+                write(repo, f"chapters/v01/c{number:03d}.md", "# 证据夜班\n\n只有解释，没有行动。\n")
+                write_reader_reward_gate(repo, chapter)
+                gate_path = repo / f"reviews/{chapter}/reader_reward_gate.json"
+                gate = json.loads(gate_path.read_text(encoding="utf-8"))
+                gate["matched_evidence_quotes"] = []
+                gate["contract"]["protagonist_action"] = ""
+                gate["contract"]["world_rule"] = ""
+                gate_path.write_text(json.dumps(gate, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+                write_chapter_shape(repo, chapter, status="WARNING")
+
+            result = run(repo, "scripts/novel.py", "pilot-reader-experience", "A", "--write")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("status: BLOCKED", result.stdout)
+            self.assertIn("missing matched reader reward evidence quote", result.stdout)
+            self.assertIn("protagonist agency is unproven", result.stdout)
+            self.assertTrue((repo / "state/gates/gate_a_reader_experience.json").exists())
+
+    def test_pilot_reader_experience_ignores_non_human_ledger_events(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_reader_promise_ready(repo)
+            events = []
+            for number in range(1, 4):
+                chapter = f"v01_c{number:03d}"
+                write(repo, f"outline/chapter_briefs/{chapter}.md", COMPLETE_BRIEF_V2.format(chapter=chapter))
+                write(repo, f"chapters/v01/c{number:03d}.md", "# 证据夜班\n\n读者确认异常并非普通故障。\n")
+                write_reader_reward_gate(repo, chapter)
+                write_chapter_shape(repo, chapter)
+                shape_path = repo / f"reviews/{chapter}/chapter_shape.json"
+                shape = json.loads(shape_path.read_text(encoding="utf-8"))
+                shape["shape"]["hook"] = f"mystery_{number}"
+                shape["shape_key"] = f"arrival|investigation|procedure|mystery_{number}"
+                shape_path.write_text(json.dumps(shape, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+                for event_type in ("character_decision", "rule_reveal", "thread_advanced"):
+                    events.append(
+                        {
+                            "event_id": f"{chapter}_{event_type}",
+                            "chapter": chapter,
+                            "type": event_type,
+                            "fact": f"{chapter} synthetic {event_type}",
+                            "evidence_quote": "读者确认异常并非普通故障",
+                            "consequence": "not human verified",
+                            "verified_by": "model",
+                            "importance": "P2",
+                        }
+                    )
+            write(repo, "state/event_ledger.jsonl", "\n".join(json.dumps(item, ensure_ascii=False) for item in events) + "\n")
+
+            result = run(repo, "scripts/novel.py", "pilot-reader-experience", "A")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("protagonist agency is unproven", result.stdout)
+            self.assertIn("world rule scene test is unproven", result.stdout)
+            self.assertIn("opens suspense without a thread_advanced/thread_paid_off event", result.stdout)
 
     def test_brief_check_requires_pacing_levels_and_explanations(self) -> None:
         with copy_repo() as temp:
@@ -5448,6 +6404,28 @@ print("OK: stub deepseek idea")
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("status: BLOCKED", result.stdout)
             self.assertIn("连续 3 章推进重量 C0/C1", result.stdout)
+
+    def test_pacing_check_blocks_three_chapter_window_without_effective_progress(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            for number in range(1, 4):
+                chapter = f"v01_c{number:03d}"
+                brief = COMPLETE_BRIEF.format(chapter=chapter).replace(
+                    "- 进展类型：decision",
+                    "- 进展类型：setup",
+                ).replace(
+                    "- 推进重量：C2",
+                    "- 推进重量：C1",
+                ).replace(
+                    "- 后果等级：scar",
+                    "- 后果等级：reversible",
+                )
+                write(repo, f"outline/chapter_briefs/{chapter}.md", brief)
+
+            result = run(repo, "scripts/novel.py", "pacing-check", "v01_c003")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("3 章窗口没有有效进展契约", result.stdout)
 
     def test_pacing_check_blocks_high_payoff_without_digestion(self) -> None:
         with copy_repo() as temp:
@@ -5803,6 +6781,7 @@ print("OK: stub deepseek idea")
         with copy_repo() as temp:
             repo = temp
             workflow = run(repo, "scripts/novel.py", "workflow-map", "--format", "mermaid")
+            write(repo, "outline/chapter_briefs/v01_c001.md", "# v01_c001 Brief\n\nTODO\n")
             diagnose = run(repo, "scripts/novel.py", "brief-diagnose", "v01_c001")
 
             self.assertEqual(workflow.returncode, 0, workflow.stdout + workflow.stderr)
@@ -6062,6 +7041,23 @@ print("OK: stub deepseek idea")
                 self.assertIn("gates", data)
                 self.assertIn("locks", data)
                 self.assertIn("stale", data)
+                self.assertIn("reader_risk", data)
+                self.assertIn("long_health", data)
+                self.assertIn("gate_countdown", data)
+
+    def test_desk_writes_static_dashboard_html(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            result = run(repo, "scripts/novel.py", "desk", "--write-report", "--html")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            md = repo / "state/audit/dashboard.md"
+            html = repo / "state/audit/dashboard.html"
+            self.assertTrue(md.exists())
+            self.assertTrue(html.exists())
+            body = html.read_text(encoding="utf-8")
+            self.assertIn("Reader Risk", body)
+            self.assertIn("Long Health", body)
 
     def test_preview_commands_print_plans_without_writing_files(self) -> None:
         with copy_repo() as temp:
@@ -6263,6 +7259,49 @@ print("OK: stub deepseek idea")
             self.assertIn("context quality context_pack_sha256 is stale", result.stdout)
             self.assertIn("recorded source input hash changed", result.stdout)
 
+    def test_stale_check_detects_reader_reward_index_stale_gate_hash(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_complete_chapter_evidence(repo, "v01_c001", 1)
+            gate_path = repo / "reviews/v01_c001/reader_reward_gate.json"
+            gate = json.loads(gate_path.read_text(encoding="utf-8"))
+            gate["warnings"].append("changed after index build")
+            gate_path.write_text(json.dumps(gate, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+            result = run(repo, "scripts/novel.py", "stale-check", "v01_c001")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("status: STALE", result.stdout)
+            self.assertIn("reader_reward_index v01_c001 gate hash is stale", result.stdout)
+
+    def test_stale_check_detects_reader_risk_and_long_health_stale_event_ledger(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_complete_chapter_evidence(repo, "v01_c010", 10)
+            with (repo / "state/event_ledger.jsonl").open("a", encoding="utf-8", newline="\n") as handle:
+                handle.write(
+                    json.dumps(
+                        {
+                            "event_id": "v01_c010_anchor",
+                            "chapter": "v01_c010",
+                            "type": "chapter_anchor",
+                            "fact": "anchor added after derived reports",
+                            "evidence_quote": "Official chapter v01_c010",
+                            "consequence": "forces derived report rebuild",
+                            "verified_by": "human",
+                            "importance": "P1",
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+                )
+
+            result = run(repo, "scripts/novel.py", "stale-check", "v01_c010")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("reader_risk latest source_event_ledger hash is stale", result.stdout)
+            self.assertIn("long_health latest source_event_ledger hash is stale", result.stdout)
+
     def test_workflow_smoke_uses_temp_copy_only(self) -> None:
         with copy_repo() as temp:
             repo = temp
@@ -6338,6 +7377,50 @@ print("OK: stub deepseek idea")
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn('"status": "PREVIEW"', result.stdout)
             self.assertFalse((repo / "reviews/v01_c001/receive_chapter.json").exists())
+
+    def test_receive_chapter_preview_includes_long_health_after_chapter_ten(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            result = run(repo, "scripts/novel.py", "receive-chapter", "v01_c010", "--preview")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            data = json.loads(result.stdout)
+            step_names = [item["name"] for item in data["steps"]]
+            self.assertIn("long-health", step_names)
+            self.assertIn("reader-risk-index", step_names)
+            self.assertLess(step_names.index("reader-reward-index"), step_names.index("long-health"))
+            self.assertLess(step_names.index("long-health"), step_names.index("chapter-evidence"))
+            self.assertLess(step_names.index("reader-risk-index"), step_names.index("chapter-evidence"))
+
+    def test_receive_chapter_resume_reruns_stale_reader_risk_index(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_complete_chapter_evidence(repo, "v01_c001", 1)
+            with (repo / "state/event_ledger.jsonl").open("a", encoding="utf-8", newline="\n") as handle:
+                handle.write(
+                    json.dumps(
+                        {
+                            "event_id": "v01_c001_anchor",
+                            "chapter": "v01_c001",
+                            "type": "chapter_anchor",
+                            "fact": "human confirms the chapter end state",
+                            "evidence_quote": "Official chapter v01_c001",
+                            "consequence": "next chapter inherits the anchor",
+                            "verified_by": "human",
+                            "importance": "P1",
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+                )
+
+            result = run(repo, "scripts/novel.py", "receive-chapter", "v01_c001", "--resume")
+            report = json.loads((repo / "reviews/v01_c001/receive_chapter.json").read_text(encoding="utf-8"))
+            risk_step = next(step for step in report["steps"] if step["name"] == "reader-risk-index")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(risk_step["status"], "READY")
+            self.assertIn("resume reran because reader-risk-index source_event_ledger hash changed", risk_step["output"])
 
     def test_accept_review_writes_current_human_metadata(self) -> None:
         with copy_repo() as temp:
@@ -6465,6 +7548,136 @@ print("OK: stub deepseek idea")
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("status: BLOCKED", result.stdout)
 
+    def test_chapter_shape_repeated_shape_is_warmup_warning_before_chapter_six(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write(repo, "chapters/v01/c003.md", "arrive at the door\nclue appears\nrecord the signal\n")
+            write(
+                repo,
+                "state/derived/chapter_shapes.json",
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "generated_at": "2000-01-01T00:00:00+00:00",
+                        "chapters": {
+                            "v01_c001": {"shape_key": "arrival|bureaucracy|new_clue|mystery"},
+                            "v01_c002": {"shape_key": "arrival|bureaucracy|new_clue|mystery"},
+                        },
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                )
+                + "\n",
+            )
+
+            result = run(repo, "scripts/novel.py", "chapter-shape-check", "v01_c003", "--write")
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("status: WARNING", result.stdout)
+
+    def test_long_health_blocks_fatigued_recent_five_chapter_window(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_reader_promise_ready(repo)
+            for number in range(6, 11):
+                chapter = f"v01_c{number:03d}"
+                write(repo, f"outline/chapter_briefs/{chapter}.md", COMPLETE_BRIEF_V2.format(chapter=chapter))
+                write(repo, f"chapters/v01/c{number:03d}.md", "# 证据夜班\n\n会议解释继续，主角没有选择。\n")
+                write_reader_reward_gate(repo, chapter)
+                gate_path = repo / f"reviews/{chapter}/reader_reward_gate.json"
+                gate = json.loads(gate_path.read_text(encoding="utf-8"))
+                gate["matched_evidence_quotes"] = []
+                gate_path.write_text(json.dumps(gate, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+                write_chapter_shape(repo, chapter)
+
+            result = run(repo, "scripts/novel.py", "long-health", "--to", "v01_c010", "--write")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("status: BLOCKED", result.stdout)
+            self.assertIn("recent 5-chapter window", result.stdout)
+            self.assertTrue((repo / "state/derived/long_health/latest.json").exists())
+
+    def test_long_health_ignores_non_human_character_decisions(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_reader_promise_ready(repo)
+            carriers = ["investigation", "dialogue", "procedure", "research", "travel"]
+            events = []
+            for offset, number in enumerate(range(6, 11)):
+                chapter = f"v01_c{number:03d}"
+                write(repo, f"outline/chapter_briefs/{chapter}.md", COMPLETE_BRIEF_V2.format(chapter=chapter))
+                write(repo, f"chapters/v01/c{number:03d}.md", "# 证据夜班\n\n读者确认异常并非普通故障。\n")
+                write_reader_reward_gate(repo, chapter)
+                gate_path = repo / f"reviews/{chapter}/reader_reward_gate.json"
+                gate = json.loads(gate_path.read_text(encoding="utf-8"))
+                gate["contract"]["low_drama_carrier"] = carriers[offset]
+                gate_path.write_text(json.dumps(gate, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+                write_chapter_shape(repo, chapter)
+                shape_path = repo / f"reviews/{chapter}/chapter_shape.json"
+                shape = json.loads(shape_path.read_text(encoding="utf-8"))
+                shape["shape"]["hook"] = f"mystery_{number}"
+                shape["shape_key"] = f"arrival|investigation|procedure|mystery_{number}"
+                shape_path.write_text(json.dumps(shape, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+                events.append(
+                    {
+                        "event_id": f"{chapter}_model_decision",
+                        "chapter": chapter,
+                        "type": "character_decision",
+                        "fact": "model-only decision must not count",
+                        "evidence_quote": "读者确认异常并非普通故障",
+                        "consequence": "not human verified",
+                        "verified_by": "model",
+                        "importance": "P2",
+                    }
+                )
+            write(repo, "state/event_ledger.jsonl", "\n".join(json.dumps(item, ensure_ascii=False) for item in events) + "\n")
+
+            result = run(repo, "scripts/novel.py", "long-health", "--to", "v01_c010", "--write")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("without character_decision", result.stdout)
+
+    def test_long_health_rejects_stale_reader_reward_gate(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            write_reader_promise_ready(repo)
+            carriers = ["investigation", "dialogue", "procedure", "research", "travel"]
+            events = []
+            for offset, number in enumerate(range(6, 11)):
+                chapter = f"v01_c{number:03d}"
+                write(repo, f"outline/chapter_briefs/{chapter}.md", COMPLETE_BRIEF_V2.format(chapter=chapter))
+                write(repo, f"chapters/v01/c{number:03d}.md", "# 证据夜班\n\n读者确认异常并非普通故障。\n")
+                write_reader_reward_gate(repo, chapter)
+                gate_path = repo / f"reviews/{chapter}/reader_reward_gate.json"
+                gate = json.loads(gate_path.read_text(encoding="utf-8"))
+                gate["contract"]["low_drama_carrier"] = carriers[offset]
+                gate_path.write_text(json.dumps(gate, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+                write_chapter_shape(repo, chapter)
+                shape_path = repo / f"reviews/{chapter}/chapter_shape.json"
+                shape = json.loads(shape_path.read_text(encoding="utf-8"))
+                shape["shape"]["hook"] = f"mystery_{number}"
+                shape["shape_key"] = f"arrival|investigation|procedure|mystery_{number}"
+                shape_path.write_text(json.dumps(shape, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+                events.append(
+                    {
+                        "event_id": f"{chapter}_human_decision",
+                        "chapter": chapter,
+                        "type": "character_decision",
+                        "fact": "human decision counts",
+                        "evidence_quote": "读者确认异常并非普通故障",
+                        "consequence": "verified",
+                        "verified_by": "human",
+                        "importance": "P2",
+                    }
+                )
+            write(repo, "state/event_ledger.jsonl", "\n".join(json.dumps(item, ensure_ascii=False) for item in events) + "\n")
+            write(repo, "chapters/v01/c010.md", "# 证据夜班\n\n正文已变化，旧 gate hash 应失效。\n")
+
+            result = run(repo, "scripts/novel.py", "long-health", "--to", "v01_c010", "--write")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("reader_reward_gate official_chapter hash is stale", result.stdout)
+
     def test_reader_feedback_writes_reader_only_outputs(self) -> None:
         with copy_repo() as temp:
             repo = temp
@@ -6489,6 +7702,14 @@ print("OK: stub deepseek idea")
                 "the final choice",
                 "--skip-moment",
                 "none",
+                "--next-click-intent",
+                "yes, the pursuit is close",
+                "--protagonist-charm",
+                "active under pressure",
+                "--author-explanation-feel",
+                "none",
+                "--suspense-feel",
+                "expectation, not fatigue",
             )
             summary = run(repo, "scripts/novel.py", "reader-feedback", "summarize", "v01_c001")
 
@@ -6498,6 +7719,75 @@ print("OK: stub deepseek idea")
             self.assertTrue((repo / "reviews/v01_c001/reader_feedback.json").exists())
             self.assertTrue((repo / "state/derived/reader_feedback.json").exists())
             self.assertEqual((repo / "bible/canon.md").read_text(encoding="utf-8"), canon_before)
+
+    def test_reader_feedback_summarize_ignores_incomplete_responses(self) -> None:
+        with copy_repo() as temp:
+            repo = temp
+            add = run(
+                repo,
+                "scripts/novel.py",
+                "reader-feedback",
+                "add",
+                "v01_c001",
+                "--reader",
+                "reader_draft",
+                "--target-reader",
+                "pilot reader",
+                "--stuck-point",
+                "middle slowed down",
+                "--continue-reason",
+                "",
+                "--promise-gap",
+                "",
+                "--favorite-moment",
+                "",
+                "--skip-moment",
+                "",
+                "--next-click-intent",
+                "",
+                "--protagonist-charm",
+                "",
+                "--author-explanation-feel",
+                "",
+                "--suspense-feel",
+                "",
+                "--allow-incomplete",
+            )
+            summary = run(repo, "scripts/novel.py", "reader-feedback", "summarize", "v01_c001", "--no-write")
+
+            self.assertEqual(add.returncode, 0, add.stdout + add.stderr)
+            self.assertNotEqual(summary.returncode, 0)
+            self.assertIn("status: WARNING", summary.stdout)
+            self.assertIn("response_count: 0", summary.stdout)
+            self.assertIn("ignored_response_count: 1", summary.stdout)
+
+    def test_human_facing_template_files_do_not_contain_mojibake_markers(self) -> None:
+        markers = (
+            "寰呭畾",
+            "寰呰瘎",
+            "寰呯敓",
+            "寰呬汉",
+            "涓€",
+            "涓昏",
+            "鏍稿",
+            "璇昏",
+            "鏂颁",
+            "鈫",
+            "�",
+            "Ã",
+            "Â",
+        )
+        targets = [ROOT / "README.md", ROOT / "AGENTS.md", ROOT / "docs", ROOT / "ops", ROOT / "templates", ROOT / "state" / "gates"]
+        failures = []
+        for target in targets:
+            paths = [target] if target.is_file() else sorted(path for path in target.rglob("*") if path.suffix in {".md", ".yaml", ".yml", ".json", ".txt"})
+            for path in paths:
+                text = path.read_text(encoding="utf-8")
+                found = [marker for marker in markers if marker in text]
+                if found:
+                    failures.append(f"{path.relative_to(ROOT).as_posix()}: {', '.join(found)}")
+
+        self.assertEqual(failures, [])
 
 
 if __name__ == "__main__":

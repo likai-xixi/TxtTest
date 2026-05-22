@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EmotionRelationshipGate",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "chapter",
+    "generated_at",
+    "status",
+    "official_chapter",
+    "checks",
+    "evidence_quotes",
+    "blockers",
+    "warnings"
+  ],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "chapter": { "type": "string", "pattern": "^v\\d{2}_c\\d{3}$" },
+    "generated_at": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["CLEAR", "BLOCKED", "NOT_READY", "ACCEPTED_BY_HUMAN"] },
+    "official_chapter": { "type": "object" },
+    "checks": { "type": "object" },
+    "evidence_quotes": { "type": "array", "items": { "type": "string" } },
+    "blockers": { "type": "array", "items": { "type": "string" } },
+    "warnings": { "type": "array", "items": { "type": "string" } }
+  }
+}

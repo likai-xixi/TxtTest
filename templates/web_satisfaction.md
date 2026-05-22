@@ -7,7 +7,7 @@ accepted_at:
 accepted_by:
 reason:
 
-不写留存率预测，只记录阅读阻力、爽点落差、章节钩子风险。
+不写留存率预测，只记录阅读阻力、爽点落差、章节钩子风险。写作入口只看 `Story Card`，机器治理看 `Machine Contract Appendix`；本审查只判断正文是否让读者感到主角有行动、世界规则被场景测试、R 档回报有可匹配 quote。
 
 ## Findings
 

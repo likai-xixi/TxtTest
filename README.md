@@ -4,8 +4,8 @@
 
 ```bash
 python scripts/novel.py start-here
-python scripts/novel.py opening-preflight --json
-python scripts/novel.py opening-preflight --live
+python scripts/novel.py opening-preflight --agents-ready --json
+python scripts/novel.py opening-preflight --agents-ready --live
 python scripts/novel.py idea --text "your seed idea"
 python scripts/novel.py opening-status --id idea_xxx
 python scripts/novel.py freeze-preview --id idea_xxx --choice A
@@ -68,7 +68,7 @@ Codex 会按 `AGENTS.md` 自己运行检查、生成 context pack、调用 DeepS
 python scripts/novel.py idea --text "赛博民俗悬疑，主角是不信鬼的人"
 ```
 
-这个命令必须真实调用 DeepSeek；没有 `DEEPSEEK_API_KEY` 会直接停止。DeepSeek 完成后，Codex app 必须启用 `product_founder`、`technical_lead`、`qa_release` 三类 agent，并把审查写入 `state/idea_lab/{idea_id}/`。三类审查完成后先记录 provenance：
+这个命令必须真实调用 DeepSeek；没有 `DEEPSEEK_API_KEY` 会直接停止。DeepSeek 完成后，Codex app 必须启用 `product_founder`、`technical_lead`、`qa_release` 三类 agent，并把审查写入 `state/idea_lab/{idea_id}/`。`opening-preflight` 默认会阻断未确认的三 agent 能力；只有在当前 Codex 环境确实可启用三类 agent 时，才可加 `--agents-ready`。三类审查完成后先记录 provenance：
 
 ```bash
 python scripts/novel.py idea-agent-manifest --id idea_xxx
@@ -165,30 +165,14 @@ python scripts/novel.py desk
 
 如果核心设定冻结缺失，`write`、`draft`、`brief-candidates`、`deepseek-brief`、`start`、`build_context_pack` 和 `deepseek-generate` 都会停止；`--allow-placeholders` 也不能绕过核心冻结。
 
-每章 brief 还要声明场景连续性、节奏档位和新元素边界：
+每章 brief 默认使用 `schema_version: 2`。写作入口看 `Story Card`，机器治理看 `Machine Contract Appendix`：
 
-- `上章章末锚点`：记录上一章最后可见状态，包括时间、地点、在场人物、主角状态、携带物 / 证据、未完成动作；首章写“开篇章，无上章”。
-- `本章开场落点`：记录本章第一场的时间、地点、在场人物、主角状态和第一动作。
-- `场景承接说明`：写 `类型：原地承接 / 明示跳切 / 省略过桥 / 开篇起始` 和具体说明；如果从办公室跳到街边，必须写清时间差、离开原因和转移动作。
-- `主线牵引档位`：以 `S0`-`S4` 开头，说明本章与核心主线的距离；低档章必须有功能，高档章必须写后果。
-- `外部压力档位`：以 `W0`-`W4` 开头，说明外部世界、制度、势力、资源或关系如何影响本章行动。
-- `本章继承变化`：写明本章承接的状态、关系、信息或限制；开篇章也要写初始状态，不能写 none。
-- `本章节奏用途` / `节奏说明`：说明本章是推进、缓冲、兑现、铺垫、转场、蓄压还是爆发，并解释为什么不会空转或强行加速。
-- `本章进展契约`：声明进展类型、推进对象、起始状态依据、结束状态变化、最低落账事件、进展重要度和低牵引功能；每章都必须留下可核验的状态变化。
-- `本章代价与后果契约`：声明推进重量 `C0`-`C4`、后果等级 `reversible/scar/structure_change`、代价、后果承接义务、消化窗口和冷却范围；高推进不能无代价解决。
-- `本章解决边界`：声明新开、推进、解决和禁止解决的伏笔；解决伏笔非空时必须付代价。
-- `本章可用道具 IDs`：只列本章允许使用的 `bible/objects.yaml` ID。
-- `本章可用技能 IDs`：只列本章允许使用的 `bible/abilities.yaml` ID。
-- `本章允许新增元素`：L0 场景细节、L1 一次性线索、L2 伏笔、L3 长期机制、L4 核心设定分别说明。
-- `本章禁止临场解决`：禁止靠未授权新道具、新能力或新规则解决本章核心问题。
-- `本章留存合同`：第一屏钩子、核心问题、中段加压、小兑现、章末钩子和下一章点击理由。
-- `本章主角魅力合同`：主动目标、过人之处、弱点误判、金手指/特殊资源、刻度变化和读者喜欢主角的瞬间。
-- `本章初始人格挑战合同`：声明本章压迫哪些初始人格字段，若真实改变必须走 `personality_delta`。
-- `本章世界观展示合同` / `本章名词预算`：限制新名词，并要求规则通过场景、冲突或人物反应展示。
-- `本章悬念推进合同`：旧问题、新线索、部分解答、新问题和状态。
-- `本章语言记忆点`：金句、梗/反差句、口头禅或标志动作，以及禁止的平铺语气。
+- `Story Card`：只保留创作输入，包括第一屏扰动、主角想要、主角主动动作、最大阻力、中段变化点、小兑现、`before -> after`、章末点击理由、一条世界规则和禁止临场破局。
+- `Machine Contract Appendix`：保留机器硬门禁，包括上章锚点、开场落点、场景承接、S/W 档位、继承变化、节奏用途、进展契约、代价后果、解决边界、R 档回报、低戏剧载体、核心机制状态、可用道具/技能 ID、允许新增元素和最低落账事件。
+- v1 旧 brief 仍可读取和检查，但新模板、新候选 brief、新 DeepSeek prompt、新首章试点 brief 都应输出 v2。
+- 正文候选 prompt 只接收 `Story Card + Hard Boundaries + Context Pack + Candidate Style Requirements`，不再把“防 AI 味合同 / 对白功能合同 / 句式破整合同 / 细节经济合同”整段塞进创作输入。
 
-`python scripts/novel.py brief-precheck {chapter}` 是生成候选 brief 前的智能预检，会检查核心冻结、上一章锚点、Gate、stop lock、关键源占位和后果承接债务；`python scripts/novel.py brief-check {chapter}` 是正式 brief 的单章硬门禁；`python scripts/novel.py pacing-check {chapter} --write` 是跨章硬门禁加预警：连续 3 章都是 `C0/C1` 会 BLOCK，高推进或 payoff 后没有在消化窗口内承接也会 BLOCK。`python scripts/novel.py pacing-dashboard {chapter} --write` 会生成节奏与 aftermath 人读报告，不替代硬门禁。
+`python scripts/novel.py brief-precheck {chapter}` 是生成候选 brief 前的智能预检；`python scripts/novel.py brief-check {chapter}` 是正式 brief 的单章硬门禁，会拦截缺 `before -> after`、缺 R 档、缺主角主动动作、缺小兑现和缺点击理由。`python scripts/novel.py reader-reward-check {chapter} --write` 会检查 R2+ 正文回报 quote、主角主动选择 evidence 和世界规则场景测试。`python scripts/novel.py pacing-check {chapter} --write` 会拦截三章窗口无有效推进、高推进无消化和连续小事；`python scripts/novel.py reader-reward-index --write` 会跟踪三章无小兑现、低戏剧载体重复和章末钩子重复。10 章后还要跑 `python scripts/novel.py long-health --to {chapter} --write`，用最近 5 章窗口拦主角被动、只调查/会议/解释、只开不合和无小兑现。
 
 `build_derived_state` 会从 `chapter_anchor` 人类确认事件生成 `state/derived/chapter_anchors/{chapter}.json`，也会从正式 brief 生成 `state/derived/pacing/progress_index.json` 和 `state/derived/pacing/aftermath_obligations.json`。下一章 brief pack 和 context pack 会读取上一章章末锚点与后果承接债务。`chapter_evidence` 会检查 brief 承诺的 `最低落账事件` 是否真的写入 `state/event_ledger.jsonl`。`build_context_pack` 会按 ID 拉完整道具/技能条目；未列入 ID 或新增授权的元素，只能做细节、线索或伏笔，不能临场破局。
 
@@ -260,7 +244,7 @@ Style and series-feel evidence:
 
 Anti-AI taste evidence is a hard Ship gate in this template. `ai_taste` keeps its legacy name but now means the structured anti-AI review: show-don't-tell, rhythm disorder, emotional risk, gray motive, dialogue agenda, detail economy, and consequence integrity. Codex has a separate isolated subagent hard-gate report at `codex_anti_ai_review.md/json`; DeepSeek also has an independent hard-gate report at `deepseek_anti_ai_review.md/json`. The two independent reports both receive the review context, but they do not read each other, the integrated reviews, model disagreement, or legacy anti-AI/dialogue outputs. All auxiliary reviews marked `CLEAR` must include the current official chapter hash, a current `review_sha256`, and at least one `Evidence Quotes` line that matches the official chapter after whitespace folding. `ACCEPTED_BY_HUMAN` is allowed for taste disputes only when it records `accepted_by: human`, `accepted_at`, `reason`, current official chapter hash, and current review body hash.
 
-New chapter briefs must include the six human-texture contracts: anti-AI taste, emotional boundary crossing, private motive and dirty play, dialogue function, rhythm disorder, and detail economy. Candidate prompts receive the same instructions, including that gray behavior is allowed but must leave consequences and, when it changes durable state, still goes through event ledger and personality-delta gates.
+v2 brief 主体不再要求填写六段长审计合同。防 AI 味、对白功能、句式破整、细节经济、角色私心和情绪越界改由正文风格要求与收章 review 检查，Ship evidence 仍会阻断缺失、过期、无 quote 或 `BLOCKED` 的审查。
 
 ### Receive Chapter Control Plane
 
@@ -276,14 +260,22 @@ python scripts/novel.py accept-review v01_c001 --artifact ai_taste --reason "int
 python scripts/novel.py gray-consequence v01_c001 --write
 python scripts/novel.py chapter-shape-check v01_c006 --write
 python scripts/novel.py reader-feedback summarize v01_c001
+python scripts/novel.py reader-risk-index --to v01_c010 --write --json
 python scripts/novel.py deepseek-manifest-check v01_c001 --kind anti_ai_review
+python scripts/novel.py deepseek-manifest-check v01_c001 --kind semantic_reader_review
 ```
 
 It writes `reviews/{chapter}/receive_chapter.json/md` and reports the exact next action. It does not auto-Ship, does not write canon, and does not write event ledger entries. Ship still goes through `chapter-evidence` and the human editor decision.
 
-DeepSeek review, anti-AI review, and style review now require run manifests at `external_runs/deepseek/{chapter}/{kind}.manifest.json`. These manifests bind model, prompt, raw response, output, allowed inputs, forbidden inputs, and isolation attestation. Missing, stale, or contaminated manifests block Ship.
+DeepSeek review, anti-AI review, semantic reader review, and style review now require run manifests at `external_runs/deepseek/{chapter}/{kind}.manifest.json`. These manifests bind model, prompt, raw response, output, allowed inputs, forbidden inputs, and isolation attestation. Missing, stale, or contaminated manifests block Ship.
 
-Revision plans, review arbitration, gray consequence reports, chapter-shape reports, and reader-feedback summaries are scaffolded for every chapter. High-impact gray behavior must be covered by human-verified event/fact evidence. Chapter-shape repetition is advisory during warmup and hard from chapter 6 when it repeats the same shape. Reader feedback is reader-experience evidence only and never a canon or event-ledger source.
+`semantic-reader-review` is a real Codex/DeepSeek LLM aggregate, not a keyword heuristic. First run `codex-semantic-reader-review-start`, complete the isolated Codex LLM review into `codex_semantic_reader_review.md/json`, then run `deepseek-semantic-reader-review` to produce `deepseek_semantic_reader_review.md/json` and its DeepSeek run manifest. The aggregate `semantic_reader_review.md/json` is accepted only when both source reviews are current, quote-bound, and clear.
+
+Revision plans, review arbitration, gray consequence reports, chapter-shape reports, emotion/relationship gates, semantic reader reviews, memorable-scene checks, reader-feedback summaries, reader-reward gates, and the cross-chapter `reader-risk-index` are part of the receive evidence chain. High-impact gray behavior must be covered by human-verified event/fact evidence. Chapter-shape repetition is advisory during warmup and hard from chapter 6 when it repeats the same shape. Reader feedback is reader-experience evidence only and never a canon or event-ledger source.
+
+Reader Promise v2 is the project-level reader-experience contract. `reader-promise-land --ready` must declare positive promises, negative failure modes, release-valve policy, protagonist agency policy, information clarity, language experience, structural efficiency, and R-level reward policy. Missing fields, placeholder arrays, and empty thresholds keep it out of `READY`.
+
+`reader-risk-index` aggregates pace, repetition, suspense, protagonist agency, worldview, perspective, language, and structural efficiency through a target chapter, including suspense age budgets for P0/P1 threads. `BLOCKED` reader risk blocks `chapter-evidence` and release audit; `WARNING` remains visible in `desk/status` and audit reports.
 
 ## Gate
 
@@ -293,7 +285,9 @@ python scripts/novel.py gate A
 python scripts/novel.py gate-close A --decision continue --reason "..." --next-limits "..." --continue-to v01_c010 --budget "..." --primary-model Codex --must-fix "..." --stop-trigger "..."
 ```
 
-Gate A/B 需要章节证据、reader promise 兑现、主角主动性、初始人格稳定性、悬念推进、世界观场景化展示、读者反馈和 synthesis。Gate F/G/H 还会复盘 suspense ledger、world reveal/concept ledger 和 protagonist progression 的长线债务。Gate 命令只检查证据和记录人类裁决，不会自动通过。
+Gate A/B 需要章节证据、reader promise 兑现、主角主动性、初始人格稳定性、悬念推进、世界观场景化展示、真实读者反馈或带 reason/accepted_by/accepted_at/hash/risk_acceptance_items 的人工说明，以及 synthesis。Gate F/G/H 还会复盘 suspense ledger、world reveal/concept ledger 和 protagonist progression 的长线债务。Gate 命令只检查证据和记录人类裁决，不会自动通过。
+
+Gate A 前可先跑 `python scripts/novel.py pilot-reader-experience A --write` 汇总前三章体验证据；它会给出 `continue/rework/reopen_direction/stop` 机器建议，不写 canon，也不写 event ledger。第 10 章后，`chapter-evidence` 会要求当前的 `long-health --to {chapter} --write` 报告不是 `BLOCKED`。
 
 ## DeepSeek 边界
 
@@ -312,6 +306,7 @@ python -m compileall scripts tests
 python scripts/novel.py check
 python scripts/novel.py self-test
 python scripts/novel.py status
+python scripts/novel.py desk --write-report --html
 python scripts/novel.py evidence v01_c001
 python scripts/novel.py gate-check A
 python scripts/novel.py export --volume v01
@@ -320,6 +315,7 @@ python scripts/run_deepseek_generate.py --chapter v01_c001 --dry-run
 python scripts/run_deepseek_review.py --chapter v01_c001 --dry-run
 python scripts/run_deepseek_style_review.py --chapter v01_c001 --dry-run
 python scripts/run_deepseek_anti_ai_review.py --chapter v01_c001 --dry-run
+python scripts/run_deepseek_semantic_reader_review.py --chapter v01_c001 --dry-run
 ```
 
 `evidence`、`gate-check` 和 `export` 在未完成项目里应返回 NOT_READY 或拒绝导出；这说明守卫在工作。

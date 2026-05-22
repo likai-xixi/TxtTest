@@ -16,6 +16,30 @@ response_count: 0
 
 - TODO
 
+## Favorite Moments
+
+- TODO
+
+## Skip Moments
+
+- TODO
+
+## Next Click Intent
+
+- TODO
+
+## Protagonist Charm
+
+- TODO
+
+## Author Explanation Flags
+
+- TODO
+
+## Suspense Expectation Or Fatigue
+
+- TODO
+
 ## Risk
 
 TODO
@@ -23,3 +47,10 @@ TODO
 ## Recommendation
 
 TODO
+
+## Human Acceptance
+
+- accepted_by:
+- accepted_at:
+- reason:
+- report_sha256:

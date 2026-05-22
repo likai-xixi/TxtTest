@@ -13,11 +13,12 @@ from brief_contract import (
     COST_CONSEQUENCE_CONTRACT_SECTIONS,
     PROGRESS_CONTRACT_SECTIONS,
     concrete_value,
+    extract_labeled_value,
     has_placeholder,
     is_none_body,
     progress_value,
 )
-from element_context import markdown_sections, section_body
+from element_context import brief_schema_version, markdown_sections, section_body
 from reader_reward_policy import (
     POLICY_PATH,
     READER_PROMISE_PATH,
@@ -35,11 +36,29 @@ from review_binding import official_chapter_path, quote_matches_text
 BRIEF_SECTIONS = ("章节标题", "Chapter Title")
 RETENTION_SECTIONS = ("本章留存合同", "Reader Retention Contract")
 END_STATE_CHANGE_SECTIONS = ("章末状态变化", "End State Change")
+STORY_CARD_SECTIONS = ("Story Card",)
 PLACEHOLDER_TITLES = {"标题", "章节标题", "chapter title", "todo", "tbd", "待定", "待填", "无题"}
 CORE_PRESENT = {"used", "limited", "backfired", "upgraded", "misled", "revealed"}
 CORE_ABSENT = {"silent", "intentionally_absent", "none", "absent", "未出现"}
 ALTERNATIVE_REWARD_MARKERS = ("替代", "关系", "信息", "代价", "反转", "兑现", "权力", "情绪", "悬念")
 COUNTER_TURN_MARKERS = ("反制", "转折", "反转", "payoff", "兑现", "压迫", "counter", "turn")
+WORLD_RULE_SCENE_TEST_MARKERS = (
+    "选择",
+    "拒绝",
+    "误用",
+    "代价",
+    "后果",
+    "反应",
+    "发现",
+    "看见",
+    "删除",
+    "覆盖",
+    "催促",
+    "承担",
+    "伤",
+    "怕",
+)
+HIGH_PRESSURE_VALUES = {"H3", "H4", "W3", "W4", "HIGH", "高", "强压", "爆发"}
 
 
 def rel(path: Path) -> str:
@@ -71,18 +90,26 @@ def brief_path(chapter: str) -> Path:
     return ROOT / "outline" / "chapter_briefs" / f"{chapter}.md"
 
 
+def labeled_value(body: str, key: str) -> str:
+    return extract_labeled_value(body, (key,))
+
+
 def labeled_values(chapter: str) -> tuple[dict[str, str], list[str]]:
     path = brief_path(chapter)
     if not path.exists():
         return {}, [f"{chapter}: missing official brief {rel(path)}"]
-    parsed = markdown_sections(read_text(path))
+    brief_text = read_text(path)
+    schema_version = brief_schema_version(brief_text)
+    parsed = markdown_sections(brief_text)
     progress = section_body(parsed, PROGRESS_CONTRACT_SECTIONS)
     retention = section_body(parsed, RETENTION_SECTIONS)
     cost = section_body(parsed, COST_CONSEQUENCE_CONTRACT_SECTIONS)
     end_state = section_body(parsed, END_STATE_CHANGE_SECTIONS)
+    story = section_body(parsed, STORY_CARD_SECTIONS)
     title = section_body(parsed, BRIEF_SECTIONS).strip()
     values = {
         "title": title,
+        "brief_schema_version": str(schema_version),
         "effective_progress_type": progress_value(progress, "effective_progress_type"),
         "effective_progress_unit": progress_value(progress, "effective_progress_unit"),
         "effective_progress_evidence_target": progress_value(progress, "effective_progress_evidence_target"),
@@ -91,6 +118,8 @@ def labeled_values(chapter: str) -> tuple[dict[str, str], list[str]]:
         "reader_reward_delivery": progress_value(retention, "reader_reward_delivery"),
         "reader_reward_timing": progress_value(retention, "reader_reward_timing"),
         "reward_evidence_requirement": progress_value(retention, "reward_evidence_requirement"),
+        "pressure_level": progress_value(retention, "pressure_level") or progress_value(cost, "pressure_level"),
+        "release_valve": progress_value(retention, "release_valve"),
         "low_drama_carrier": progress_value(retention, "low_drama_carrier"),
         "low_drama_progress_type": progress_value(retention, "low_drama_progress_type"),
         "core_mechanism_presence": progress_value(retention, "core_mechanism_presence").strip(),
@@ -98,6 +127,12 @@ def labeled_values(chapter: str) -> tuple[dict[str, str], list[str]]:
         "waiting_ending_debt": progress_value(retention, "waiting_ending_debt").strip(),
         "small_payoff": progress_value(retention, "chapter_small_payoff"),
         "next_click_reason": progress_value(retention, "next_click_reason"),
+        "protagonist_goal": labeled_value(story, "主角本章想要"),
+        "protagonist_action": labeled_value(story, "主角主动动作") or section_body(parsed, ("主角主动选择",)).strip(),
+        "protagonist_cost_or_consequence": progress_value(cost, "cost_paid_now") or progress_value(cost, "aftermath_obligation"),
+        "protagonist_state_change": labeled_value(story, "before -> after") or progress_value(progress, "effective_progress_unit"),
+        "protagonist_desire_or_principle": labeled_value(story, "主角本章想要") or progress_value(retention, "protagonist_desire_or_principle"),
+        "world_rule": labeled_value(story, "本章只讲懂的一条世界规则"),
         "cost_paid_now": progress_value(cost, "cost_paid_now"),
         "aftermath_obligation": progress_value(cost, "aftermath_obligation"),
         "end_state_change": end_state,
@@ -133,6 +168,15 @@ def extract_quote_candidates(*values: str) -> list[str]:
 
 def matched_quotes(candidates: list[str], source_text: str) -> list[str]:
     return [quote for quote in candidates if quote_matches_text(quote, source_text)]
+
+
+def has_world_rule_scene_test(source_text: str) -> bool:
+    return any(marker in source_text for marker in WORLD_RULE_SCENE_TEST_MARKERS)
+
+
+def high_pressure(value: str) -> bool:
+    text = str(value or "").strip().upper()
+    return text in HIGH_PRESSURE_VALUES or any(marker in str(value or "") for marker in ("高压", "强压", "爆发", "H3", "H4", "W3", "W4"))
 
 
 def review_body_hash(data: dict[str, Any]) -> str:
@@ -206,6 +250,8 @@ def build_gate(chapter: str) -> dict[str, Any]:
         values.get("reward_evidence_requirement", ""),
         values.get("effective_progress_evidence_target", ""),
         values.get("reader_reward_delivery", ""),
+        values.get("protagonist_action", ""),
+        values.get("world_rule", ""),
     )
     matched = matched_quotes(quote_candidates, source_text)
 
@@ -220,6 +266,33 @@ def build_gate(chapter: str) -> dict[str, Any]:
         blockers.append(f"{chapter}: 缺读者回报说明 reader_reward_delivery")
     if not concrete_value(values.get("next_click_reason", "")):
         blockers.append(f"{chapter}: 缺章末继续阅读理由")
+    if values.get("brief_schema_version") == "2":
+        action_quotes = matched_quotes(extract_quote_candidates(values.get("protagonist_action", "")), source_text)
+        if not action_quotes:
+            blockers.append(f"{chapter}: 缺正文主角主动动作 evidence")
+        for key, label in (
+            ("protagonist_goal", "主角主动目标"),
+            ("protagonist_cost_or_consequence", "主角承担代价或后果"),
+            ("protagonist_state_change", "主角改变局面或状态"),
+            ("protagonist_desire_or_principle", "主角欲望、私心或原则"),
+        ):
+            if not concrete_value(values.get(key, "")):
+                blockers.append(f"{chapter}: 缺{label} evidence")
+        world_rule = values.get("world_rule", "")
+        if concrete_value(world_rule, min_chars=2):
+            world_quotes = matched_quotes(extract_quote_candidates(world_rule), source_text)
+            if not world_quotes:
+                blockers.append(f"{chapter}: 世界规则未在正文场景中形成可匹配 evidence")
+            elif not has_world_rule_scene_test(source_text):
+                blockers.append(f"{chapter}: 世界规则只有解释，缺少选择、误用、代价或人物反应的场景测试")
+        else:
+            blockers.append(f"{chapter}: 缺本章世界规则场景测试")
+        pressure = values.get("pressure_level", "")
+        release = values.get("release_valve", "")
+        if not concrete_value(pressure, min_chars=1):
+            blockers.append(f"{chapter}: 缺释放阀预算 pressure_level")
+        if high_pressure(pressure) and not concrete_value(release, min_chars=2):
+            blockers.append(f"{chapter}: 高压章节缺释放阀 release_valve")
 
     presence = values.get("core_mechanism_presence", "").strip()
     presence_normalized = presence.lower().strip("。；;,.，")

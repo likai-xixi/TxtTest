@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import html
 import json
 
+from _common import ROOT, write_text
 from workflow_state import dashboard
 
 
@@ -14,13 +16,98 @@ def bullet_list(items: list[str], fallback: str = "none") -> None:
         print(f"- {item}")
 
 
+def dashboard_markdown(state: dict) -> str:
+    risk = state.get("reader_risk", {})
+    health = state.get("long_health", {})
+    lines = [
+        "# 总编台 Dashboard",
+        "",
+        f"- phase: {state.get('phase_id')}",
+        f"- blocker: {state.get('blocker')}",
+        f"- next: {state.get('human_action')}",
+        f"- risk_flags: {', '.join(state.get('risk_flags', [])) or 'none'}",
+        f"- reader_risk: {risk.get('status', 'UNKNOWN')} through {risk.get('through', '')} blockers={risk.get('blocker_count', 0)}",
+        f"- long_health: {health.get('status', 'UNKNOWN')} through {health.get('through', '')} blockers={health.get('rolling_blocker_count', 0)}",
+        "",
+        "## Gate Countdown",
+        "",
+    ]
+    for gate, item in (state.get("gate_countdown") or {}).items():
+        lines.append(f"- Gate {gate}: remaining={item.get('remaining')} decision={item.get('decision')}")
+    lines.extend(["", "## Evidence Paths", ""])
+    lines.extend(f"- {item}" for item in state.get("evidence_paths", []) or ["none"])
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def dashboard_html(state: dict) -> str:
+    risk = state.get("reader_risk", {})
+    health = state.get("long_health", {})
+    flags = state.get("risk_flags", [])
+    category_rows = "".join(
+        f"<tr><td>{html.escape(str(key))}</td><td>{html.escape(str(value))}</td></tr>"
+        for key, value in (risk.get("category_statuses") or {}).items()
+    ) or "<tr><td colspan='2'>none</td></tr>"
+    gate_rows = "".join(
+        "<tr><td>Gate {gate}</td><td>{remaining}</td><td>{decision}</td></tr>".format(
+            gate=html.escape(str(gate)),
+            remaining=html.escape(str(item.get("remaining", ""))),
+            decision=html.escape(str(item.get("decision", ""))),
+        )
+        for gate, item in (state.get("gate_countdown") or {}).items()
+    )
+    evidence = "".join(f"<li>{html.escape(str(item))}</li>" for item in state.get("evidence_paths", []) or ["none"])
+    return f"""<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>总编台 Dashboard</title>
+  <style>
+    body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 32px; color: #171717; }}
+    h1, h2 {{ margin-bottom: 8px; }}
+    .grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }}
+    .panel {{ border: 1px solid #ddd; border-radius: 8px; padding: 14px; }}
+    .status {{ font-size: 24px; font-weight: 700; }}
+    table {{ border-collapse: collapse; width: 100%; }}
+    td, th {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
+    code {{ background: #f4f4f4; padding: 2px 4px; border-radius: 4px; }}
+  </style>
+</head>
+<body>
+  <h1>总编台 Dashboard</h1>
+  <div class="grid">
+    <section class="panel"><h2>当前卡点</h2><p class="status">{html.escape(str(state.get('phase_id')))}</p><p>{html.escape(str(state.get('blocker')))}</p></section>
+    <section class="panel"><h2>Reader Risk</h2><p class="status">{html.escape(str(risk.get('status', 'UNKNOWN')))}</p><p>through {html.escape(str(risk.get('through', '')))}, blockers {html.escape(str(risk.get('blocker_count', 0)))}</p></section>
+    <section class="panel"><h2>Long Health</h2><p class="status">{html.escape(str(health.get('status', 'UNKNOWN')))}</p><p>through {html.escape(str(health.get('through', '')))}, blockers {html.escape(str(health.get('rolling_blocker_count', 0)))}</p></section>
+    <section class="panel"><h2>风险标记</h2><p>{html.escape(', '.join(flags) or 'none')}</p></section>
+  </div>
+  <h2>Reader Risk Categories</h2>
+  <table><tr><th>Category</th><th>Status</th></tr>{category_rows}</table>
+  <h2>Gate Countdown</h2>
+  <table><tr><th>Gate</th><th>Remaining</th><th>Decision</th></tr>{gate_rows}</table>
+  <h2>Evidence Paths</h2>
+  <ul>{evidence}</ul>
+</body>
+</html>
+"""
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Show the editor dashboard with the current blocker and next command.")
     parser.add_argument("--chapter", default=None)
     parser.add_argument("--json", action="store_true")
+    parser.add_argument("--write-report", action="store_true", help="Write state/audit/dashboard.md.")
+    parser.add_argument("--html", action="store_true", help="Also write state/audit/dashboard.html when used with --write-report.")
     args = parser.parse_args()
 
     state = dashboard(args.chapter)
+    if args.write_report:
+        md_path = ROOT / "state" / "audit" / "dashboard.md"
+        write_text(md_path, dashboard_markdown(state))
+        print(f"wrote_report: {md_path.relative_to(ROOT).as_posix()}")
+        if args.html:
+            html_path = ROOT / "state" / "audit" / "dashboard.html"
+            write_text(html_path, dashboard_html(state))
+            print(f"wrote_report: {html_path.relative_to(ROOT).as_posix()}")
     if args.json:
         print(json.dumps(state, ensure_ascii=False, indent=2))
         return 0
@@ -84,6 +171,15 @@ def main() -> int:
     print(f"- 章节结构: {advisory.get('chapter_structure', 'unknown')}")
     print(f"- 章末状态变化: {advisory.get('end_state_change', 'unknown')}")
     print(f"- 润色状态: {advisory.get('polish', 'unknown')}")
+    print()
+    print("## Reader Risk / Long Health")
+    risk = state.get("reader_risk", {})
+    health = state.get("long_health", {})
+    print(f"- reader risk: {risk.get('status', 'UNKNOWN')} through {risk.get('through', '')} blockers={risk.get('blocker_count', 0)}")
+    print(f"- long health: {health.get('status', 'UNKNOWN')} through {health.get('through', '')} blockers={health.get('rolling_blocker_count', 0)}")
+    categories = risk.get("category_statuses") or {}
+    if categories:
+        print("- reader risk categories: " + ", ".join(f"{key}={value}" for key, value in categories.items()))
     print()
     print("## Gates / Locks")
     print(f"- stop locks: {len(state['locks'])}")

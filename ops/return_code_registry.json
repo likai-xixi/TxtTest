@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "commands": [
+    {
+      "name": "check",
+      "args": ["check"],
+      "class": "template_quality",
+      "unopened_template_expectation": "zero"
+    },
+    {
+      "name": "status_json",
+      "args": ["status", "--json"],
+      "class": "informational",
+      "unopened_template_expectation": "zero",
+      "json_status_path": "story_status"
+    },
+    {
+      "name": "stale_check",
+      "args": ["stale-check"],
+      "class": "informational",
+      "unopened_template_expectation": "zero"
+    },
+    {
+      "name": "stale_check_json",
+      "args": ["stale-check", "--json"],
+      "class": "informational",
+      "unopened_template_expectation": "zero",
+      "json_status_path": "summary.status"
+    },
+    {
+      "name": "core_freeze_check",
+      "args": ["core-freeze-check"],
+      "class": "workflow_blocker",
+      "unopened_template_expectation": "nonzero"
+    },
+    {
+      "name": "reader_promise_require_ready",
+      "args": ["reader-promise-check", "--require-ready"],
+      "class": "workflow_blocker",
+      "unopened_template_expectation": "nonzero"
+    },
+    {
+      "name": "gate_rehearsal_a",
+      "args": ["gate-rehearsal", "A"],
+      "class": "informational",
+      "unopened_template_expectation": "zero"
+    },
+    {
+      "name": "decision_packet_json",
+      "args": ["decision-packet", "--json"],
+      "class": "informational",
+      "unopened_template_expectation": "zero",
+      "json_status_path": "status"
+    },
+    {
+      "name": "revision_closure",
+      "args": ["revision-closure", "v01_c001"],
+      "class": "workflow_blocker",
+      "unopened_template_expectation": "zero"
+    },
+    {
+      "name": "stale_check_strict",
+      "args": ["stale-check", "--strict"],
+      "class": "workflow_blocker",
+      "unopened_template_expectation": "zero"
+    }
+  ],
+  "no_write_commands": [
+    ["status", "--json"],
+    ["desk", "--json"],
+    ["stale-check"],
+    ["gate-rehearsal", "A"],
+    ["decision-packet", "--json"],
+    ["pilot-health", "--to", "v01_c003", "--json"],
+    ["revision-closure", "v01_c001", "--json"],
+    ["emotion-relationship-gate", "v01_c001", "--json"],
+    ["semantic-reader-review", "v01_c001", "--json"],
+    ["memorable-scene-check", "v01_c001", "--json"],
+    ["candidate-compare", "v01_c001", "--brief", "--json"],
+    ["context-diff", "v01_c001", "--json"]
+  ]
+}

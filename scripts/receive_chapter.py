@@ -8,7 +8,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from _common import ROOT, chapter_parts, now_iso, read_json, read_text, write_json, write_text
+from _common import ROOT, chapter_number, chapter_parts, now_iso, read_json, read_text, write_json, write_text
+from context_governance import sha256
 
 
 def rel(path: Path) -> str:
@@ -64,37 +65,125 @@ def run_command(name: str, args: list[str]) -> dict[str, Any]:
     }
 
 
-def should_skip(primary: Path | None, resume: bool) -> bool:
-    return bool(resume and primary and primary.exists())
+def current_ref_failures(ref: Any, label: str, expected_path: Path | None = None) -> list[str]:
+    if not isinstance(ref, dict):
+        return [f"{label} missing file reference"]
+    path_text = str(ref.get("path") or "")
+    if not path_text:
+        return [f"{label} file reference missing path"]
+    if expected_path is not None and path_text != rel(expected_path):
+        return [f"{label} path mismatch: expected {rel(expected_path)}"]
+    source = ROOT / path_text
+    if ref.get("exists") is False:
+        return [f"{label} recorded source missing but it now exists: {path_text}"] if source.exists() else []
+    if not source.exists():
+        return [f"{label} recorded source is missing: {path_text}"]
+    expected = str(ref.get("sha256") or "")
+    if not expected:
+        return [f"{label} file reference missing sha256: {path_text}"]
+    if sha256(source) != expected:
+        return [f"{label} hash changed: {path_text}"]
+    return []
+
+
+def chapter_number_safe(chapter: Any) -> int:
+    try:
+        return chapter_number(str(chapter))
+    except Exception:
+        return 0
+
+
+def derived_artifact_failures(name: str, primary: Path, chapter: str) -> list[str]:
+    if name not in {"reader-reward-index", "reader-risk-index", "long-health"}:
+        return []
+    data = read_json(primary, {}) if primary.exists() else {}
+    if not isinstance(data, dict) or not data:
+        return [f"{name} is not a JSON object"]
+    failures: list[str] = []
+    if name == "reader-reward-index":
+        failures.extend(current_ref_failures(data.get("source_policy"), "reader_reward_index source_policy", ROOT / "ops" / "reader_reward_policy.json"))
+        failures.extend(current_ref_failures(data.get("source_reader_promise"), "reader_reward_index source_reader_promise", ROOT / "state" / "project_reader_promise.json"))
+        for item in data.get("chapters", []):
+            if isinstance(item, dict):
+                failures.extend(current_ref_failures(item.get("gate"), f"reader_reward_index {item.get('chapter') or 'chapter'} gate"))
+            else:
+                failures.append("reader_reward_index chapter entry is not an object")
+        return failures
+
+    through = str(data.get("through") or "")
+    if chapter_number_safe(through) < chapter_number_safe(chapter):
+        failures.append(f"{name} only covers {through or 'none'}, not {chapter}")
+    failures.extend(current_ref_failures(data.get("source_reader_promise"), f"{name} source_reader_promise", ROOT / "state" / "project_reader_promise.json"))
+    failures.extend(current_ref_failures(data.get("source_event_ledger"), f"{name} source_event_ledger", ROOT / "state" / "event_ledger.jsonl"))
+    if name == "reader-risk-index":
+        for item in data.get("chapters", []):
+            if not isinstance(item, dict):
+                failures.append("reader_risk chapter entry is not an object")
+                continue
+            item_chapter = item.get("chapter") or "chapter"
+            for key in ("reader_reward_gate", "chapter_shape", "reader_feedback"):
+                if key in item:
+                    failures.extend(current_ref_failures(item.get(key), f"reader_risk {item_chapter} {key}"))
+    else:
+        for item in data.get("rolling_input_refs", []):
+            if not isinstance(item, dict):
+                failures.append("long_health rolling input entry is not an object")
+                continue
+            item_chapter = item.get("chapter") or "chapter"
+            for key in ("reader_reward_gate", "chapter_shape"):
+                if key in item:
+                    failures.extend(current_ref_failures(item.get(key), f"long_health {item_chapter} {key}"))
+    return failures
+
+
+def should_skip(primary: Path | None, resume: bool, *, name: str = "", chapter: str = "") -> tuple[bool, str]:
+    if not (resume and primary and primary.exists()):
+        return False, ""
+    failures = derived_artifact_failures(name, primary, chapter)
+    if failures:
+        return False, "; ".join(failures[:3])
+    return True, ""
 
 
 def planned_steps(chapter: str, *, run_deepseek: bool) -> list[dict[str, Any]]:
-    return [
+    steps = [
         {"name": "selection", "command": [], "writes": []},
         {"name": "landing", "command": [], "writes": []},
         {"name": "codex_review", "command": [], "writes": []},
         {"name": "review_context", "command": ["review-context", chapter, "--write"], "writes": [f"state/context_pack/{chapter}_review_context.json"]},
         {"name": "codex_anti_ai_start", "command": ["codex-anti-ai-review-start", chapter], "writes": [f"reviews/{chapter}/codex_anti_ai_review_manifest.json"]},
         {"name": "codex_anti_ai_review", "command": [], "writes": [f"reviews/{chapter}/codex_anti_ai_review.json"]},
+        {"name": "codex_semantic_reader_review_start", "command": ["codex-semantic-reader-review-start", chapter], "writes": [f"reviews/{chapter}/codex_semantic_reader_review_manifest.json"]},
+        {"name": "codex_semantic_reader_review", "command": [], "writes": [f"reviews/{chapter}/codex_semantic_reader_review.json"]},
         {"name": "deepseek_review", "command": ["review", chapter, "--deepseek"] if run_deepseek else [], "writes": [f"reviews/{chapter}/deepseek_integrated_review.md"]},
         {"name": "deepseek_anti_ai", "command": ["deepseek-anti-ai-review", chapter] if run_deepseek else [], "writes": [f"reviews/{chapter}/deepseek_anti_ai_review.json"]},
+        {"name": "deepseek_semantic_reader_review", "command": ["deepseek-semantic-reader-review", chapter] if run_deepseek else [], "writes": [f"reviews/{chapter}/deepseek_semantic_reader_review.json"]},
         {"name": "context-quality", "command": ["context-quality", chapter], "writes": []},
         {"name": "style-check", "command": ["style-check", chapter], "writes": [f"reviews/{chapter}/style_metrics.json"]},
         {"name": "series-style-check", "command": ["series-style-check", chapter], "writes": [f"reviews/{chapter}/series_style.json"]},
         {"name": "ai-taste-check", "command": ["ai-taste-check", chapter], "writes": [f"reviews/{chapter}/ai_taste.json"]},
         {"name": "dialogue-function-check", "command": ["dialogue-function-check", chapter], "writes": [f"reviews/{chapter}/dialogue_function.json"]},
+        {"name": "emotion-relationship-gate", "command": ["emotion-relationship-gate", chapter, "--write"], "writes": [f"reviews/{chapter}/emotion_relationship_gate.json"]},
+        {"name": "semantic-reader-review", "command": ["semantic-reader-review", chapter, "--write"], "writes": [f"reviews/{chapter}/semantic_reader_review.json"]},
+        {"name": "memorable-scene-check", "command": ["memorable-scene-check", chapter, "--write"], "writes": [f"reviews/{chapter}/memorable_scene.json"]},
         {"name": "continuity", "command": ["continuity", chapter], "writes": [f"reviews/{chapter}/continuity.md"]},
         {"name": "compare", "command": ["compare", chapter], "writes": [f"reviews/{chapter}/model_disagreement.md"]},
         {"name": "fact-cards", "command": ["fact-cards", chapter, "--write"], "writes": [f"reviews/{chapter}/fact_cards.json"]},
         {"name": "review-arbitration", "command": ["review-arbitration", chapter], "writes": [f"reviews/{chapter}/review_arbitration.json"]},
-        {"name": "revision-plan", "command": ["revision-plan", chapter], "writes": [f"reviews/{chapter}/revision_plan.json"]},
         {"name": "gray-consequence", "command": ["gray-consequence", chapter, "--write"], "writes": [f"reviews/{chapter}/gray_consequence.json"]},
         {"name": "chapter-shape-check", "command": ["chapter-shape-check", chapter, "--write"], "writes": [f"reviews/{chapter}/chapter_shape.json"]},
         {"name": "reader-reward-check", "command": ["reader-reward-check", chapter, "--write"], "writes": [f"reviews/{chapter}/reader_reward_gate.json"]},
         {"name": "reader-reward-index", "command": ["reader-reward-index", "--write"], "writes": ["state/derived/pacing/reader_reward_index.json"]},
         {"name": "reader-feedback", "command": ["reader-feedback", "summarize", chapter], "writes": [f"reviews/{chapter}/reader_feedback.json"]},
+        {"name": "reader-risk-index", "command": ["reader-risk-index", "--to", chapter, "--write"], "writes": ["state/derived/reader_risk/latest.json"]},
+        {"name": "revision-plan", "command": ["revision-plan", chapter], "writes": [f"reviews/{chapter}/revision_plan.json"]},
+        {"name": "revision-closure", "command": ["revision-closure", chapter], "writes": []},
         {"name": "chapter-evidence", "command": ["evidence", chapter], "writes": []},
     ]
+    if chapter_number(chapter) >= 10:
+        revision_index = next((index for index, step in enumerate(steps) if step["name"] == "revision-plan"), len(steps) - 1)
+        steps.insert(revision_index, {"name": "long-health", "command": ["long-health", "--to", chapter, "--write"], "writes": ["state/derived/long_health/latest.json"]})
+    return steps
 
 
 def evaluate(args: argparse.Namespace) -> dict[str, Any]:
@@ -118,18 +207,25 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         (official_path(args.chapter), "official_chapter"),
         (review_dir / "codex_integrated_review.md", "codex_integrated_review"),
         (review_dir / "codex_anti_ai_review.json", "codex_anti_ai_review"),
+        (review_dir / "codex_semantic_reader_review.json", "codex_semantic_reader_review"),
     ]
     for path, label in prerequisites:
         steps.append(file_status(path, label))
 
     if args.run_deepseek:
-        if not should_skip(review_dir / "deepseek_integrated_review.md", args.resume):
+        skip, _reason = should_skip(review_dir / "deepseek_integrated_review.md", args.resume)
+        if not skip:
             steps.append(run_command("deepseek_review", ["review", args.chapter, "--deepseek"]))
-        if not should_skip(review_dir / "deepseek_anti_ai_review.json", args.resume):
+        skip, _reason = should_skip(review_dir / "deepseek_anti_ai_review.json", args.resume)
+        if not skip:
             steps.append(run_command("deepseek_anti_ai", ["deepseek-anti-ai-review", args.chapter]))
+        skip, _reason = should_skip(review_dir / "deepseek_semantic_reader_review.json", args.resume)
+        if not skip:
+            steps.append(run_command("deepseek_semantic_reader_review", ["deepseek-semantic-reader-review", args.chapter]))
     else:
         steps.append(file_status(review_dir / "deepseek_integrated_review.md", "deepseek_integrated_review"))
         steps.append(file_status(review_dir / "deepseek_anti_ai_review.json", "deepseek_anti_ai_review"))
+        steps.append(file_status(review_dir / "deepseek_semantic_reader_review.json", "deepseek_semantic_reader_review"))
 
     command_steps = [
         ("review-context", ["review-context", args.chapter, "--write"], ROOT / "state" / "context_pack" / f"{args.chapter}_review_context.json"),
@@ -138,23 +234,36 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         ("series-style-check", ["series-style-check", args.chapter], review_dir / "series_style.json"),
         ("ai-taste-check", ["ai-taste-check", args.chapter], review_dir / "ai_taste.json"),
         ("dialogue-function-check", ["dialogue-function-check", args.chapter], review_dir / "dialogue_function.json"),
+        ("emotion-relationship-gate", ["emotion-relationship-gate", args.chapter, "--write"], review_dir / "emotion_relationship_gate.json"),
+        ("semantic-reader-review", ["semantic-reader-review", args.chapter, "--write"], review_dir / "semantic_reader_review.json"),
+        ("memorable-scene-check", ["memorable-scene-check", args.chapter, "--write"], review_dir / "memorable_scene.json"),
         ("continuity", ["continuity", args.chapter], review_dir / "continuity.md"),
         ("compare", ["compare", args.chapter], review_dir / "model_disagreement.md"),
         ("fact-cards", ["fact-cards", args.chapter, "--write"], review_dir / "fact_cards.json"),
         ("review-arbitration", ["review-arbitration", args.chapter], review_dir / "review_arbitration.json"),
-        ("revision-plan", ["revision-plan", args.chapter], review_dir / "revision_plan.json"),
         ("gray-consequence", ["gray-consequence", args.chapter, "--write"], review_dir / "gray_consequence.json"),
         ("chapter-shape-check", ["chapter-shape-check", args.chapter, "--write"], review_dir / "chapter_shape.json"),
         ("reader-reward-check", ["reader-reward-check", args.chapter, "--write"], review_dir / "reader_reward_gate.json"),
         ("reader-reward-index", ["reader-reward-index", "--write"], ROOT / "state" / "derived" / "pacing" / "reader_reward_index.json"),
+        *(
+            [("long-health", ["long-health", "--to", args.chapter, "--write"], ROOT / "state" / "derived" / "long_health" / "latest.json")]
+            if chapter_number(args.chapter) >= 10
+            else []
+        ),
         ("reader-feedback", ["reader-feedback", "summarize", args.chapter], review_dir / "reader_feedback.json"),
+        ("reader-risk-index", ["reader-risk-index", "--to", args.chapter, "--write"], ROOT / "state" / "derived" / "reader_risk" / "latest.json"),
+        ("revision-plan", ["revision-plan", args.chapter], review_dir / "revision_plan.json"),
+        ("revision-closure", ["revision-closure", args.chapter], None),
         ("chapter-evidence", ["evidence", args.chapter], None),
     ]
     for name, command, primary in command_steps:
-        if should_skip(primary, args.resume):
+        skip, stale_reason = should_skip(primary, args.resume, name=name, chapter=args.chapter)
+        if skip:
             steps.append({"name": name, "command": ["python", "scripts/novel.py", *command], "status": "SKIPPED", "returncode": 0, "output": f"resume kept {rel(primary)}", "artifacts": [rel(primary)]})
             continue
         result = run_command(name, command)
+        if stale_reason:
+            result["output"] = f"resume reran because {stale_reason}\n{result['output']}".strip()
         if name == "reader-feedback" and result["returncode"] != 0:
             result["status"] = "WARNING"
         steps.append(result)
@@ -191,8 +300,10 @@ def next_action(chapter: str, failed: list[dict[str, Any]]) -> str:
         "chapter_landing": f"Run `python scripts/novel.py land {chapter} --selected-direction ... --attestation ...`.",
         "codex_integrated_review": f"Run `python scripts/novel.py codex-review-start {chapter}`, then write the independent Codex review.",
         "codex_anti_ai_review": f"Run `python scripts/novel.py codex-anti-ai-review-start {chapter}`, then complete the isolated Codex anti-AI review.",
+        "codex_semantic_reader_review": f"Run `python scripts/novel.py codex-semantic-reader-review-start {chapter}`, then complete the isolated Codex semantic reader review.",
         "deepseek_integrated_review": f"Run `python scripts/novel.py review {chapter} --deepseek`.",
         "deepseek_anti_ai_review": f"Run `python scripts/novel.py deepseek-anti-ai-review {chapter}`.",
+        "deepseek_semantic_reader_review": f"Run `python scripts/novel.py deepseek-semantic-reader-review {chapter}`.",
         "chapter_anchor": f"Run `python scripts/novel.py event {chapter} --type chapter_anchor ...`.",
     }
     return mapping.get(first, f"Fix `{first}` and rerun `python scripts/novel.py receive-chapter {chapter} --resume`.")

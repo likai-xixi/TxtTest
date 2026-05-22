@@ -5,6 +5,7 @@ exports/
 backups/
 state/audit/
 state/derived/long_health/
+state/derived/reader_risk/
 external_runs/**/*.raw.json
 external_runs/**/*.prompt.md
 !external_runs/codex/*/draft.prompt.md

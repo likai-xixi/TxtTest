@@ -16,6 +16,7 @@ ROUTES = (
     "deepseek_review",
     "deepseek_style_review",
     "deepseek_anti_ai_review",
+    "deepseek_semantic_reader_review",
 )
 
 

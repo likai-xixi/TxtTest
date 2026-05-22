@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 from _common import ROOT, chapter_parts, read_json, read_text
-from element_context import markdown_sections, missing_section, section_body
+from element_context import brief_schema_version, markdown_sections, missing_section, section_body
 from reader_personality_contracts import (
     READER_BRIEF_REQUIRED_LABELS,
     READER_BRIEF_REQUIRED_SECTIONS,
@@ -24,7 +24,10 @@ def check_brief_reader_contracts(chapter: str) -> list[str]:
     brief = ROOT / "outline" / "chapter_briefs" / f"{chapter}.md"
     if not brief.exists():
         return [f"missing brief: {brief.relative_to(ROOT)}"]
-    parsed = markdown_sections(read_text(brief))
+    text = read_text(brief)
+    if brief_schema_version(text) == 2:
+        return []
+    parsed = markdown_sections(text)
     failures: list[str] = []
     for aliases in READER_BRIEF_REQUIRED_SECTIONS:
         if missing_section(parsed, aliases):

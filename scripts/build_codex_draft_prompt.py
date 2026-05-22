@@ -8,19 +8,29 @@ from candidate_style_requirements import build_prompt_manifest, prompt_paths, re
 from context_governance import context_quality_path
 from context_pack_quality import write_quality_report
 from core_setting_freeze import ensure_ready as ensure_core_setting_freeze
+from drafting_prompt_context import filtered_brief_for_drafting, sanitize_context_pack_for_drafting
+
+
+def drafting_brief_block(brief: str) -> str:
+    return filtered_brief_for_drafting(brief)
 
 
 def compose_prompt(chapter: str, style_block: str, brief: str, context: str) -> str:
     return "\n\n".join(
         [
             style_block.strip(),
-            "# Official Chapter Brief\n\n" + brief.strip(),
-            "# Context Pack\n\n" + context.strip(),
+            drafting_brief_block(brief),
+            "# Context Pack\n\n" + sanitize_context_pack_for_drafting(context),
             "# Codex Candidate Draft Output Requirements\n\n"
             "- Write only the candidate chapter prose for this chapter.\n"
             "- Do not claim the text is canon or final.\n"
             "- Do not update canon, event ledger, state files, reviews, or chapter landing records.\n"
-            "- Use only the official brief and context pack, with the Candidate Style Requirements as the top-level voice constraint.\n"
+            "- Use only the Official Story Card, Hard Boundaries, and context pack, with the Candidate Style Requirements as the top-level voice constraint.\n"
+            "- Begin from visible action, pressure, abnormality, misjudgment, or conflict.\n"
+            "- The midpoint must change the situation; do not let the chapter proceed exactly as planned.\n"
+            "- Deliver the reader reward promised in the Story Card with visible prose evidence.\n"
+            "- Show world rules through choices, misuse, costs, or ordinary-person reactions instead of explanation blocks.\n"
+            "- Do not narrate in terms like 本章、合同、证据、门禁、流程 unless those words naturally appear inside the story world.\n"
             "- If any required style, fact, or authorization input is missing or contradictory, stop and list the blocker instead of drafting.\n",
         ]
     ).rstrip() + "\n"

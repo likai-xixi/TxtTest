@@ -18,6 +18,7 @@ class Step:
 def run_step(name: str, command: list[str], *, ci_depth: int) -> Step:
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = "utf-8:replace"
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
     env["NOVEL_CI_DEPTH"] = str(ci_depth + 1)
     if name == "self-test" and ci_depth > 0:
         print("# self-test")
@@ -31,8 +32,9 @@ def run_step(name: str, command: list[str], *, ci_depth: int) -> Step:
 def main() -> int:
     ci_depth = int(os.environ.get("NOVEL_CI_DEPTH", "0") or "0")
     steps = [
-        ("compileall", [sys.executable, "-m", "compileall", "scripts", "tests"]),
+        ("compileall", [sys.executable, "-B", "-m", "compileall", "-q", "scripts", "tests"]),
         ("check", [sys.executable, str(ROOT / "scripts" / "novel.py"), "check"]),
+        ("workflow-contracts", [sys.executable, str(ROOT / "scripts" / "novel.py"), "workflow-contracts"]),
         ("self-test", [sys.executable, str(ROOT / "scripts" / "novel.py"), "self-test"]),
         ("workflow-smoke", [sys.executable, str(ROOT / "scripts" / "novel.py"), "workflow-smoke"]),
     ]

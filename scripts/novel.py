@@ -9,7 +9,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from _common import ROOT, chapter_parts, now_iso, read_text, unresolved_locks, write_text
+from _common import ROOT, chapter_number, chapter_parts, now_iso, read_text, unresolved_locks, write_text
 from diff_scope_check import ROLE_PATTERNS, changed_files
 from gate_config import load_gate_configs
 from validate_event_ledger import ALLOWED_TYPES
@@ -295,6 +295,33 @@ def append_to_brief_section(path: Path, section_title: str, item: str) -> bool:
     return True
 
 
+def append_to_v2_machine_field(path: Path, field: str, item: str) -> bool:
+    if not path.exists():
+        return False
+    lines = read_text(path).splitlines()
+    in_machine = False
+    for idx, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped == "## Machine Contract Appendix":
+            in_machine = True
+            continue
+        if in_machine and stripped.startswith("## "):
+            break
+        if not in_machine:
+            continue
+        prefix = f"- {field}："
+        if stripped.startswith(prefix):
+            value = stripped[len(prefix) :].strip()
+            addition = f"{item.strip()}"
+            if section_has_placeholder([value]) or value.lower().strip("。；;,.，") in {"none", "无"}:
+                lines[idx] = f"{prefix}已暂存于 open_questions，正文出现并人工落账前不得进入 canon：{addition}"
+            else:
+                lines.insert(idx + 1, f"  - {addition}")
+            write_text(path, "\n".join(lines).rstrip() + "\n")
+            return True
+    return False
+
+
 def command_init(args: argparse.Namespace) -> int:
     script_args = ["--project-name", args.name]
     if args.init_git:
@@ -479,7 +506,7 @@ def command_setting(args: argparse.Namespace) -> int:
         brief = ROOT / "outline" / "chapter_briefs" / f"{chapter}.md"
         if not brief.exists():
             run_script("new_chapter.py", "--chapter", chapter)
-        if append_to_brief_section(brief, "新增设定", text):
+        if append_to_brief_section(brief, "新增设定", text) or append_to_v2_machine_field(brief, "新增设定", text):
             print(f"OK: also added it to outline/chapter_briefs/{chapter}.md under 新增设定")
         else:
             print(f"warning: could not find 新增设定 section in outline/chapter_briefs/{chapter}.md", file=sys.stderr)
@@ -699,9 +726,25 @@ def command_deepseek_anti_ai_review(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_deepseek_semantic_reader_review(args: argparse.Namespace) -> int:
+    ensure_no_open_locks()
+    script_args = ["--chapter", args.chapter]
+    if args.model:
+        script_args.extend(["--model", args.model])
+    if args.dry_run:
+        script_args.append("--dry-run")
+    run_script("run_deepseek_semantic_reader_review.py", *script_args)
+    return 0
+
+
 def command_codex_anti_ai_review_start(args: argparse.Namespace) -> int:
     ensure_no_open_locks()
     return run_script("codex_anti_ai_review_start.py", args.chapter, check=False)
+
+
+def command_codex_semantic_reader_review_start(args: argparse.Namespace) -> int:
+    ensure_no_open_locks()
+    return run_script("codex_semantic_reader_review_start.py", args.chapter, check=False)
 
 
 def command_review_context(args: argparse.Namespace) -> int:
@@ -735,6 +778,25 @@ def command_revision_plan(args: argparse.Namespace) -> int:
     if args.no_write:
         script_args.append("--no-write")
     return run_script("revision_plan.py", *script_args, check=False)
+
+
+def command_revision_closure(args: argparse.Namespace) -> int:
+    script_args = [args.chapter]
+    if args.json:
+        script_args.append("--json")
+    return run_script("revision_closure.py", *script_args, check=False)
+
+
+def command_decision_packet(args: argparse.Namespace) -> int:
+    script_args: list[str] = []
+    if args.chapter:
+        script_args.append(args.chapter)
+    script_args.extend(["--gate", args.gate])
+    if args.brief:
+        script_args.append("--brief")
+    if args.json:
+        script_args.append("--json")
+    return run_script("decision_packet.py", *script_args, check=False)
 
 
 def command_accept_review(args: argparse.Namespace) -> int:
@@ -785,6 +847,17 @@ def command_reader_reward_index(args: argparse.Namespace) -> int:
     return run_script("reader_reward_index.py", *script_args, check=False)
 
 
+def command_reader_risk_index(args: argparse.Namespace) -> int:
+    script_args: list[str] = []
+    if args.to:
+        script_args.extend(["--to", args.to])
+    if args.write:
+        script_args.append("--write")
+    if args.json:
+        script_args.append("--json")
+    return run_script("reader_risk_index.py", *script_args, check=False)
+
+
 def command_reader_reward_migration_report(args: argparse.Namespace) -> int:
     return run_script("reader_reward_migration_report.py", check=False)
 
@@ -801,6 +874,10 @@ def command_reader_feedback(args: argparse.Namespace) -> int:
             ("promise_gap", "--promise-gap"),
             ("favorite_moment", "--favorite-moment"),
             ("skip_moment", "--skip-moment"),
+            ("next_click_intent", "--next-click-intent"),
+            ("protagonist_charm", "--protagonist-charm"),
+            ("author_explanation_feel", "--author-explanation-feel"),
+            ("suspense_feel", "--suspense-feel"),
         ):
             value = getattr(args, attr)
             if value:
@@ -814,6 +891,8 @@ def command_reader_feedback(args: argparse.Namespace) -> int:
             script_args.extend(["--risk", args.risk])
         if args.recommendation:
             script_args.extend(["--recommendation", args.recommendation])
+        if args.human_acceptance_reason:
+            script_args.extend(["--human-acceptance-reason", args.human_acceptance_reason])
         if args.no_write:
             script_args.append("--no-write")
     elif args.reader_feedback_command == "resolve":
@@ -1076,11 +1155,15 @@ def command_close(args: argparse.Namespace) -> int:
             return 1
         run_script("element_usage.py", args.chapter, "--write")
         run_script("review_arbitration.py", args.chapter, check=False)
-        run_script("revision_plan.py", args.chapter, check=False)
         run_script("gray_consequence.py", args.chapter, "--write", check=False)
         run_script("chapter_shape_check.py", args.chapter, "--write", check=False)
         run_script("reader_reward_check.py", "--chapter", args.chapter, "--write", check=False)
         run_script("reader_reward_index.py", "--write", check=False)
+        run_script("reader_risk_index.py", "--to", args.chapter, "--write", check=False)
+        if chapter_number(args.chapter) >= 10:
+            run_script("long_health.py", "--to", args.chapter, "--write", check=False)
+        run_script("revision_plan.py", args.chapter, check=False)
+        run_script("revision_closure.py", args.chapter, check=False)
         run_script("chapter_evidence.py", "--chapter", args.chapter)
 
     command_decision(args)
@@ -1316,6 +1399,33 @@ def command_dialogue_function_check(args: argparse.Namespace) -> int:
     return run_script("dialogue_function_check.py", *script_args, check=False)
 
 
+def command_emotion_relationship_gate(args: argparse.Namespace) -> int:
+    script_args = [args.chapter]
+    if args.write:
+        script_args.append("--write")
+    if args.json:
+        script_args.append("--json")
+    return run_script("emotion_relationship_gate.py", *script_args, check=False)
+
+
+def command_semantic_reader_review(args: argparse.Namespace) -> int:
+    script_args = [args.chapter]
+    if args.write:
+        script_args.append("--write")
+    if args.json:
+        script_args.append("--json")
+    return run_script("semantic_reader_review.py", *script_args, check=False)
+
+
+def command_memorable_scene_check(args: argparse.Namespace) -> int:
+    script_args = [args.chapter]
+    if args.write:
+        script_args.append("--write")
+    if args.json:
+        script_args.append("--json")
+    return run_script("memorable_scene_check.py", *script_args, check=False)
+
+
 def command_migrate_anti_ai_reviews(args: argparse.Namespace) -> int:
     script_args: list[str] = []
     if args.chapter:
@@ -1379,6 +1489,8 @@ def command_opening_preflight(args: argparse.Namespace) -> int:
         script_args.append("--json")
     if args.live:
         script_args.append("--live")
+    if args.agents_ready:
+        script_args.append("--agents-ready")
     return run_script("opening_preflight.py", *script_args, check=False)
 
 
@@ -1535,6 +1647,28 @@ def command_long_health(args: argparse.Namespace) -> int:
     return run_script("long_health.py", *script_args, check=False)
 
 
+def command_pilot_reader_experience(args: argparse.Namespace) -> int:
+    script_args = [args.gate]
+    if getattr(args, "to", None):
+        script_args.extend(["--to", args.to])
+    if args.json:
+        script_args.append("--json")
+    if args.write:
+        script_args.append("--write")
+    return run_script("pilot_reader_experience.py", *script_args, check=False)
+
+
+def command_pilot_health(args: argparse.Namespace) -> int:
+    script_args = ["A"]
+    if args.to:
+        script_args.extend(["--to", args.to])
+    if args.json:
+        script_args.append("--json")
+    if args.write:
+        script_args.append("--write")
+    return run_script("pilot_reader_experience.py", *script_args, check=False)
+
+
 def command_deepseek_preflight(args: argparse.Namespace) -> int:
     script_args: list[str] = []
     if args.no_live:
@@ -1582,7 +1716,16 @@ def command_stale_check(args: argparse.Namespace) -> int:
         script_args.append(args.chapter)
     if args.json:
         script_args.append("--json")
+    if args.strict:
+        script_args.append("--strict")
     return run_script("stale_check.py", *script_args, check=False)
+
+
+def command_workflow_contracts(args: argparse.Namespace) -> int:
+    script_args: list[str] = []
+    if args.section:
+        script_args.extend(["--section", args.section])
+    return run_script("workflow_contracts.py", *script_args, check=False)
 
 
 def command_workflow_smoke(args: argparse.Namespace) -> int:
@@ -1720,6 +1863,10 @@ def command_desk(args: argparse.Namespace) -> int:
     script_args: list[str] = []
     if args.chapter:
         script_args.extend(["--chapter", args.chapter])
+    if args.write_report:
+        script_args.append("--write-report")
+    if args.html:
+        script_args.append("--html")
     if args.json:
         script_args.append("--json")
     return run_script_text("editor_desk.py", *script_args)
@@ -1855,6 +2002,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("opening-preflight", help="Check DeepSeek and opening experiment prerequisites.")
     p.add_argument("--json", action="store_true")
     p.add_argument("--live", action="store_true", help="Make a live DeepSeek preflight request.")
+    p.add_argument("--agents-ready", action="store_true", help="Assert the three required Codex agents are available.")
     p.set_defaults(func=command_opening_preflight)
 
     p = sub.add_parser("draft", help="Open or continue a chapter until its context pack is ready.")
@@ -1962,9 +2110,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--dry-run", action="store_true")
     p.set_defaults(func=command_deepseek_anti_ai_review)
 
+    p = sub.add_parser("deepseek-semantic-reader-review", help="Ask DeepSeek for an independent semantic reader review.")
+    p.add_argument("chapter")
+    p.add_argument("--model", default=model_for("deepseek_semantic_reader_review"))
+    p.add_argument("--dry-run", action="store_true")
+    p.set_defaults(func=command_deepseek_semantic_reader_review)
+
     p = sub.add_parser("deepseek-manifest-check", help="Validate DeepSeek run manifest evidence.")
     p.add_argument("chapter")
-    p.add_argument("--kind", required=True, choices=["review", "anti_ai_review", "style_review"])
+    p.add_argument("--kind", required=True, choices=["review", "anti_ai_review", "semantic_reader_review", "style_review"])
     p.set_defaults(func=command_deepseek_manifest_check)
 
     p = sub.add_parser("receive-chapter", help="Run the receive-chapter control plane without auto-shipping.")
@@ -1979,6 +2133,18 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--json", action="store_true")
     p.add_argument("--no-write", action="store_true")
     p.set_defaults(func=command_revision_plan)
+
+    p = sub.add_parser("revision-closure", help="Verify Revise once has been closed before Ship.")
+    p.add_argument("chapter")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=command_revision_closure)
+
+    p = sub.add_parser("decision-packet", help="Assemble a no-write editor decision packet from current evidence.")
+    p.add_argument("chapter", nargs="?")
+    p.add_argument("--gate", choices=sorted(GATES), default="A")
+    p.add_argument("--brief", action="store_true")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=command_decision_packet)
 
     p = sub.add_parser("accept-review", help="Record a human acceptance for a taste/style review artifact.")
     p.add_argument("chapter")
@@ -2014,6 +2180,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--write", action="store_true")
     p.set_defaults(func=command_reader_reward_index)
 
+    p = sub.add_parser("reader-risk-index", help="Build the cross-chapter reader experience risk index.")
+    p.add_argument("--to", default=None)
+    p.add_argument("--write", action="store_true")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=command_reader_risk_index)
+
     p = sub.add_parser("reader-reward-migration-report", help="Report reader reward hard-enable migration gaps.")
     p.set_defaults(func=command_reader_reward_migration_report)
 
@@ -2029,6 +2201,10 @@ def build_parser() -> argparse.ArgumentParser:
     rp.add_argument("--promise-gap", default="")
     rp.add_argument("--favorite-moment", default="")
     rp.add_argument("--skip-moment", default="")
+    rp.add_argument("--next-click-intent", default="")
+    rp.add_argument("--protagonist-charm", default="")
+    rp.add_argument("--author-explanation-feel", default="")
+    rp.add_argument("--suspense-feel", default="")
     rp.add_argument("--allow-incomplete", action="store_true")
     rp.add_argument("--allow-unknown", action="store_true")
     rp.set_defaults(func=command_reader_feedback)
@@ -2036,6 +2212,7 @@ def build_parser() -> argparse.ArgumentParser:
     rp.add_argument("chapter")
     rp.add_argument("--risk", default="")
     rp.add_argument("--recommendation", default="")
+    rp.add_argument("--human-acceptance-reason", default="")
     rp.add_argument("--no-write", action="store_true")
     rp.set_defaults(func=command_reader_feedback)
     rp = reader_feedback_sub.add_parser("resolve")
@@ -2123,6 +2300,10 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("codex-anti-ai-review-start", help="Prepare an isolated Codex subagent anti-AI review prompt and manifest.")
     p.add_argument("chapter")
     p.set_defaults(func=command_codex_anti_ai_review_start)
+
+    p = sub.add_parser("codex-semantic-reader-review-start", help="Prepare an isolated Codex subagent semantic reader review prompt and manifest.")
+    p.add_argument("chapter")
+    p.set_defaults(func=command_codex_semantic_reader_review_start)
 
     p = sub.add_parser("decision", help="Record a human chapter decision.")
     p.add_argument("chapter")
@@ -2332,6 +2513,24 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--no-write", action="store_true")
     p.set_defaults(func=command_dialogue_function_check)
 
+    p = sub.add_parser("emotion-relationship-gate", help="Check chapter emotion and relationship continuity.")
+    p.add_argument("chapter")
+    p.add_argument("--write", action="store_true")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=command_emotion_relationship_gate)
+
+    p = sub.add_parser("semantic-reader-review", help="Check semantic reader risks beyond repetition keywords.")
+    p.add_argument("chapter")
+    p.add_argument("--write", action="store_true")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=command_semantic_reader_review)
+
+    p = sub.add_parser("memorable-scene-check", help="Check each chapter's retellable scene, action, and language memory point.")
+    p.add_argument("chapter")
+    p.add_argument("--write", action="store_true")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=command_memorable_scene_check)
+
     p = sub.add_parser("migrate-anti-ai-reviews", help="Create anti-AI review scaffolds without clearing them.")
     p.add_argument("chapter", nargs="?")
     p.add_argument("--all", action="store_true")
@@ -2466,6 +2665,19 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--write", action="store_true")
     p.set_defaults(func=command_long_health)
 
+    p = sub.add_parser("pilot-reader-experience", help="Summarize Gate A three-chapter reader experience evidence.")
+    p.add_argument("gate", choices=["A", "a"])
+    p.add_argument("--to", default=None)
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--write", action="store_true")
+    p.set_defaults(func=command_pilot_reader_experience)
+
+    p = sub.add_parser("pilot-health", help="Check the first-three-chapter pilot health before opening chapter 4.")
+    p.add_argument("--to", default="v01_c003")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--write", action="store_true")
+    p.set_defaults(func=command_pilot_health)
+
     p = sub.add_parser("deepseek-preflight", help="Check DeepSeek configuration and live API connectivity.")
     p.add_argument("--no-live", action="store_true")
     p.add_argument("--model", default=None)
@@ -2496,7 +2708,16 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("stale-check", help="Detect stale derived, context, review, and landing inputs without rebuilding.")
     p.add_argument("chapter", nargs="?")
     p.add_argument("--json", action="store_true")
+    p.add_argument("--strict", action="store_true", help="Fail on STALE/MISSING as well as SCHEMA.")
     p.set_defaults(func=command_stale_check)
+
+    p = sub.add_parser("workflow-contracts", help="Run workflow return-code, JSON, no-write, clone, and encoding contract checks.")
+    p.add_argument(
+        "--section",
+        choices=["return-codes", "json", "no-write", "clone", "encoding"],
+        default=None,
+    )
+    p.set_defaults(func=command_workflow_contracts)
 
     p = sub.add_parser("workflow-smoke", help="Run a no-live-API workflow smoke in a temporary copy.")
     p.add_argument("--keep-temp", action="store_true")
@@ -2554,6 +2775,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("desk", help="Show the editor dashboard, daily shortcuts, status, and next Codex prompt.")
     p.add_argument("--chapter", default=None)
     p.add_argument("--json", action="store_true")
+    p.add_argument("--write-report", action="store_true")
+    p.add_argument("--html", action="store_true")
     p.set_defaults(func=command_desk)
 
     p = sub.add_parser("check", help="Run template integrity check.")

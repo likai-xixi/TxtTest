@@ -656,6 +656,47 @@ def contract_snapshot() -> dict[str, str]:
     }
 
 
+def _latest_json(rel_path: str) -> dict[str, Any]:
+    data = _json_or_none(ROOT / rel_path)
+    return data if isinstance(data, dict) else {}
+
+
+def reader_risk_snapshot() -> dict[str, Any]:
+    data = _latest_json("state/derived/reader_risk/latest.json")
+    if not data:
+        return {"status": "MISSING", "through": "", "blocker_count": 0, "warning_count": 0, "category_statuses": {}}
+    return {
+        "status": data.get("status", "UNKNOWN"),
+        "through": data.get("through", ""),
+        "blocker_count": len(data.get("blockers") or []),
+        "warning_count": len(data.get("warnings") or []),
+        "category_statuses": data.get("category_statuses", {}),
+        "path": "state/derived/reader_risk/latest.json",
+    }
+
+
+def long_health_snapshot() -> dict[str, Any]:
+    data = _latest_json("state/derived/long_health/latest.json")
+    if not data:
+        return {"status": "MISSING", "through": "", "rolling_blocker_count": 0, "risk_flags": []}
+    return {
+        "status": data.get("status", "UNKNOWN"),
+        "through": data.get("through", ""),
+        "rolling_blocker_count": len(data.get("rolling_blockers") or []),
+        "risk_flags": data.get("risk_flags", []),
+        "path": "state/derived/long_health/latest.json",
+    }
+
+
+def gate_countdown_snapshot(chapter: str) -> dict[str, Any]:
+    current = max(0, chapter_number(chapter) - 1)
+    gates = {"A": 3, "B": 10, "C": 25, "E": 125, "F": 200, "G": 500, "H": 800}
+    return {
+        gate: {"needed": needed, "shipped": current, "remaining": max(0, needed - current), "decision": gate_decision(gate.lower()) or "not recorded"}
+        for gate, needed in gates.items()
+    }
+
+
 def gate_prompt() -> str | None:
     if shipped_through(125) and gate_decision("e") != "continue":
         return "进入 Gate E，评估是否进入 300 万字模式，并给我 continue / pause / kill / rework 裁决建议。"
@@ -741,7 +782,7 @@ def dashboard(chapter: str | None = None) -> dict[str, Any]:
     freeze_errors = validate_freeze()
     book_outline_errors = validate_book_outline_contract(_safe_json(BOOK_JSON)[0] or {}, official=True)
     style_contract_errors = validate_style_contract(_safe_json(CONTRACT_JSON)[0] or {}, official=True)
-    reader_promise_errors = validate_reader_promise(load_reader_promise(), require_ready=True) if not freeze_errors else []
+    reader_promise_errors = validate_reader_promise(load_reader_promise(), require_ready=True)
     idea = analyze_idea_lab()
     paths = chapter_paths(chapter)
     locks = unresolved_locks()
@@ -838,6 +879,16 @@ def dashboard(chapter: str | None = None) -> dict[str, Any]:
         risk_flags.append(f"stale_{str(stale.get('status')).lower()}")
     if gate:
         risk_flags.append(f"gate_{gate.lower()}_pending")
+    reader_risk = reader_risk_snapshot()
+    if reader_risk.get("status") == "BLOCKED":
+        risk_flags.append("reader_risk_blocked")
+    elif reader_risk.get("status") == "WARNING":
+        risk_flags.append("reader_risk_warning")
+    long_health = long_health_snapshot()
+    if long_health.get("status") == "BLOCKED":
+        risk_flags.append("long_health_blocked")
+    elif long_health.get("status") == "WARNING":
+        risk_flags.append("long_health_warning")
 
     evidence_paths = [rel(paths["brief"])]
     if paths["context_pack"].exists():
@@ -858,6 +909,9 @@ def dashboard(chapter: str | None = None) -> dict[str, Any]:
         evidence_paths.append(rel(paths["codex_anti_ai"]))
     if paths["deepseek_anti_ai"].exists():
         evidence_paths.append(rel(paths["deepseek_anti_ai"]))
+    for runtime_path in ("state/derived/reader_risk/latest.json", "state/derived/long_health/latest.json"):
+        if (ROOT / runtime_path).exists():
+            evidence_paths.append(runtime_path)
     idea_id = idea.get("idea_id")
     advisory = advisory_snapshot(chapter, idea_id)
     contracts = contract_snapshot()
@@ -898,6 +952,9 @@ def dashboard(chapter: str | None = None) -> dict[str, Any]:
         "risk_flags": risk_flags,
         "advisory": advisory,
         "contracts": contracts,
+        "reader_risk": reader_risk,
+        "long_health": long_health,
+        "gate_countdown": gate_countdown_snapshot(chapter),
         "evidence_paths": evidence_paths,
         "freeze_ready": not freeze_errors,
         "freeze_errors": freeze_errors,

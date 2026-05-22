@@ -82,6 +82,117 @@ def check_input_hashes(path: Path, data: dict[str, Any], key: str = "input_hashe
     return issues
 
 
+def check_file_ref(path: Path, ref: Any, label: str, expected_path: Path | None = None) -> list[dict[str, Any]]:
+    if not isinstance(ref, dict):
+        return [issue("SCHEMA", f"{label} missing file reference", rel(path))]
+    path_text = str(ref.get("path") or "")
+    if not path_text:
+        return [issue("SCHEMA", f"{label} file reference missing path", rel(path))]
+    if expected_path is not None and path_text != rel(expected_path):
+        return [issue("STALE", f"{label} path mismatch; expected {rel(expected_path)}", path_text)]
+    source = ROOT / path_text
+    recorded_exists = ref.get("exists")
+    if recorded_exists is False:
+        if source.exists():
+            return [issue("STALE", f"{label} recorded source missing but it now exists", path_text)]
+        return []
+    if not source.exists():
+        return [issue("MISSING", f"{label} recorded source is missing", path_text)]
+    expected = str(ref.get("sha256") or "")
+    if not expected:
+        return [issue("SCHEMA", f"{label} file reference missing sha256", path_text)]
+    if sha256(source) != expected:
+        return [issue("STALE", f"{label} hash is stale", path_text)]
+    return []
+
+
+def chapter_number_safe(chapter: Any) -> int:
+    text = str(chapter or "")
+    try:
+        return int(text[-3:])
+    except ValueError:
+        return 0
+
+
+def check_reader_reward_index(chapter: str) -> tuple[list[str], list[dict[str, Any]]]:
+    path = ROOT / "state" / "derived" / "pacing" / "reader_reward_index.json"
+    checked = [rel(path)]
+    issues: list[dict[str, Any]] = []
+    required = (ROOT / "reviews" / chapter / "reader_reward_gate.json").exists()
+    data, error = _json(path)
+    if error:
+        issues.append(error)
+    elif data:
+        issues.extend(check_file_ref(path, data.get("source_policy"), "reader_reward_index source_policy", ROOT / "ops" / "reader_reward_policy.json"))
+        issues.extend(check_file_ref(path, data.get("source_reader_promise"), "reader_reward_index source_reader_promise", ROOT / "state" / "project_reader_promise.json"))
+        for item in data.get("chapters", []):
+            if isinstance(item, dict):
+                gate_ref = item.get("gate")
+                issues.extend(check_file_ref(path, gate_ref, f"reader_reward_index {item.get('chapter') or 'chapter'} gate"))
+            else:
+                issues.append(issue("SCHEMA", "reader_reward_index chapter entry must be an object", rel(path)))
+    elif required:
+        issues.append(issue("MISSING", "reader_reward_index is missing after reader_reward_gate exists", rel(path)))
+    return checked, issues
+
+
+def check_reader_risk_index(chapter: str) -> tuple[list[str], list[dict[str, Any]]]:
+    path = ROOT / "state" / "derived" / "reader_risk" / "latest.json"
+    checked = [rel(path), rel(path.with_suffix(".md"))]
+    issues: list[dict[str, Any]] = []
+    required = any(
+        (ROOT / "reviews" / chapter / name).exists()
+        for name in ("reader_reward_gate.json", "chapter_shape.json", "reader_feedback.json")
+    )
+    data, error = _json(path)
+    if error:
+        issues.append(error)
+    elif data:
+        through = str(data.get("through") or "")
+        if chapter_number_safe(through) < chapter_number_safe(chapter):
+            issues.append(issue("STALE", f"reader_risk latest only covers {through or 'none'}, not {chapter}", rel(path)))
+        issues.extend(check_file_ref(path, data.get("source_reader_promise"), "reader_risk latest source_reader_promise", ROOT / "state" / "project_reader_promise.json"))
+        issues.extend(check_file_ref(path, data.get("source_event_ledger"), "reader_risk latest source_event_ledger", ROOT / "state" / "event_ledger.jsonl"))
+        for item in data.get("chapters", []):
+            if not isinstance(item, dict):
+                issues.append(issue("SCHEMA", "reader_risk chapter entry must be an object", rel(path)))
+                continue
+            item_chapter = item.get("chapter") or "chapter"
+            for key in ("reader_reward_gate", "chapter_shape", "reader_feedback"):
+                if key in item:
+                    issues.extend(check_file_ref(path, item.get(key), f"reader_risk {item_chapter} {key}"))
+    elif required:
+        issues.append(issue("MISSING", "reader_risk latest is missing after reader experience reports exist", rel(path)))
+    return checked, issues
+
+
+def check_long_health(chapter: str) -> tuple[list[str], list[dict[str, Any]]]:
+    path = ROOT / "state" / "derived" / "long_health" / "latest.json"
+    checked = [rel(path), rel(path.with_suffix(".md"))]
+    issues: list[dict[str, Any]] = []
+    required = chapter_number_safe(chapter) >= 10
+    data, error = _json(path)
+    if error:
+        issues.append(error)
+    elif data:
+        through = str(data.get("through") or "")
+        if chapter_number_safe(through) < chapter_number_safe(chapter):
+            issues.append(issue("STALE", f"long_health latest only covers {through or 'none'}, not {chapter}", rel(path)))
+        issues.extend(check_file_ref(path, data.get("source_reader_promise"), "long_health latest source_reader_promise", ROOT / "state" / "project_reader_promise.json"))
+        issues.extend(check_file_ref(path, data.get("source_event_ledger"), "long_health latest source_event_ledger", ROOT / "state" / "event_ledger.jsonl"))
+        for item in data.get("rolling_input_refs", []):
+            if not isinstance(item, dict):
+                issues.append(issue("SCHEMA", "long_health rolling_input_refs entry must be an object", rel(path)))
+                continue
+            item_chapter = item.get("chapter") or "chapter"
+            for key in ("reader_reward_gate", "chapter_shape"):
+                if key in item:
+                    issues.extend(check_file_ref(path, item.get(key), f"long_health {item_chapter} {key}"))
+    elif required:
+        issues.append(issue("MISSING", "long_health latest is missing for chapter 10+", rel(path)))
+    return checked, issues
+
+
 def check_nested_review_inputs(path: Path, data: dict[str, Any]) -> list[dict[str, Any]]:
     issues: list[dict[str, Any]] = []
     if "inputs" in data:
@@ -178,6 +289,11 @@ def check_chapter(chapter: str) -> dict[str, Any]:
     for review_name in (
         "ai_taste.md",
         "dialogue_function.md",
+        "emotion_relationship_gate.md",
+        "codex_semantic_reader_review.md",
+        "deepseek_semantic_reader_review.md",
+        "semantic_reader_review.md",
+        "memorable_scene.md",
         "codex_anti_ai_review.md",
         "deepseek_anti_ai_review.md",
         "review_arbitration.md",
@@ -213,6 +329,11 @@ def check_chapter(chapter: str) -> dict[str, Any]:
     for review_json in (
         "ai_taste.json",
         "dialogue_function.json",
+        "emotion_relationship_gate.json",
+        "codex_semantic_reader_review.json",
+        "deepseek_semantic_reader_review.json",
+        "semantic_reader_review.json",
+        "memorable_scene.json",
         "codex_anti_ai_review.json",
         "deepseek_anti_ai_review.json",
         "revision_plan.json",
@@ -235,7 +356,7 @@ def check_chapter(chapter: str) -> dict[str, Any]:
             issues.extend(check_input_hashes(path, data))
         checked.append(rel(path))
 
-    for kind in ("review", "anti_ai_review", "style_review"):
+    for kind in ("review", "anti_ai_review", "semantic_reader_review", "style_review"):
         manifest_path = ROOT / "external_runs" / "deepseek" / chapter / f"{kind}.manifest.json"
         if manifest_path.exists():
             for message in validate_run_manifest(chapter, kind):
@@ -258,6 +379,22 @@ def check_chapter(chapter: str) -> dict[str, Any]:
     elif data:
         issues.extend(check_nested_review_inputs(codex_anti_manifest, data))
     checked.append(rel(codex_anti_manifest))
+
+    codex_semantic_manifest = ROOT / "reviews" / chapter / "codex_semantic_reader_review_manifest.json"
+    data, error = _json(codex_semantic_manifest)
+    if error:
+        issues.append(error)
+    elif data:
+        issues.extend(check_nested_review_inputs(codex_semantic_manifest, data))
+    checked.append(rel(codex_semantic_manifest))
+
+    for extra_checked, extra_issues in (
+        check_reader_reward_index(chapter),
+        check_reader_risk_index(chapter),
+        check_long_health(chapter),
+    ):
+        checked.extend(extra_checked)
+        issues.extend(extra_issues)
 
     categories = {item["category"] for item in issues}
     if "SCHEMA" in categories:
@@ -320,6 +457,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Detect stale workflow state without rebuilding it.")
     parser.add_argument("chapter", nargs="?")
     parser.add_argument("--json", action="store_true")
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Return non-zero for STALE or MISSING results as well as SCHEMA errors.",
+    )
     args = parser.parse_args()
     if args.chapter:
         result = check_chapter(args.chapter)
@@ -331,7 +473,9 @@ def main() -> int:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
         print_text(result)
-    return 1 if (result.get("status") == "SCHEMA" or result.get("summary", {}).get("status") == "SCHEMA") else 0
+    status = result.get("status") or result.get("summary", {}).get("status")
+    blocking = {"SCHEMA", "STALE", "MISSING"} if args.strict else {"SCHEMA"}
+    return 1 if status in blocking else 0
 
 
 if __name__ == "__main__":

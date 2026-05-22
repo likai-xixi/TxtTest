@@ -67,6 +67,13 @@ READER_PROMISE_REQUIRED_FIELDS = (
     "per_chapter_must_not_only_have",
     "ending_hook_priority",
     "reward_mix",
+    "positive_promises",
+    "negative_failure_modes",
+    "release_valve_policy",
+    "protagonist_agency_policy",
+    "information_clarity_policy",
+    "language_experience_policy",
+    "structural_efficiency_policy",
     "reader_reward_intensity_policy",
     "genre_mismatch_red_lines",
 )
@@ -384,6 +391,59 @@ def default_reader_promise() -> dict[str, Any]:
             "笑点": "待定",
             "情绪点": "待定",
         },
+        "positive_promises": [
+            "待定：读者每章至少应获得的可感回报。",
+            "待定：读者三章内必须确认的追读理由。",
+        ],
+        "negative_failure_modes": {
+            "red_lines": [
+                "待定：不得连续压抑无释放。",
+                "待定：不得连续只开悬念不推进或兑现。",
+                "待定：不得让主角只承担工具功能。",
+                "待定：不得用设定解释替代戏剧冲突。",
+            ],
+            "no_release_max_run": 2,
+            "no_payoff_max_run": 2,
+            "open_without_payoff_max_run": 2,
+            "passive_protagonist_max_run": 1,
+            "explanation_only_max_run": 1,
+            "repeated_shape_max_run": 2,
+            "low_efficiency_window_chapters": 5,
+            "low_efficiency_max_count": 2,
+        },
+        "release_valve_policy": {
+            "max_high_pressure_without_release": 2,
+            "minimum_release_types": ["小胜", "真相兑现", "关系推进", "情绪缓冲", "反制"],
+            "per_three_chapters_must_include_release": True,
+            "rationale": "待定：说明本书如何避免长期压抑无释放。",
+        },
+        "protagonist_agency_policy": {
+            "requires_active_goal": True,
+            "requires_active_action": True,
+            "requires_cost_or_consequence": True,
+            "requires_state_change": True,
+            "requires_desire_or_principle": True,
+            "rationale": "待定：说明主角如何持续改变局面，而不是被流程推着走。",
+        },
+        "information_clarity_policy": {
+            "max_consecutive_setup_only_chapters": 2,
+            "require_scene_test_for_world_rule": True,
+            "forbid_explanation_only_worldbuilding": True,
+            "rationale": "待定：说明世界观如何通过场景让读者看懂。",
+        },
+        "language_experience_policy": {
+            "forbid_summary_voice": True,
+            "require_memorable_line_or_detail": True,
+            "max_explanation_paragraphs_without_scene": 2,
+            "rationale": "待定：说明如何避免公文腔和作者总结腔。",
+        },
+        "structural_efficiency_policy": {
+            "min_effective_progress_per_chapter": "before -> after",
+            "max_words_without_state_change": 6000,
+            "max_low_progress_window_count": 2,
+            "window_chapters": 5,
+            "rationale": "待定：说明如何防止大字数低推进。",
+        },
         "reader_reward_intensity_policy": {
             "opening_chapter_count": 0,
             "opening_intensity_by_chapter": {},
@@ -393,7 +453,152 @@ def default_reader_promise() -> dict[str, Any]:
         },
         "genre_mismatch_red_lines": ["待定"],
         "source_boundary": "instruction_only_not_fact_source",
-    }
+}
+
+
+def _validate_required_object(value: object, name: str, required: tuple[str, ...], *, require_ready: bool) -> list[str]:
+    errors: list[str] = []
+    if not isinstance(value, dict):
+        return [f"reader promise {name} must be an object"]
+    for field in required:
+        if field not in value:
+            errors.append(f"reader promise {name} missing field: {field}")
+            continue
+        if require_ready and has_placeholder(value.get(field)):
+            errors.append(f"reader promise {name}.{field} is empty or placeholder")
+    return errors
+
+
+def _require_bool(value: dict[str, Any], name: str, field: str, errors: list[str]) -> None:
+    if not isinstance(value.get(field), bool):
+        errors.append(f"reader promise {name}.{field} must be boolean")
+
+
+def _require_non_negative_int(value: dict[str, Any], name: str, field: str, errors: list[str]) -> None:
+    raw = value.get(field)
+    if not isinstance(raw, int) or raw < 0:
+        errors.append(f"reader promise {name}.{field} must be a non-negative integer")
+
+
+def validate_reader_experience_policies(data: dict[str, Any], *, require_ready: bool) -> list[str]:
+    errors: list[str] = []
+    if has_placeholder(data.get("positive_promises")) and require_ready:
+        errors.append("reader promise positive_promises must be concrete")
+
+    negative = data.get("negative_failure_modes")
+    errors.extend(
+        _validate_required_object(
+            negative,
+            "negative_failure_modes",
+            (
+                "red_lines",
+                "no_release_max_run",
+                "no_payoff_max_run",
+                "open_without_payoff_max_run",
+                "passive_protagonist_max_run",
+                "explanation_only_max_run",
+                "repeated_shape_max_run",
+                "low_efficiency_window_chapters",
+                "low_efficiency_max_count",
+            ),
+            require_ready=False,
+        )
+    )
+    if isinstance(negative, dict):
+        if require_ready and has_placeholder(negative.get("red_lines")):
+            errors.append("reader promise negative_failure_modes.red_lines must be concrete")
+        for field in (
+            "no_release_max_run",
+            "no_payoff_max_run",
+            "open_without_payoff_max_run",
+            "passive_protagonist_max_run",
+            "explanation_only_max_run",
+            "repeated_shape_max_run",
+            "low_efficiency_window_chapters",
+            "low_efficiency_max_count",
+        ):
+            _require_non_negative_int(negative, "negative_failure_modes", field, errors)
+
+    release = data.get("release_valve_policy")
+    errors.extend(
+        _validate_required_object(
+            release,
+            "release_valve_policy",
+            ("max_high_pressure_without_release", "minimum_release_types", "per_three_chapters_must_include_release", "rationale"),
+            require_ready=False,
+        )
+    )
+    if isinstance(release, dict):
+        _require_non_negative_int(release, "release_valve_policy", "max_high_pressure_without_release", errors)
+        _require_bool(release, "release_valve_policy", "per_three_chapters_must_include_release", errors)
+        if require_ready and has_placeholder(release.get("minimum_release_types")):
+            errors.append("reader promise release_valve_policy.minimum_release_types must be concrete")
+        if require_ready and has_placeholder(release.get("rationale")):
+            errors.append("reader promise release_valve_policy.rationale must be concrete")
+
+    agency = data.get("protagonist_agency_policy")
+    agency_fields = (
+        "requires_active_goal",
+        "requires_active_action",
+        "requires_cost_or_consequence",
+        "requires_state_change",
+        "requires_desire_or_principle",
+        "rationale",
+    )
+    errors.extend(_validate_required_object(agency, "protagonist_agency_policy", agency_fields, require_ready=False))
+    if isinstance(agency, dict):
+        for field in agency_fields[:-1]:
+            _require_bool(agency, "protagonist_agency_policy", field, errors)
+        if require_ready and has_placeholder(agency.get("rationale")):
+            errors.append("reader promise protagonist_agency_policy.rationale must be concrete")
+
+    clarity = data.get("information_clarity_policy")
+    clarity_fields = (
+        "max_consecutive_setup_only_chapters",
+        "require_scene_test_for_world_rule",
+        "forbid_explanation_only_worldbuilding",
+        "rationale",
+    )
+    errors.extend(_validate_required_object(clarity, "information_clarity_policy", clarity_fields, require_ready=False))
+    if isinstance(clarity, dict):
+        _require_non_negative_int(clarity, "information_clarity_policy", "max_consecutive_setup_only_chapters", errors)
+        for field in clarity_fields[1:3]:
+            _require_bool(clarity, "information_clarity_policy", field, errors)
+        if require_ready and has_placeholder(clarity.get("rationale")):
+            errors.append("reader promise information_clarity_policy.rationale must be concrete")
+
+    language = data.get("language_experience_policy")
+    language_fields = (
+        "forbid_summary_voice",
+        "require_memorable_line_or_detail",
+        "max_explanation_paragraphs_without_scene",
+        "rationale",
+    )
+    errors.extend(_validate_required_object(language, "language_experience_policy", language_fields, require_ready=False))
+    if isinstance(language, dict):
+        for field in language_fields[:2]:
+            _require_bool(language, "language_experience_policy", field, errors)
+        _require_non_negative_int(language, "language_experience_policy", "max_explanation_paragraphs_without_scene", errors)
+        if require_ready and has_placeholder(language.get("rationale")):
+            errors.append("reader promise language_experience_policy.rationale must be concrete")
+
+    efficiency = data.get("structural_efficiency_policy")
+    efficiency_fields = (
+        "min_effective_progress_per_chapter",
+        "max_words_without_state_change",
+        "max_low_progress_window_count",
+        "window_chapters",
+        "rationale",
+    )
+    errors.extend(_validate_required_object(efficiency, "structural_efficiency_policy", efficiency_fields, require_ready=False))
+    if isinstance(efficiency, dict):
+        for field in ("max_words_without_state_change", "max_low_progress_window_count", "window_chapters"):
+            _require_non_negative_int(efficiency, "structural_efficiency_policy", field, errors)
+        if require_ready and has_placeholder(efficiency.get("min_effective_progress_per_chapter")):
+            errors.append("reader promise structural_efficiency_policy.min_effective_progress_per_chapter must be concrete")
+        if require_ready and has_placeholder(efficiency.get("rationale")):
+            errors.append("reader promise structural_efficiency_policy.rationale must be concrete")
+    return errors
 
 
 def validate_reader_reward_intensity_policy(value: object, *, require_ready: bool) -> list[str]:
@@ -468,6 +673,7 @@ def validate_reader_promise(data: object, *, require_ready: bool = False) -> lis
             require_ready=require_ready or data.get("status") == "READY",
         )
     )
+    errors.extend(validate_reader_experience_policies(data, require_ready=require_ready or data.get("status") == "READY"))
     return errors
 
 
@@ -519,6 +725,22 @@ def render_reader_promise_markdown(data: dict[str, Any]) -> str:
         "- 章末钩子类型优先级：" + "、".join(map(str, data.get("ending_hook_priority", []))),
         "- 爽点 / 悬念 / 笑点 / 情绪点比例：" + json.dumps(data.get("reward_mix", {}), ensure_ascii=False),
         "- 类型错位红线：" + "、".join(map(str, data.get("genre_mismatch_red_lines", []))),
+        "",
+        "## 正向承诺与反向禁区",
+        "",
+        "- positive_promises：" + "、".join(map(str, data.get("positive_promises", []))),
+        "- negative_failure_modes：" + json.dumps(data.get("negative_failure_modes", {}), ensure_ascii=False),
+        "",
+        "## 释放阀与主角主动性",
+        "",
+        "- release_valve_policy：" + json.dumps(data.get("release_valve_policy", {}), ensure_ascii=False),
+        "- protagonist_agency_policy：" + json.dumps(data.get("protagonist_agency_policy", {}), ensure_ascii=False),
+        "",
+        "## 信息、语言与结构效率",
+        "",
+        "- information_clarity_policy：" + json.dumps(data.get("information_clarity_policy", {}), ensure_ascii=False),
+        "- language_experience_policy：" + json.dumps(data.get("language_experience_policy", {}), ensure_ascii=False),
+        "- structural_efficiency_policy：" + json.dumps(data.get("structural_efficiency_policy", {}), ensure_ascii=False),
         "",
         "## 手动 R 档回报强度策略",
         "",

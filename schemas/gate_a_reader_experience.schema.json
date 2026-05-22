@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "GateAReaderExperience",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "gate",
+    "generated_at",
+    "status",
+    "chapters",
+    "event_counts",
+    "source_event_ledger",
+    "sustainability_checks",
+    "decision_recommendation",
+    "decision_reasons",
+    "blockers",
+    "warnings",
+    "writes_canon",
+    "writes_event_ledger"
+  ],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "gate": { "const": "A" },
+    "generated_at": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["READY", "WARNING", "BLOCKED", "ACCEPTED_BY_HUMAN"] },
+    "chapters": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "type": "object",
+        "required": ["chapter", "reader_reward_gate", "matched_evidence_count", "chapter_shape"],
+        "properties": {
+          "chapter": { "type": "string", "pattern": "^v\\d{2}_c\\d{3}$" },
+          "reader_reward_gate": {
+            "type": "object",
+            "required": ["path", "exists", "status"],
+            "properties": {
+              "path": { "type": "string", "minLength": 1 },
+              "exists": { "type": "boolean" },
+              "sha256": { "type": "string" },
+              "status": { "type": "string" }
+            }
+          },
+          "matched_evidence_count": { "type": "integer" },
+          "chapter_shape": {
+            "type": "object",
+            "required": ["path", "exists", "shape_key"],
+            "properties": {
+              "path": { "type": "string", "minLength": 1 },
+              "exists": { "type": "boolean" },
+              "sha256": { "type": "string" },
+              "shape_key": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "event_counts": { "type": "object" },
+    "sustainability_checks": { "type": "object" },
+    "decision_recommendation": { "enum": ["continue", "rework", "reopen_direction", "stop"] },
+    "decision_reasons": { "type": "array", "items": { "type": "string" } },
+    "source_event_ledger": {
+      "type": "object",
+      "required": ["path", "exists"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "exists": { "type": "boolean" },
+        "sha256": { "type": "string" }
+      }
+    },
+    "blockers": { "type": "array", "items": { "type": "string" } },
+    "warnings": { "type": "array", "items": { "type": "string" } },
+    "writes_canon": { "const": false },
+    "writes_event_ledger": { "const": false }
+  }
+}

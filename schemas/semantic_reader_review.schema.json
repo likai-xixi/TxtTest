@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SemanticReaderReview",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "chapter",
+    "generated_at",
+    "status",
+    "official_chapter",
+    "categories",
+    "blockers",
+    "warnings"
+  ],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "chapter": { "type": "string", "pattern": "^v\\d{2}_c\\d{3}$" },
+    "generated_at": { "type": "string", "minLength": 1 },
+    "reviewer": { "type": "string" },
+    "model": { "type": "string" },
+    "status": { "enum": ["CLEAR", "WARNING", "BLOCKED", "NOT_READY", "ACCEPTED_BY_HUMAN"] },
+    "official_chapter": { "type": "object" },
+    "source_reviews": { "type": "object" },
+    "inputs": { "type": "array" },
+    "metrics": { "type": "object" },
+    "categories": { "type": "object" },
+    "scene_samples": { "type": "array" },
+    "blockers": { "type": "array", "items": { "type": "string" } },
+    "warnings": { "type": "array", "items": { "type": "string" } }
+  }
+}

@@ -39,6 +39,65 @@
     "笑点": "待定",
     "情绪点": "待定"
   },
+  "positive_promises": [
+    "待定：读者每章至少应获得的可感回报。",
+    "待定：读者三章内必须确认的追读理由。"
+  ],
+  "negative_failure_modes": {
+    "red_lines": [
+      "待定：不得连续压抑无释放。",
+      "待定：不得连续只开悬念不推进或兑现。",
+      "待定：不得让主角只承担工具功能。",
+      "待定：不得用设定解释替代戏剧冲突。"
+    ],
+    "no_release_max_run": 2,
+    "no_payoff_max_run": 2,
+    "open_without_payoff_max_run": 2,
+    "passive_protagonist_max_run": 1,
+    "explanation_only_max_run": 1,
+    "repeated_shape_max_run": 2,
+    "low_efficiency_window_chapters": 5,
+    "low_efficiency_max_count": 2
+  },
+  "release_valve_policy": {
+    "max_high_pressure_without_release": 2,
+    "minimum_release_types": [
+      "小胜",
+      "真相兑现",
+      "关系推进",
+      "情绪缓冲",
+      "反制"
+    ],
+    "per_three_chapters_must_include_release": true,
+    "rationale": "待定：说明本书如何避免长期压抑无释放。"
+  },
+  "protagonist_agency_policy": {
+    "requires_active_goal": true,
+    "requires_active_action": true,
+    "requires_cost_or_consequence": true,
+    "requires_state_change": true,
+    "requires_desire_or_principle": true,
+    "rationale": "待定：说明主角如何持续改变局面，而不是被流程推着走。"
+  },
+  "information_clarity_policy": {
+    "max_consecutive_setup_only_chapters": 2,
+    "require_scene_test_for_world_rule": true,
+    "forbid_explanation_only_worldbuilding": true,
+    "rationale": "待定：说明世界观如何通过场景让读者看懂。"
+  },
+  "language_experience_policy": {
+    "forbid_summary_voice": true,
+    "require_memorable_line_or_detail": true,
+    "max_explanation_paragraphs_without_scene": 2,
+    "rationale": "待定：说明如何避免公文腔和作者总结腔。"
+  },
+  "structural_efficiency_policy": {
+    "min_effective_progress_per_chapter": "before -> after",
+    "max_words_without_state_change": 6000,
+    "max_low_progress_window_count": 2,
+    "window_chapters": 5,
+    "rationale": "待定：说明如何防止大字数低推进。"
+  },
   "reader_reward_intensity_policy": {
     "opening_chapter_count": 0,
     "opening_intensity_by_chapter": {},

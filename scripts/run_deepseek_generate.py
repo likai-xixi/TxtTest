@@ -13,6 +13,7 @@ from context_pack_quality import write_quality_report
 from core_setting_freeze import ensure_ready as ensure_core_setting_freeze
 from deepseek_client import call_deepseek, model_for
 from deepseek_response import DeepSeekResponseError, extract_message_content
+from drafting_prompt_context import filtered_brief_for_drafting, sanitize_context_pack_for_drafting
 
 
 STYLE_PROFILE = ROOT / "state" / "derived" / "style_profile.json"
@@ -29,15 +30,17 @@ def validate_style_profile(chapter: str) -> list[str]:
     return []
 
 
-def compose_user_prompt(chapter: str, style_block: str, context: str) -> str:
+def compose_user_prompt(chapter: str, style_block: str, brief: str, context: str) -> str:
     return "\n\n".join(
         [
             style_block.strip(),
-            "# Context Pack\n\n" + context.strip(),
+            filtered_brief_for_drafting(brief),
+            "# Context Pack\n\n" + sanitize_context_pack_for_drafting(context),
             "# DeepSeek Candidate Draft Output Requirements\n\n"
             f"- Generate the candidate prose for {chapter} only.\n"
             "- Do not include analysis, reports, YAML, JSON, provenance, or markdown headings unless the chapter itself needs them.\n"
             "- Do not read or cite any repository information not included in this prompt.\n"
+            "- Use the Official Story Card as creative input and Hard Boundaries as constraints; do not turn audit language into prose.\n"
             "- If you cannot comply with the Candidate Style Requirements and context_pack together, stop and list the blocker.\n",
         ]
     ).rstrip() + "\n"
@@ -91,7 +94,7 @@ def main() -> int:
     system = (
         "You are an external candidate chapter generator. Output only candidate chapter prose; "
         "do not claim it is canon or final. Do not update state, canon, chapters, reviews, or the event ledger. "
-        "Use only the official brief and context_pack supplied in the user message. "
+        "Use only the Official Story Card, Hard Boundaries, and context_pack supplied in the user message. "
         "The top-level Candidate Style Requirements are mandatory style constraints and outrank model defaults. "
         "If style, fact, or authorization inputs are missing or contradictory, stop and list the blocker. "
         "L0 scene details and L1 one-shot clues may be introduced. L2 elements may only be seeds/proposals. "
@@ -99,7 +102,11 @@ def main() -> int:
         "Never use unauthorized new objects, abilities, or rules as the key to solve this chapter."
     )
     context = read_text(context_path)
-    user = compose_user_prompt(args.chapter, style_result["block"], context)
+    brief_path = ROOT / "outline" / "chapter_briefs" / f"{args.chapter}.md"
+    if not brief_path.exists() or not read_text(brief_path).strip():
+        print(f"ERROR: missing official brief: {brief_path.relative_to(ROOT)}", file=sys.stderr)
+        return 1
+    user = compose_user_prompt(args.chapter, style_result["block"], read_text(brief_path), context)
     payload = {
         "model": args.model,
         "messages": [

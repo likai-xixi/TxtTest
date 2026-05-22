@@ -20,6 +20,11 @@ SOURCE_NAMES = (
     "continuity.md",
     "ai_taste.json",
     "dialogue_function.json",
+    "emotion_relationship_gate.json",
+    "codex_semantic_reader_review.json",
+    "deepseek_semantic_reader_review.json",
+    "semantic_reader_review.json",
+    "memorable_scene.json",
     "codex_anti_ai_review.json",
     "deepseek_anti_ai_review.json",
 )

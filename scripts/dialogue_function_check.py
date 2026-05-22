@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -17,8 +16,37 @@ FUNCTION_MARKERS = {
     "conflict_pressure": ("不行", "不能", "必须", "你敢", "否则", "现在"),
     "concealment": ("没什么", "不知道", "以后再说", "别问", "算了", "不是"),
     "relationship_probe": ("你信", "你怕", "你觉得", "你到底", "我们"),
-    "theme_statement": ("原则", "正义", "真相", "规则", "程序", "意义", "边界"),
+    "theme_statement": ("原则", "正义", "真相", "规则", "程序", "意义", "边界", "流程", "报告", "档案"),
 }
+PRIVATE_AGENDA_FUNCTIONS = {"desire_exposure", "conflict_pressure", "concealment", "relationship_probe"}
+EXPLANATION_ONLY_FUNCTIONS = {"pure_theme_statement", "rule_delivery_only"}
+VALID_DIALOGUE_FUNCTIONS = {
+    "information_progress",
+    "desire_exposure",
+    "conflict_pressure",
+    "concealment",
+    "relationship_probe",
+    "theme_with_agenda",
+}
+FUNCTION_MARKERS["information_progress"] += ("clue", "evidence", "tell", "find", "know", "see")
+FUNCTION_MARKERS["desire_exposure"] += ("want", "need", "refuse")
+FUNCTION_MARKERS["conflict_pressure"] += ("cannot", "or else", "now")
+FUNCTION_MARKERS["concealment"] += ("nothing", "do not know", "later", "do not ask")
+FUNCTION_MARKERS["relationship_probe"] += ("trust", "we", "us")
+FUNCTION_MARKERS["theme_statement"] += (
+    "principle",
+    "justice",
+    "truth",
+    "rule",
+    "procedure",
+    "meaning",
+    "boundary",
+    "process",
+    "report",
+    "file",
+)
+RULE_DELIVERY_MARKERS = ("规则", "程序", "流程", "档案", "报告", "线索", "证据")
+RULE_DELIVERY_MARKERS = RULE_DELIVERY_MARKERS + ("rule", "procedure", "process", "file", "report", "clue", "evidence")
 
 
 def chapter_path(chapter: str) -> Path:
@@ -30,7 +58,7 @@ def dialogue_lines(text: str) -> list[str]:
     lines: list[str] = []
     for line in text.splitlines():
         stripped = line.strip()
-        if stripped.startswith(("“", "\"", "'", "「", "『", "- ")) or ("“" in stripped and "”" in stripped):
+        if stripped.startswith(("“", "‘", '"', "'", "「", "『", "- ")) or ("“" in stripped and "”" in stripped):
             lines.append(stripped)
     return lines
 
@@ -51,6 +79,10 @@ def classify(line: str) -> str:
     best = max(scores, key=lambda key: scores[key])
     if scores[best] == 0:
         return "character_texture"
+    if any(marker in line for marker in RULE_DELIVERY_MARKERS) and not any(
+        scores.get(name, 0) for name in PRIVATE_AGENDA_FUNCTIONS
+    ):
+        return "rule_delivery_only"
     if best == "theme_statement":
         other_score = sum(value for key, value in scores.items() if key != "theme_statement")
         if other_score > 0:
@@ -61,6 +93,7 @@ def classify(line: str) -> str:
 
 def sample_for_line(line: str) -> dict[str, Any]:
     function = classify(line)
+    blocked = function in EXPLANATION_ONLY_FUNCTIONS or function not in VALID_DIALOGUE_FUNCTIONS
     return {
         "evidence_quote": line[:140],
         "speaker": "unknown",
@@ -68,8 +101,20 @@ def sample_for_line(line: str) -> dict[str, Any]:
         "character_goal": "advance pressure, desire, concealment, relationship, or information rather than only state theme",
         "subtext_or_hidden_agenda": "reviewer must confirm the line has subtext or a concrete agenda",
         "consequence_or_power_shift": "reviewer must confirm what changes after this line",
-        "status": "BLOCKED" if function == "pure_theme_statement" else "CLEAR",
+        "status": "BLOCKED" if blocked else "CLEAR",
     }
+
+
+def max_explanation_run(functions: list[str]) -> int:
+    longest = 0
+    current = 0
+    for function in functions:
+        if function in EXPLANATION_ONLY_FUNCTIONS:
+            current += 1
+            longest = max(longest, current)
+        else:
+            current = 0
+    return longest
 
 
 def evaluate(chapter: str) -> dict[str, Any]:
@@ -91,13 +136,20 @@ def evaluate(chapter: str) -> dict[str, Any]:
             }
         ]
     else:
-        samples = [sample_for_line(line) for line in lines[:10]]
-    pure_count = sum(1 for item in samples if item.get("function") == "pure_theme_statement")
-    ratio = round(pure_count / max(len(samples), 1), 3)
+        samples = [sample_for_line(line) for line in lines[:20]]
+    all_functions = [classify(line) for line in lines]
+    pure_count = sum(1 for function in all_functions if function in EXPLANATION_ONLY_FUNCTIONS)
+    invalid_count = sum(1 for function in all_functions if function not in VALID_DIALOGUE_FUNCTIONS)
+    explanation_run = max_explanation_run(all_functions)
+    ratio = round(pure_count / max(len(all_functions), 1), 3)
     blockers = []
     if pure_count and ratio >= 0.35:
-        blockers.append("dialogue has too many pure theme statements without visible character agenda")
-    if any(item.get("status") == "BLOCKED" for item in samples) and ratio >= 0.35:
+        blockers.append("dialogue has too many pure theme/rule-delivery statements without visible character agenda")
+    if explanation_run >= 2:
+        blockers.append("dialogue has consecutive explanation-only lines without conflict, concealment, relationship movement, or power shift")
+    if invalid_count:
+        blockers.append("dialogue contains lines without one of the required functions: conflict, concealment, relationship, desire, pressure, or information turn")
+    if any(item.get("status") == "BLOCKED" for item in samples) and (ratio >= 0.35 or explanation_run >= 2 or invalid_count):
         status = "BLOCKED"
     else:
         status = "CLEAR"
@@ -112,6 +164,8 @@ def evaluate(chapter: str) -> dict[str, Any]:
             "sample_count": len(samples),
             "pure_theme_statement_count": pure_count,
             "pure_theme_statement_ratio": ratio,
+            "invalid_function_count": invalid_count,
+            "max_explanation_only_run": explanation_run,
         },
         "samples": samples,
         "blockers": blockers,

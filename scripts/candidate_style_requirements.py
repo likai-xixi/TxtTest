@@ -234,6 +234,8 @@ def render_requirements(chapter: str) -> dict[str, Any]:
             "- R2+ 必须给出正文可匹配的回报证据；R3/R4 必须触达核心卖点或写清替代回报证据。",
             "- 世界观信息必须通过场景压力、人物选择或普通人反应展示。",
             "- 每章至少保留一句有传播力的台词、吐槽、反差句或情绪句。",
+            "- 正文候选只把 Story Card 当创作输入；Machine Contract Appendix 是硬边界，不是叙事腔。",
+            "- 禁止把“本章、合同、证据、门禁、流程”等审计词当旁白结构使用。",
             "",
             "## Project Reader Promise",
             "",

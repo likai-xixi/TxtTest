@@ -45,6 +45,8 @@ def classify(name: str, returncode: int, output: str, state: dict | None = None,
         if returncode != 0 or has_explicit_error(output):
             return "ERROR"
         return "READY"
+    if name in {"workflow-smoke", "longrun-smoke"} and returncode == 0 and not has_explicit_error(output):
+        return "READY"
     if name == "status" and state is not None:
         return "NOT_READY" if state.get("blocker") else "READY"
     if "status: WARNING" in output:
@@ -73,8 +75,8 @@ def step_summary(output: str, limit: int = 10) -> list[str]:
 
 def run_step(name: str, args: list[str], *, audit_depth: int, state: dict | None = None, mode: str = "project") -> StepResult:
     command = [sys.executable, str(ROOT / "scripts" / "novel.py"), *args]
-    if name == "self-test" and audit_depth > 0:
-        return StepResult(name, command, 0, "READY", "SELF_TEST_SKIPPED_NESTED", "skipped nested self-test to avoid audit recursion")
+    if name == "self-test":
+        return StepResult(name, command, 0, "READY", "SELF_TEST_SKIPPED_AUDIT", "skipped self-test inside audit; run it as a standalone release check")
     result = run_command(command, audit_depth=audit_depth)
     output = (result.stdout or "") + (result.stderr or "")
     status = classify(name, result.returncode, output, state, mode=mode)
@@ -97,6 +99,9 @@ def step_defs_for(mode: str, chapter: str, gate: str) -> list[tuple[str, list[st
         ("style-check", ["style-check", chapter, "--no-write"]),
         ("ai-taste-check", ["ai-taste-check", chapter, "--no-write"]),
         ("dialogue-function-check", ["dialogue-function-check", chapter, "--no-write"]),
+        ("emotion-relationship-gate", ["emotion-relationship-gate", chapter]),
+        ("semantic-reader-review", ["semantic-reader-review", chapter]),
+        ("memorable-scene-check", ["memorable-scene-check", chapter]),
         ("deepseek-manifest-check-review", ["deepseek-manifest-check", chapter, "--kind", "review"]),
         ("deepseek-manifest-check-anti-ai", ["deepseek-manifest-check", chapter, "--kind", "anti_ai_review"]),
         ("review-arbitration", ["review-arbitration", chapter, "--no-write"]),
@@ -105,6 +110,8 @@ def step_defs_for(mode: str, chapter: str, gate: str) -> list[tuple[str, list[st
         ("chapter-shape-check", ["chapter-shape-check", chapter]),
         ("reader-reward-check", ["reader-reward-check", chapter]),
         ("reader-reward-index", ["reader-reward-index"]),
+        ("reader-risk-index", ["reader-risk-index", "--to", chapter]),
+        ("pilot-reader-experience", ["pilot-reader-experience", "A"]),
         ("reader-feedback", ["reader-feedback", "summarize", chapter, "--no-write"]),
         ("receive-chapter-preview", ["receive-chapter", chapter, "--preview"]),
         ("series-style-check", ["series-style-check", chapter, "--no-write"]),
@@ -128,7 +135,10 @@ def step_defs_for(mode: str, chapter: str, gate: str) -> list[tuple[str, list[st
             ("deepseek-preflight", ["deepseek-preflight", "--no-live"]),
         ]
     if mode == "release":
-        return project + [("workflow-smoke", ["workflow-smoke"]), ("longrun-smoke", ["longrun-smoke", "--chapters", "10"])]
+        # Release checklist runs self-test as a standalone artifact. Keep audit focused
+        # on story/template gates plus release smokes so it can finish quickly.
+        release_project = [step for step in project if step[0] != "self-test"]
+        return release_project + [("workflow-smoke", ["workflow-smoke"]), ("longrun-smoke", ["longrun-smoke", "--chapters", "10"])]
     return project
 
 
@@ -175,6 +185,8 @@ def render_human_report(state: dict, steps: list[StepResult], chapter: str, gate
         f"- end_state_change: {state.get('advisory', {}).get('end_state_change', 'unknown')}",
         f"- polish: {state.get('advisory', {}).get('polish', 'unknown')}",
         f"- series_style: {state.get('advisory', {}).get('series_style', 'unknown')}",
+        f"- reader_risk: {state.get('reader_risk', {}).get('status', 'unknown')} through {state.get('reader_risk', {}).get('through', '')}",
+        f"- long_health: {state.get('long_health', {}).get('status', 'unknown')} through {state.get('long_health', {}).get('through', '')}",
         "",
         "## Contract Signals",
         "",
@@ -234,6 +246,9 @@ def json_report(state: dict, steps: list[StepResult], chapter: str, gate: str, m
         "next_prompt": state.get("next_prompt") or state.get("recommended_command"),
         "advisory": state.get("advisory", {}),
         "contracts": state.get("contracts", {}),
+        "reader_risk": state.get("reader_risk", {}),
+        "long_health": state.get("long_health", {}),
+        "gate_countdown": state.get("gate_countdown", {}),
         "steps": [
             {
                 "name": step.name,

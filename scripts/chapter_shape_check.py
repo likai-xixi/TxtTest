@@ -38,6 +38,25 @@ HOOK_PATTERNS = {
     "mystery": ("why", "unknown", "signal", "为何", "未知", "信号"),
     "cost": ("cost", "price", "debt", "代价", "债"),
 }
+PROTAGONIST_POSITION_PATTERNS = {
+    "active": ("选择", "决定", "拒绝", "反制", "承担", "交换", "主动", "拆穿", "逼问", "保护"),
+    "reactive": ("被迫", "只好", "不得不", "被带", "被问", "被要求", "等待", "旁观"),
+}
+PROTAGONIST_SOLUTION_PATTERNS = {
+    "active_choice": ("选择", "决定", "拒绝", "反制", "承担", "交换", "拆穿"),
+    "procedure": ("提交", "归档", "申请", "记录", "审批", "流程"),
+    "new_clue": ("发现", "线索", "信号", "证据"),
+    "force": ("打", "破", "杀", "抢", "冲"),
+    "delay": ("等待", "搁置", "稍后", "未决"),
+}
+SIDE_CHARACTER_PATTERNS = {
+    "messenger": ("通知", "告诉", "转述", "汇报", "递给", "发送"),
+    "obstacle": ("阻止", "威胁", "刁难", "拒绝", "审问"),
+    "ally": ("帮助", "掩护", "提醒", "协助"),
+    "mirror": ("看着", "沉默", "旁观", "反问"),
+}
+EXPLANATION_MARKERS = ("解释", "说明", "意味着", "也就是说", "规则是", "原因是", "总结", "因此")
+SCENE_MARKERS = ("门", "手", "眼", "血", "汗", "灯", "声音", "脚步", "雨", "桌", "窗")
 
 
 def rel(path: Path) -> str:
@@ -65,16 +84,49 @@ def chapter_shape(chapter: str) -> dict[str, str]:
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     opening_text = "\n".join(lines[:8])
     ending_text = "\n".join(lines[-8:])
+    explanation_hits = sum(text.count(marker) for marker in EXPLANATION_MARKERS)
+    scene_hits = sum(text.count(marker) for marker in SCENE_MARKERS)
+    exposition_load = "explanation_only" if explanation_hits >= 4 and scene_hits < 4 else "mixed" if explanation_hits >= 2 else "scene_first"
+    protagonist_position = pick(text, PROTAGONIST_POSITION_PATTERNS, "unclear")
+    if protagonist_position == "reactive" and any(marker in text for marker in PROTAGONIST_POSITION_PATTERNS["active"]):
+        protagonist_position = "mixed"
     return {
         "opening": pick(opening_text, OPENING_PATTERNS, "unclear"),
         "obstacle": pick(text, OBSTACLE_PATTERNS, "unclear"),
         "resolution": pick(ending_text or text, RESOLUTION_PATTERNS, "unclear"),
         "hook": pick(ending_text or text, HOOK_PATTERNS, "unclear"),
+        "protagonist_position": protagonist_position,
+        "protagonist_solution": pick(ending_text or text, PROTAGONIST_SOLUTION_PATTERNS, "unclear"),
+        "side_character_function": pick(text, SIDE_CHARACTER_PATTERNS, "unclear"),
+        "exposition_load": exposition_load,
     }
 
 
 def shape_key(shape: dict[str, str]) -> str:
-    return "|".join(shape.get(key, "unclear") for key in ("opening", "obstacle", "resolution", "hook"))
+    return "|".join(
+        shape.get(key, "unclear")
+        for key in (
+            "opening",
+            "obstacle",
+            "resolution",
+            "hook",
+            "protagonist_position",
+            "protagonist_solution",
+            "side_character_function",
+            "exposition_load",
+        )
+    )
+
+
+def shape_keys_match(current_key: str, previous_key: str) -> bool:
+    current_parts = current_key.split("|") if current_key else []
+    previous_parts = previous_key.split("|") if previous_key else []
+    if not current_parts or not previous_parts:
+        return False
+    if current_parts == previous_parts:
+        return True
+    shared = min(len(current_parts), len(previous_parts))
+    return shared >= 4 and current_parts[:shared] == previous_parts[:shared]
 
 
 def load_shape_ledger() -> dict[str, Any]:
@@ -88,7 +140,24 @@ def prior_repetition_count(chapter: str, key: str, ledger: dict[str, Any]) -> in
             continue
         if not isinstance(value, dict):
             continue
-        if value.get("shape_key") == key:
+        if shape_keys_match(key, str(value.get("shape_key", ""))):
+            count += 1
+        else:
+            break
+    return count
+
+
+def prior_component_repetition_count(chapter: str, component: str, value: str, ledger: dict[str, Any]) -> int:
+    count = 0
+    if not value or value == "unclear":
+        return 0
+    for previous, item in sorted((ledger.get("chapters") or {}).items(), reverse=True):
+        if previous >= chapter:
+            continue
+        if not isinstance(item, dict):
+            continue
+        shape = item.get("shape") if isinstance(item.get("shape"), dict) else {}
+        if shape.get(component) == value:
             count += 1
         else:
             break
@@ -115,6 +184,10 @@ def evaluate(chapter: str) -> dict[str, Any]:
     key = shape_key(shape)
     ledger = load_shape_ledger()
     repeat_count = prior_repetition_count(chapter, key, ledger)
+    component_repeats = {
+        component: prior_component_repetition_count(chapter, component, value, ledger)
+        for component, value in shape.items()
+    }
     warnings: list[str] = []
     blockers: list[str] = []
     if repeat_count >= 2:
@@ -123,6 +196,26 @@ def evaluate(chapter: str) -> dict[str, Any]:
             blockers.append(message)
         else:
             warnings.append(message)
+    for component, count in component_repeats.items():
+        if count >= 2:
+            message = f"chapter {component} repeats the previous {count} checked chapters: {shape.get(component)}"
+            if number >= 6:
+                blockers.append(message)
+            else:
+                warnings.append(message)
+    if (
+        shape.get("obstacle") == "investigation"
+        and shape.get("resolution") in {"delay", "procedure", "new_clue"}
+        and shape.get("hook") in {"mystery", "new_threat", "new_rule"}
+        and number >= 6
+    ):
+        warnings.append("investigation/procedure/new-clue shape detected; ensure it does not repeat as a low-drama loop.")
+    if number >= 6 and shape.get("protagonist_position") == "reactive":
+        blockers.append("chapter 6+ has reactive protagonist shape; protagonist must actively alter the situation")
+    if number >= 6 and shape.get("exposition_load") == "explanation_only":
+        blockers.append("chapter 6+ is explanation-heavy without enough scene anchors")
+    if number >= 6 and shape.get("side_character_function") == "messenger":
+        warnings.append("side character is primarily a messenger; avoid tool-like support cast")
     if number <= 3 and not blockers:
         warnings.append("warmup chapter: shape repetition is advisory only.")
     status = "BLOCKED" if blockers else "WARNING" if warnings else "READY"
@@ -135,6 +228,7 @@ def evaluate(chapter: str) -> dict[str, Any]:
         "shape": shape,
         "shape_key": key,
         "repeat_count": repeat_count,
+        "component_repeats": component_repeats,
         "blockers": blockers,
         "warnings": warnings,
         "human_acceptance": None,
@@ -156,6 +250,9 @@ def render_markdown(report: dict[str, Any]) -> str:
     ]
     for key, value in (report.get("shape") or {}).items():
         lines.append(f"- {key}: {value}")
+    lines.extend(["", "## Component Repeats", ""])
+    for key, value in (report.get("component_repeats") or {}).items():
+        lines.append(f"- {key}: {value}")
     for key, title in (("blockers", "Blockers"), ("warnings", "Warnings")):
         lines.extend(["", f"## {title}", ""])
         lines.extend(f"- {item}" for item in report.get(key) or ["none"])
@@ -173,6 +270,7 @@ def update_ledger(report: dict[str, Any]) -> None:
             "status": report["status"],
             "shape": report.get("shape", {}),
             "shape_key": report.get("shape_key", ""),
+            "component_repeats": report.get("component_repeats", {}),
             "official_chapter": report.get("official_chapter", {}),
             "updated_at": now_iso(),
         }

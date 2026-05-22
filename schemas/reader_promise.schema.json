@@ -26,6 +26,13 @@
     "per_chapter_must_not_only_have",
     "ending_hook_priority",
     "reward_mix",
+    "positive_promises",
+    "negative_failure_modes",
+    "release_valve_policy",
+    "protagonist_agency_policy",
+    "information_clarity_policy",
+    "language_experience_policy",
+    "structural_efficiency_policy",
     "reader_reward_intensity_policy",
     "genre_mismatch_red_lines",
     "source_boundary"
@@ -53,6 +60,113 @@
     "per_chapter_must_not_only_have": { "type": "array", "items": { "type": "string" } },
     "ending_hook_priority": { "type": "array", "items": { "type": "string" } },
     "reward_mix": { "type": "object" },
+    "positive_promises": { "type": "array", "items": { "type": "string" } },
+    "negative_failure_modes": {
+      "type": "object",
+      "required": [
+        "red_lines",
+        "no_release_max_run",
+        "no_payoff_max_run",
+        "open_without_payoff_max_run",
+        "passive_protagonist_max_run",
+        "explanation_only_max_run",
+        "repeated_shape_max_run",
+        "low_efficiency_window_chapters",
+        "low_efficiency_max_count"
+      ],
+      "properties": {
+        "red_lines": { "type": "array", "items": { "type": "string" } },
+        "no_release_max_run": { "type": "integer" },
+        "no_payoff_max_run": { "type": "integer" },
+        "open_without_payoff_max_run": { "type": "integer" },
+        "passive_protagonist_max_run": { "type": "integer" },
+        "explanation_only_max_run": { "type": "integer" },
+        "repeated_shape_max_run": { "type": "integer" },
+        "low_efficiency_window_chapters": { "type": "integer" },
+        "low_efficiency_max_count": { "type": "integer" }
+      }
+    },
+    "release_valve_policy": {
+      "type": "object",
+      "required": [
+        "max_high_pressure_without_release",
+        "minimum_release_types",
+        "per_three_chapters_must_include_release",
+        "rationale"
+      ],
+      "properties": {
+        "max_high_pressure_without_release": { "type": "integer" },
+        "minimum_release_types": { "type": "array", "items": { "type": "string" } },
+        "per_three_chapters_must_include_release": { "type": "boolean" },
+        "rationale": { "type": "string" }
+      }
+    },
+    "protagonist_agency_policy": {
+      "type": "object",
+      "required": [
+        "requires_active_goal",
+        "requires_active_action",
+        "requires_cost_or_consequence",
+        "requires_state_change",
+        "requires_desire_or_principle",
+        "rationale"
+      ],
+      "properties": {
+        "requires_active_goal": { "type": "boolean" },
+        "requires_active_action": { "type": "boolean" },
+        "requires_cost_or_consequence": { "type": "boolean" },
+        "requires_state_change": { "type": "boolean" },
+        "requires_desire_or_principle": { "type": "boolean" },
+        "rationale": { "type": "string" }
+      }
+    },
+    "information_clarity_policy": {
+      "type": "object",
+      "required": [
+        "max_consecutive_setup_only_chapters",
+        "require_scene_test_for_world_rule",
+        "forbid_explanation_only_worldbuilding",
+        "rationale"
+      ],
+      "properties": {
+        "max_consecutive_setup_only_chapters": { "type": "integer" },
+        "require_scene_test_for_world_rule": { "type": "boolean" },
+        "forbid_explanation_only_worldbuilding": { "type": "boolean" },
+        "rationale": { "type": "string" }
+      }
+    },
+    "language_experience_policy": {
+      "type": "object",
+      "required": [
+        "forbid_summary_voice",
+        "require_memorable_line_or_detail",
+        "max_explanation_paragraphs_without_scene",
+        "rationale"
+      ],
+      "properties": {
+        "forbid_summary_voice": { "type": "boolean" },
+        "require_memorable_line_or_detail": { "type": "boolean" },
+        "max_explanation_paragraphs_without_scene": { "type": "integer" },
+        "rationale": { "type": "string" }
+      }
+    },
+    "structural_efficiency_policy": {
+      "type": "object",
+      "required": [
+        "min_effective_progress_per_chapter",
+        "max_words_without_state_change",
+        "max_low_progress_window_count",
+        "window_chapters",
+        "rationale"
+      ],
+      "properties": {
+        "min_effective_progress_per_chapter": { "type": "string" },
+        "max_words_without_state_change": { "type": "integer" },
+        "max_low_progress_window_count": { "type": "integer" },
+        "window_chapters": { "type": "integer" },
+        "rationale": { "type": "string" }
+      }
+    },
     "reader_reward_intensity_policy": {
       "type": "object",
       "required": [

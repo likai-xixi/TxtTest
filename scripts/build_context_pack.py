@@ -11,6 +11,7 @@ from _common import ROOT, chapter_number, chapter_parts, now_iso, read_text, tru
 from book_outline import BOOK_JSON, BOOK_MD, ensure_ready as ensure_book_outline
 from context_governance import context_manifest_path, context_pack_budget, input_hash, rel, section_budgets, sha256
 from core_setting_freeze import ensure_ready as ensure_core_setting_freeze, freeze_markdown_path
+from drafting_prompt_context import filtered_brief_for_drafting
 from element_context import (
     ALLOWED_NEW_ELEMENT_SECTIONS,
     PROHIBITED_INSTANT_SOLUTION_SECTIONS,
@@ -461,7 +462,7 @@ def build_sections(chapter: str, brief_text: str, object_ids: list[str], ability
             0,
         ),
         Section("core_freeze", LEGACY_CORE_FREEZE, file_body(freeze_path), budgets["core_freeze"], [SourceRef(freeze_path)], "always", 1),
-        Section("chapter_brief", "本章 brief", brief_text, budgets["chapter_brief"], [SourceRef(ROOT / "outline" / "chapter_briefs" / f"{chapter}.md")], "always", 2),
+        Section("chapter_brief", "本章 brief", filtered_brief_for_drafting(brief_text), budgets["chapter_brief"], [SourceRef(ROOT / "outline" / "chapter_briefs" / f"{chapter}.md")], "drafting_filtered_brief", 2),
         Section("chapter_anchor_continuity", "上一章章末锚点连续性", anchor_body, budgets.get("chapter_anchor_continuity", 900), anchor_sources, "previous_chapter_end_anchor", 3),
         Section("active_aftermath_obligations", "Active Aftermath Obligations", aftermath_body, budgets.get("active_aftermath_obligations", 900), aftermath_sources, "unresolved_cost_and_consequence_debt", 4),
         Section("review_context_state_and_quotes", "Review Structured State And Key Quotes", review_context_body, budgets.get("review_context_state_and_quotes", 4000), review_context_sources, "review_only_prior_state_without_previous_full_chapters", 4),

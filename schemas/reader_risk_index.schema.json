@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReaderRiskIndex",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "generated_at",
+    "status",
+    "through",
+    "chapters_checked",
+    "thresholds",
+    "category_statuses",
+    "category_blockers",
+    "category_warnings",
+    "chapters",
+    "source_reader_promise",
+    "source_event_ledger",
+    "blockers",
+    "warnings"
+  ],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "generated_at": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["READY", "WARNING", "BLOCKED"] },
+    "through": { "type": "string", "pattern": "^v\\d{2}_c\\d{3}$" },
+    "chapters_checked": { "type": "integer" },
+    "thresholds": { "type": "object" },
+    "category_statuses": { "type": "object" },
+    "category_blockers": { "type": "object" },
+    "category_warnings": { "type": "object" },
+    "chapters": { "type": "array" },
+    "source_reader_promise": { "type": "object" },
+    "source_event_ledger": { "type": "object" },
+    "blockers": { "type": "array", "items": { "type": "string" } },
+    "warnings": { "type": "array", "items": { "type": "string" } }
+  }
+}

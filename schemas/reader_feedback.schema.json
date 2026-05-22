@@ -2,19 +2,44 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Reader Feedback",
   "type": "object",
-  "required": ["schema_version", "chapter", "generated_at", "status", "response_count", "stuck_points", "continue_reasons", "reader_promise_gaps", "risk", "recommendation", "human_acceptance"],
+  "required": ["schema_version", "chapter", "generated_at", "status", "response_count", "source_response_refs", "stuck_points", "continue_reasons", "reader_promise_gaps", "favorite_moments", "skip_moments", "next_click_intents", "protagonist_charm_notes", "author_explanation_flags", "suspense_fatigue_flags", "risk", "recommendation", "human_acceptance"],
   "properties": {
     "schema_version": {"type": "integer"},
     "chapter": {"type": "string"},
     "generated_at": {"type": "string"},
-    "status": {"type": "string"},
+    "status": {"enum": ["READY", "WARNING", "ACCEPTED_BY_HUMAN"]},
     "response_count": {"type": "integer"},
+    "source_response_refs": {"type": "array"},
+    "ignored_response_count": {"type": "integer"},
+    "ignored_response_refs": {"type": "array"},
     "stuck_points": {"type": "array"},
     "continue_reasons": {"type": "array"},
     "reader_promise_gaps": {"type": "array"},
+    "favorite_moments": {"type": "array"},
+    "skip_moments": {"type": "array"},
+    "next_click_intents": {"type": "array"},
+    "protagonist_charm_notes": {"type": "array"},
+    "author_explanation_flags": {"type": "array"},
+    "suspense_fatigue_flags": {"type": "array"},
     "risk": {"type": "string"},
     "recommendation": {"type": "string"},
-    "human_acceptance": {"type": ["object", "null"]},
+    "human_acceptance": {
+      "type": ["object", "null"],
+      "required": ["accepted_by", "accepted_at", "reason", "report_sha256", "risk_acceptance_items"],
+      "properties": {
+        "accepted_by": {"const": "human"},
+        "accepted_at": {"type": "string"},
+        "reason": {"type": "string", "minLength": 1},
+        "response_refs": {"type": "array"},
+        "report_sha256": {"type": "string", "minLength": 1},
+        "risk_acceptance_items": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "minLength": 1}
+        }
+      },
+      "additionalProperties": false
+    },
     "resolutions": {"type": "array"}
   },
   "additionalProperties": false

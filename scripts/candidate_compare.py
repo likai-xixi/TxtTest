@@ -18,6 +18,14 @@ SIGNALS = {
     "event_evidence": ("事件", "落账", "chapter_anchor", "锚点", "改变", "决定", "承诺", "代价", "后果"),
     "breaker_risk": ("破局", "突然获得", "新道具", "新技能", "无代价", "直接解决", "临场解决", "万能"),
 }
+MATRIX_DIMENSIONS = (
+    "hook_click_reason",
+    "character_drive",
+    "pacing_efficiency",
+    "setting_safety",
+    "revision_cost",
+    "reader_reward",
+)
 
 
 def rel(path: Path) -> str:
@@ -78,6 +86,69 @@ def analyze(path: Path) -> dict[str, Any]:
     }
 
 
+def clamp_score(value: int) -> int:
+    return max(0, min(5, value))
+
+
+def risk_flags(item: dict[str, Any]) -> list[str]:
+    flags: list[str] = []
+    if not item.get("nonempty"):
+        flags.append("missing_candidate")
+    if int(item.get("setting_new_risk", 0)) > 0:
+        flags.append("setting_new_risk")
+    if int(item.get("unauthorized_breaker_risk", 0)) > 0:
+        flags.append("unauthorized_breaker_risk")
+    if int(item.get("ai_taste_risk", 0)) >= 2:
+        flags.append("ai_taste_risk")
+    if int(item.get("protagonist_agency", 0)) == 0 and item.get("nonempty"):
+        flags.append("low_protagonist_agency")
+    if int(item.get("mainline_progress", 0)) == 0 and item.get("nonempty"):
+        flags.append("low_mainline_progress")
+    return flags
+
+
+def selection_dimensions(item: dict[str, Any]) -> dict[str, int]:
+    if not item.get("nonempty"):
+        return {key: 0 for key in MATRIX_DIMENSIONS}
+    agency = int(item.get("protagonist_agency", 0))
+    progress = int(item.get("mainline_progress", 0))
+    setting_risk = int(item.get("setting_new_risk", 0))
+    ai_taste = int(item.get("ai_taste_risk", 0))
+    event_evidence = int(item.get("ledger_event_evidence", 0))
+    breaker_risk = int(item.get("unauthorized_breaker_risk", 0))
+    sentence_penalty = 1 if int(item.get("sentences", 1)) > 80 and progress <= 1 else 0
+    flags = risk_flags(item)
+    return {
+        "hook_click_reason": clamp_score(progress + event_evidence - ai_taste - breaker_risk),
+        "character_drive": clamp_score(agency * 2 - ai_taste),
+        "pacing_efficiency": clamp_score(progress * 2 + agency - sentence_penalty - ai_taste),
+        "setting_safety": clamp_score(5 - setting_risk - breaker_risk * 2),
+        "revision_cost": clamp_score(5 - len(flags)),
+        "reader_reward": clamp_score(progress + event_evidence + agency - ai_taste),
+    }
+
+
+def selection_matrix(candidates: dict[str, dict[str, Any]], recommendation: str) -> dict[str, Any]:
+    rows: list[dict[str, Any]] = []
+    for name, item in candidates.items():
+        dimensions = selection_dimensions(item)
+        rows.append(
+            {
+                "candidate": name,
+                "dimensions": dimensions,
+                "total": sum(dimensions.values()),
+                "raw_score": item.get("score", 0),
+                "risk_flags": risk_flags(item),
+                "recommended": name == recommendation,
+            }
+        )
+    return {
+        "dimensions": list(MATRIX_DIMENSIONS),
+        "rows": rows,
+        "writes_selection": False,
+    }
+
+
 def compare(chapter: str, brief: bool = False) -> dict[str, Any]:
     chapter_parts(chapter)
     paths = candidate_paths(chapter, brief)
@@ -94,6 +165,7 @@ def compare(chapter: str, brief: bool = False) -> dict[str, Any]:
         "mode": "brief" if brief else "chapter",
         "status": "READY" if usable else "MISSING",
         "candidates": candidates,
+        "selection_matrix": selection_matrix(candidates, recommendation),
         "recommended_choice": recommendation,
         "recommendation_reason": reason,
         "writes_selection": False,
@@ -118,6 +190,27 @@ def print_text(result: dict[str, Any]) -> None:
         print(f"- unauthorized_breaker_risk: {item.get('unauthorized_breaker_risk', 0)}")
         print(f"- score: {item.get('score', 0)}")
         print()
+    print("## Selection Matrix")
+    print()
+    print("| candidate | hook | character | pacing | setting_safety | revision_cost | reader_reward | total | risks |")
+    print("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |")
+    for row in result.get("selection_matrix", {}).get("rows", []):
+        dimensions = row.get("dimensions", {})
+        risks = ", ".join(row.get("risk_flags") or ["none"])
+        print(
+            "| {candidate} | {hook} | {character} | {pacing} | {safety} | {revision} | {reward} | {total} | {risks} |".format(
+                candidate=row.get("candidate", ""),
+                hook=dimensions.get("hook_click_reason", 0),
+                character=dimensions.get("character_drive", 0),
+                pacing=dimensions.get("pacing_efficiency", 0),
+                safety=dimensions.get("setting_safety", 0),
+                revision=dimensions.get("revision_cost", 0),
+                reward=dimensions.get("reader_reward", 0),
+                total=row.get("total", 0),
+                risks=risks,
+            )
+        )
+    print()
     print("This command does not write selection.")
 
 
@@ -137,4 +230,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

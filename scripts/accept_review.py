@@ -15,6 +15,11 @@ from review_binding import markdown_review_with_hash, metadata_value, review_bod
 ARTIFACTS: dict[str, tuple[str | None, str | None]] = {
     "ai_taste": ("ai_taste.md", "ai_taste.json"),
     "dialogue_function": ("dialogue_function.md", "dialogue_function.json"),
+    "emotion_relationship_gate": ("emotion_relationship_gate.md", "emotion_relationship_gate.json"),
+    "semantic_reader_review": ("semantic_reader_review.md", "semantic_reader_review.json"),
+    "codex_semantic_reader_review": ("codex_semantic_reader_review.md", "codex_semantic_reader_review.json"),
+    "deepseek_semantic_reader_review": ("deepseek_semantic_reader_review.md", "deepseek_semantic_reader_review.json"),
+    "memorable_scene": ("memorable_scene.md", "memorable_scene.json"),
     "codex_anti_ai_review": ("codex_anti_ai_review.md", "codex_anti_ai_review.json"),
     "deepseek_anti_ai_review": ("deepseek_anti_ai_review.md", "deepseek_anti_ai_review.json"),
     "series_style": ("series_style.md", "series_style.json"),

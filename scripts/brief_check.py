@@ -11,6 +11,7 @@ from element_context import (
     PROHIBITED_INSTANT_SOLUTION_SECTIONS,
     USABLE_ABILITY_ID_SECTIONS,
     USABLE_OBJECT_ID_SECTIONS,
+    brief_schema_version,
     declared_ids,
     markdown_sections,
     missing_section,
@@ -51,6 +52,7 @@ from brief_contract import (
     anchor_value,
     concrete_value,
     digestion_window_chapters,
+    extract_labeled_value,
     has_placeholder,
     is_opening_chapter_anchor,
     is_yes,
@@ -82,6 +84,75 @@ END_STATE_CHANGE_SECTIONS = ("章末状态变化", "End State Change")
 END_STATE_CHANGE_TYPES = {"关系改变", "代价落地", "认知更新", "选择完成", "风险显形", "旧问题变形", "新线索出现", "后果承接"}
 READER_RETENTION_SECTIONS = ("本章留存合同", "Reader Retention Contract")
 PLACEHOLDER_TITLES = {"标题", "章节标题", "chapter title", "todo", "tbd", "待定", "待填", "无题"}
+V2_STORY_CARD_SECTIONS = ("Story Card",)
+V2_MACHINE_APPENDIX_SECTIONS = ("Machine Contract Appendix",)
+V2_STORY_FIELDS = (
+    "第一屏扰动",
+    "主角本章想要",
+    "主角主动动作",
+    "最大阻力",
+    "中段变化点",
+    "本章小兑现",
+    "before -> after",
+    "章末点击理由",
+    "本章只讲懂的一条世界规则",
+    "禁止临场破局",
+)
+V2_MACHINE_FIELDS = (
+    "上章章末锚点",
+    "本章开场落点",
+    "场景承接说明",
+    "主线牵引档位",
+    "外部压力档位",
+    "本章继承变化",
+    "本章节奏用途",
+    "节奏说明",
+    "本章进展契约",
+    "本章代价与后果契约",
+    "本章解决边界",
+    "reader_reward_intensity",
+    "reader_reward_type",
+    "reader_reward_delivery",
+    "reader_reward_timing",
+    "reward_evidence_requirement",
+    "pressure_level",
+    "release_valve",
+    "protagonist_desire_or_principle",
+    "低戏剧载体",
+    "低戏剧载体承载的推进类型",
+    "核心机制是否出现",
+    "若未出现，当前沉默计数",
+    "等待结尾债务",
+    "可用人物状态",
+    "可用道具 / 装备",
+    "可用道具 IDs",
+    "可用技能 / 能力",
+    "可用技能 IDs",
+    "能力限制 / 代价",
+    "未解决伏笔",
+    "新增设定",
+    "允许新增元素",
+    "最低落账事件",
+    "禁止新增",
+    "禁止解决",
+    "主角弱点 / 误判",
+    "普通人 / 外部视角对照",
+    "旧问题",
+    "悬念状态",
+)
+V2_MACHINE_ALLOW_NONE = {
+    "低戏剧载体",
+    "低戏剧载体承载的推进类型",
+    "等待结尾债务",
+    "可用道具 / 装备",
+    "可用道具 IDs",
+    "可用技能 / 能力",
+    "可用技能 IDs",
+    "未解决伏笔",
+    "新增设定",
+    "允许新增元素",
+    "旧问题",
+}
 
 
 def title_is_ready(title: str) -> bool:
@@ -165,6 +236,29 @@ def check_reader_contract_sections(parsed: dict[str, str]) -> list[str]:
                 failures.append(f"reader contract section {label} missing field: {field}")
             elif has_placeholder(value):
                 failures.append(f"reader contract section {label} field is not ready: {field}")
+    return failures
+
+
+def check_v2_story_and_machine_sections(parsed: dict[str, str]) -> list[str]:
+    failures: list[str] = []
+    story = section_body(parsed, V2_STORY_CARD_SECTIONS)
+    machine = section_body(parsed, V2_MACHINE_APPENDIX_SECTIONS)
+    if not story:
+        failures.append("missing required section: Story Card")
+    if not machine:
+        failures.append("missing required section: Machine Contract Appendix")
+    for field in V2_STORY_FIELDS:
+        value = labeled_value(story, field)
+        if not value:
+            failures.append(f"Story Card missing field: {field}")
+        elif has_placeholder(value) or is_none_body(value):
+            failures.append(f"Story Card field is not ready: {field}")
+    for field in V2_MACHINE_FIELDS:
+        value = labeled_value(machine, field)
+        if not value:
+            failures.append(f"Machine Contract Appendix missing field: {field}")
+        elif has_placeholder(value) or (field not in V2_MACHINE_ALLOW_NONE and is_none_body(value)):
+            failures.append(f"Machine Contract Appendix field is not ready: {field}")
     return failures
 
 
@@ -316,6 +410,7 @@ def check_progress_contract_sections(parsed: dict[str, str]) -> list[str]:
             failures.append("高牵引/高推进章必须填写 冷却范围")
 
     retention = section_body(parsed, READER_RETENTION_SECTIONS)
+    machine = section_body(parsed, V2_MACHINE_APPENDIX_SECTIONS)
     intensity = progress_value(retention, "reader_reward_intensity").strip().upper()
     if intensity not in READER_REWARD_INTENSITIES:
         failures.append("本章留存合同 reader_reward_intensity must be R0-R4")
@@ -334,6 +429,15 @@ def check_progress_contract_sections(parsed: dict[str, str]) -> list[str]:
             failures.append("R4 本章代价与后果契约必须填写 已支付代价")
         if not concrete_value(obligation):
             failures.append("R4 本章代价与后果契约必须填写 后果承接义务")
+    pressure = progress_value(retention, "pressure_level") or progress_value(machine, "pressure_level") or progress_value(cost, "pressure_level")
+    release = progress_value(retention, "release_valve") or progress_value(machine, "release_valve")
+    if not concrete_value(pressure, min_chars=1):
+        failures.append("本章留存合同 pressure_level must be concrete")
+    if any(marker in pressure for marker in ("H3", "H4", "W3", "W4", "高压", "强压", "爆发")) and not concrete_value(release):
+        failures.append("高压章节必须填写 release_valve")
+    protagonist_desire = progress_value(retention, "protagonist_desire_or_principle") or progress_value(machine, "protagonist_desire_or_principle")
+    if not concrete_value(protagonist_desire):
+        failures.append("本章留存合同 protagonist_desire_or_principle must be concrete")
 
     resolved_threads = progress_value(boundary, "resolved_threads")
     if not is_none_body(resolved_threads):
@@ -356,21 +460,25 @@ def check_brief(path: Path) -> list[str]:
     if not path.exists():
         return [f"missing brief: {path.relative_to(ROOT)}"]
     text = read_text(path)
+    schema_version = brief_schema_version(text)
     parsed = markdown_sections(text)
     title = section_body(parsed, TITLE_SECTIONS).strip()
     if missing_section(parsed, TITLE_SECTIONS):
         failures.append("missing required section: 章节标题")
     elif not title_is_ready(title):
         failures.append("章节标题 must be non-placeholder")
-    for name in REQUIRED_SECTIONS:
-        if name not in parsed:
-            failures.append(f"missing required section: {name}")
-            continue
-        body = parsed[name]
-        if not body:
-            failures.append(f"empty required section: {name}")
-        elif any(marker in body for marker in PLACEHOLDER_MARKERS):
-            failures.append(f"section still has placeholder text: {name}")
+    if schema_version == 2:
+        failures.extend(check_v2_story_and_machine_sections(parsed))
+    else:
+        for name in REQUIRED_SECTIONS:
+            if name not in parsed:
+                failures.append(f"missing required section: {name}")
+                continue
+            body = parsed[name]
+            if not body:
+                failures.append(f"empty required section: {name}")
+            elif any(marker in body for marker in PLACEHOLDER_MARKERS):
+                failures.append(f"section still has placeholder text: {name}")
     for aliases in REQUIRED_ELEMENT_SECTIONS:
         label = aliases[0]
         if missing_section(parsed, aliases):
@@ -384,7 +492,8 @@ def check_brief(path: Path) -> list[str]:
     failures.extend(check_pacing_sections(parsed))
     failures.extend(check_scene_continuity_sections(path.stem, parsed))
     failures.extend(check_progress_contract_sections(parsed))
-    failures.extend(check_reader_contract_sections(parsed))
+    if schema_version != 2:
+        failures.extend(check_reader_contract_sections(parsed))
 
     object_ids = declared_ids(section_body(parsed, USABLE_OBJECT_ID_SECTIONS))
     ability_ids = declared_ids(section_body(parsed, USABLE_ABILITY_ID_SECTIONS))
@@ -403,20 +512,7 @@ def check_brief(path: Path) -> list[str]:
 
 
 def labeled_value(body: str, key: str) -> str:
-    for raw in body.splitlines():
-        line = raw.strip()
-        if not line:
-            continue
-        line = line.lstrip("-*+ ").strip()
-        if ":" in line:
-            label, value = line.split(":", 1)
-        elif "：" in line:
-            label, value = line.split("：", 1)
-        else:
-            continue
-        if label.strip() == key:
-            return value.strip()
-    return ""
+    return extract_labeled_value(body, (key,))
 
 
 def check_catalog_sections(parsed: dict[str, str]) -> list[str]:

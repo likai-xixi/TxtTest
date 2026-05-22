@@ -207,6 +207,9 @@ PROGRESS_KEY_ALIASES = {
     "reader_reward_delivery": ("reader_reward_delivery", "读者回报交付"),
     "reader_reward_timing": ("reader_reward_timing", "读者回报时点"),
     "reward_evidence_requirement": ("reward_evidence_requirement", "回报证据要求"),
+    "pressure_level": ("pressure_level", "压迫值", "本章压迫值"),
+    "release_valve": ("release_valve", "释放阀", "本章释放阀"),
+    "protagonist_desire_or_principle": ("protagonist_desire_or_principle", "主角欲望或原则", "主角私心或原则"),
     "chapter_small_payoff": ("本章小兑现", "chapter_small_payoff"),
     "next_click_reason": ("下一章点击理由", "next_click_reason"),
     "low_drama_carrier": ("低戏剧载体", "low_drama_carrier"),
@@ -272,7 +275,15 @@ def extract_labeled_value(body: str, aliases: tuple[str, ...]) -> str:
         else:
             continue
         if normalized_field_name(key) in normalized_aliases:
-            return value.strip()
+            return re.split(r"[；;\n]", value.strip(), 1)[0].strip()
+    for alias in aliases:
+        pattern = re.compile(
+            rf"(?:^|[；;。\n])\s*[-*+]*\s*{re.escape(alias)}\s*[:：]\s*([^；;\n]+)",
+            flags=re.I,
+        )
+        match = pattern.search(body)
+        if match:
+            return match.group(1).strip()
     return ""
 
 

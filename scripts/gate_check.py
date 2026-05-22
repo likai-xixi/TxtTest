@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 from pathlib import Path
 
 from _common import ROOT, read_text
+from artifact_integrity import validate_current_ref
 from chapter_evidence import chapter_evidence_failures
 from context_governance import context_quality_path
 from gate_config import load_gate_configs
@@ -150,11 +152,100 @@ def check_assessment(config: dict, failures: list[str]) -> None:
     if has_placeholder(path):
         failures.append(f"gate assessment still has placeholders: {path_text}")
     status = status_value(text)
-    if status not in {"CLEAR", "ACCEPTED_BY_HUMAN"}:
+    if status not in {"CLEAR", "READY", "ACCEPTED_BY_HUMAN"}:
         failures.append(f"gate assessment {path_text} status is {status or 'MISSING'}")
     for section in config.get("assessment_sections", []):
         if section not in text:
             failures.append(f"gate assessment {path_text} missing section {section}")
+
+
+def check_gate_a_reader_experience_json(failures: list[str]) -> None:
+    path = ROOT / "state" / "gates" / "gate_a_reader_experience.json"
+    if not path.exists():
+        failures.append("missing Gate A reader experience machine report: state/gates/gate_a_reader_experience.json")
+        return
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        failures.append(f"Gate A reader experience report invalid JSON: {exc}")
+        return
+    if not isinstance(data, dict):
+        failures.append("Gate A reader experience report must be a JSON object")
+        return
+    if data.get("gate") != "A":
+        failures.append("Gate A reader experience report gate must be A")
+    status = str(data.get("status", "")).upper()
+    if status not in {"READY", "ACCEPTED_BY_HUMAN"}:
+        failures.append(f"Gate A reader experience report status is {status or 'MISSING'}")
+    recommendation = str(data.get("decision_recommendation", "")).strip()
+    if recommendation != "continue":
+        failures.append(f"Gate A reader experience recommendation is {recommendation or 'MISSING'}, not continue")
+    checks = data.get("sustainability_checks")
+    if not isinstance(checks, dict):
+        failures.append("Gate A reader experience missing sustainability_checks")
+    else:
+        for key, value in checks.items():
+            if not value:
+                failures.append(f"Gate A sustainability check failed: {key}")
+    blockers = data.get("blockers")
+    if isinstance(blockers, list) and blockers:
+        failures.extend(f"Gate A reader experience blocker: {item}" for item in blockers)
+    failures.extend(validate_current_ref(data.get("source_event_ledger"), ROOT / "state" / "event_ledger.jsonl", "Gate A reader experience source_event_ledger"))
+    for item in data.get("chapters", []):
+        if not isinstance(item, dict):
+            failures.append("Gate A reader experience chapter item must be an object")
+            continue
+        chapter = str(item.get("chapter", ""))
+        if not chapter:
+            failures.append("Gate A reader experience chapter item missing chapter")
+            continue
+        gate_ref = item.get("reader_reward_gate")
+        shape_ref = item.get("chapter_shape")
+        gate_path = ROOT / "reviews" / chapter / "reader_reward_gate.json"
+        shape_path = ROOT / "reviews" / chapter / "chapter_shape.json"
+        failures.extend(validate_current_ref(gate_ref, gate_path, f"Gate A reader experience {chapter} reader_reward_gate"))
+        failures.extend(validate_current_ref(shape_ref, shape_path, f"Gate A reader experience {chapter} chapter_shape"))
+
+
+def reader_feedback_accepted(data: dict) -> bool:
+    acceptance = data.get("human_acceptance")
+    if not isinstance(acceptance, dict):
+        return False
+    risk_items = acceptance.get("risk_acceptance_items")
+    if not (
+        acceptance.get("accepted_by") == "human"
+        and all(str(acceptance.get(key, "")).strip() for key in ("accepted_at", "reason", "report_sha256"))
+        and isinstance(risk_items, list)
+        and any(str(item).strip() for item in risk_items)
+    ):
+        return False
+    clean = dict(data)
+    clean.pop("human_acceptance", None)
+    clean.pop("status", None)
+    report_hash = hashlib.sha256(json.dumps(clean, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+    return acceptance.get("report_sha256") == report_hash
+
+
+def check_chapter_reader_feedback(chapter: str, failures: list[str]) -> None:
+    path = ROOT / "reviews" / chapter / "reader_feedback.json"
+    if not path.exists():
+        failures.append(f"{chapter}: missing reader feedback summary: {path.relative_to(ROOT).as_posix()}")
+        return
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        failures.append(f"{chapter}: reader feedback invalid JSON: {exc}")
+        return
+    if not isinstance(data, dict):
+        failures.append(f"{chapter}: reader feedback must be a JSON object")
+        return
+    status = str(data.get("status", "")).upper()
+    count = int(data.get("response_count", 0) or 0)
+    if status == "READY" and count > 0:
+        return
+    if status == "ACCEPTED_BY_HUMAN" and reader_feedback_accepted(data):
+        return
+    failures.append(f"{chapter}: reader feedback requires real responses or human acceptance with reason/time/hash/risk")
 
 
 def check_chapter(chapter: str, chapters_with_events: set[str], failures: list[str]) -> None:
@@ -264,6 +355,9 @@ def check_reader_experience_governance(gate: str, config: dict, failures: list[s
             missing = sorted(expected_chapters - chapters)
             if missing:
                 failures.append(f"suspense ledger missing chapter coverage: {', '.join(missing[:5])}")
+    if gate in {"A", "B"}:
+        for number in range(1, int(config["needed"]) + 1):
+            check_chapter_reader_feedback(chapter_id(number), failures)
 
 
 def main() -> int:
@@ -277,6 +371,8 @@ def main() -> int:
     chapters_with_events = event_chapters()
 
     check_assessment(config, failures)
+    if gate == "A":
+        check_gate_a_reader_experience_json(failures)
     check_context_governance(gate, config, failures)
     check_reader_experience_governance(gate, config, failures)
     for number in range(1, config["needed"] + 1):

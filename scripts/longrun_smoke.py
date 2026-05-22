@@ -36,7 +36,78 @@ def seed(repo: Path, chapters: int) -> str:
     events = []
     for number in range(1, chapters + 1):
         chapter = f"v01_c{number:03d}"
-        write(Path(repo) / "chapters" / "v01" / f"c{number:03d}.md", f"Synthetic chapter {chapter}: tracked decision and anchor.\n")
+        chapter_path = Path(repo) / "chapters" / "v01" / f"c{number:03d}.md"
+        brief_path = Path(repo) / "outline" / "chapter_briefs" / f"{chapter}.md"
+        write(chapter_path, f"Synthetic chapter {chapter}: tracked decision and anchor.\n")
+        write(brief_path, "# Brief\n\nsynthetic brief for longrun smoke\n")
+        carrier = ("investigation", "dialogue", "procedure")[number % 3]
+        hook = ("mystery", "cost", "relationship")[number % 3]
+        write(
+            Path(repo) / "reviews" / chapter / "reader_reward_gate.json",
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "chapter": chapter,
+                    "generated_at": "2000-01-01T00:00:00+00:00",
+                    "status": "READY",
+                    "reader_reward_intensity": "R2",
+                    "official_chapter": {"path": f"chapters/v01/c{number:03d}.md", "sha256": sha(chapter_path)},
+                    "official_brief": {"path": f"outline/chapter_briefs/{chapter}.md", "sha256": sha(brief_path)},
+                    "contract": {
+                        "reader_reward_intensity": "R2",
+                        "reader_reward_delivery": "tracked decision",
+                        "reward_evidence_requirement": "tracked decision",
+                        "pressure_level": "H2",
+                        "release_valve": "tracked decision payoff",
+                        "core_mechanism_presence": "used",
+                        "low_drama_carrier": carrier,
+                        "small_payoff": "tracked decision",
+                        "next_click_reason": f"next cost {number}",
+                        "effective_progress_unit": f"before {number} -> after {number}",
+                        "protagonist_action": "tracked decision",
+                        "world_rule": "tracked decision changes the rule pressure",
+                    },
+                    "evidence_quotes": ["tracked decision"],
+                    "matched_evidence_quotes": ["tracked decision"],
+                    "blockers": [],
+                    "warnings": [],
+                    "human_acceptance": None,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+        )
+        write(
+            Path(repo) / "reviews" / chapter / "chapter_shape.json",
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "chapter": chapter,
+                    "generated_at": "2000-01-01T00:00:00+00:00",
+                    "status": "READY",
+                    "official_chapter": {"path": f"chapters/v01/c{number:03d}.md", "sha256": sha(chapter_path)},
+                    "shape": {
+                        "opening": "arrival",
+                        "obstacle": carrier,
+                        "resolution": "choice",
+                        "hook": hook,
+                        "protagonist_position": "active",
+                        "protagonist_solution": "active_choice",
+                        "side_character_function": "ally",
+                        "exposition_load": "scene_first",
+                    },
+                    "shape_key": f"arrival|{carrier}|choice|{hook}|active|active_choice|ally|scene_first",
+                    "repeat_count": 0,
+                    "blockers": [],
+                    "warnings": [],
+                    "human_acceptance": None,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+        )
         events.append(
             {
                 "event_id": f"{chapter}_e001",
@@ -96,6 +167,51 @@ def seed(repo: Path, chapters: int) -> str:
         "per_chapter_must_not_only_have": ["流程记录"],
         "ending_hook_priority": ["新问题", "代价"],
         "reward_mix": {"爽点": "中", "悬念": "高", "笑点": "低", "情绪点": "中"},
+        "positive_promises": ["每章有主角主动改变局面的证据", "三章内有悬念推进和小兑现"],
+        "negative_failure_modes": {
+            "red_lines": ["不得连续高压无释放", "不得只开不合", "不得主角工具化", "不得设定百科化"],
+            "no_release_max_run": 2,
+            "no_payoff_max_run": 2,
+            "open_without_payoff_max_run": 2,
+            "passive_protagonist_max_run": 1,
+            "explanation_only_max_run": 1,
+            "repeated_shape_max_run": 2,
+            "low_efficiency_window_chapters": 5,
+            "low_efficiency_max_count": 2,
+        },
+        "release_valve_policy": {
+            "max_high_pressure_without_release": 2,
+            "minimum_release_types": ["小胜", "真相兑现", "关系推进"],
+            "per_three_chapters_must_include_release": True,
+            "rationale": "synthetic smoke requires visible payoff cadence.",
+        },
+        "protagonist_agency_policy": {
+            "requires_active_goal": True,
+            "requires_active_action": True,
+            "requires_cost_or_consequence": True,
+            "requires_state_change": True,
+            "requires_desire_or_principle": True,
+            "rationale": "synthetic smoke keeps protagonist agency visible.",
+        },
+        "information_clarity_policy": {
+            "max_consecutive_setup_only_chapters": 2,
+            "require_scene_test_for_world_rule": True,
+            "forbid_explanation_only_worldbuilding": True,
+            "rationale": "synthetic smoke avoids explanation-only worldbuilding.",
+        },
+        "language_experience_policy": {
+            "forbid_summary_voice": True,
+            "require_memorable_line_or_detail": True,
+            "max_explanation_paragraphs_without_scene": 2,
+            "rationale": "synthetic smoke keeps language checks enabled.",
+        },
+        "structural_efficiency_policy": {
+            "min_effective_progress_per_chapter": "before -> after",
+            "max_words_without_state_change": 6000,
+            "max_low_progress_window_count": 2,
+            "window_chapters": 5,
+            "rationale": "synthetic smoke requires efficient state movement.",
+        },
         "reader_reward_intensity_policy": {
             "opening_chapter_count": 3,
             "opening_intensity_by_chapter": {"v01_c001": "R2", "v01_c002": "R2", "v01_c003": "R2"},
@@ -179,7 +295,6 @@ def seed(repo: Path, chapters: int) -> str:
         "context_pack": {"path": pack_rel, "sha256": sha(repo / pack_rel), "chars": len(pack)},
     }
     write(repo / manifest_rel, json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
-    write(repo / f"outline/chapter_briefs/{target}.md", "# Brief\n\nsynthetic brief for longrun smoke\n")
     return target
 
 
@@ -200,6 +315,7 @@ def main() -> int:
         ("context-quality", ("scripts/novel.py", "context-quality", target)),
         ("pacing-dashboard", ("scripts/novel.py", "pacing-dashboard", target)),
         ("long-health", ("scripts/novel.py", "long-health", "--to", target)),
+        ("reader-risk-index", ("scripts/novel.py", "reader-risk-index", "--to", target)),
         ("gate-rehearsal", ("scripts/novel.py", "gate-rehearsal", "A")),
     ]
     ok = True

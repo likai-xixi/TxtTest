@@ -12,6 +12,21 @@ repeat_count:
 - obstacle: TODO
 - resolution: TODO
 - hook: TODO
+- protagonist_position: TODO
+- protagonist_solution: TODO
+- side_character_function: TODO
+- exposition_load: TODO
+
+## Component Repeats
+
+- opening: TODO
+- obstacle: TODO
+- resolution: TODO
+- hook: TODO
+- protagonist_position: TODO
+- protagonist_solution: TODO
+- side_character_function: TODO
+- exposition_load: TODO
 
 ## Blockers
 

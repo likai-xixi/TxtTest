@@ -113,15 +113,18 @@ python scripts/novel.py self-test
 15. python scripts/novel.py review {chapter} --deepseek
 16. python scripts/novel.py ai-taste-check {chapter}
 17. python scripts/novel.py dialogue-function-check {chapter}
-18. python scripts/novel.py deepseek-anti-ai-review {chapter}
-19. python scripts/novel.py evidence {chapter}
-20. 人类判定：Ship / Revise once / Rewrite brief / Kill chapter / Pause project
-21. python scripts/novel.py event ...（Ship 前至少记录一个 `chapter_anchor` 章末锚点事件，供下一章承接）
-22. python scripts/novel.py close {chapter} --decision Ship
+18. python scripts/novel.py emotion-relationship-gate {chapter} --write
+19. python scripts/novel.py semantic-reader-review {chapter} --write
+20. python scripts/novel.py memorable-scene-check {chapter} --write
+21. python scripts/novel.py deepseek-anti-ai-review {chapter}
+22. python scripts/novel.py evidence {chapter}
+23. 人类判定：Ship / Revise once / Rewrite brief / Kill chapter / Pause project
+24. python scripts/novel.py event ...（Ship 前至少记录一个 `chapter_anchor` 章末锚点事件，供下一章承接）
+25. python scripts/novel.py close {chapter} --decision Ship
 ```
 
-Ship close 必须具备：结构化候选选择、官方正文落章 provenance、Codex/DeepSeek 审查、review manifest、model_disagreement、无 P0/P1 continuity、辅助审查、`style-check`、`ai-taste-check`、`dialogue-function-check`、`deepseek-anti-ai-review` 与 post-warmup `series-style-check`；若直采 DeepSeek，必须证明人类已选择 DeepSeek 且 landing 记录为 `deepseek_direct_adoption`。
-Ship close 还必须具备：前三章 `opening_retention.md`，全章 `ai_taste.md/json`、`dialogue_function.md/json`、`codex_anti_ai_review.md/json`、`deepseek_anti_ai_review.md/json`、`personality_drift.md`、`hook_retention.md`、`protagonist_charm.md`、`world_reveal.md`、`suspense_ladder.md`、`language_memorability.md`、`genre_fit.md`。Markdown review 状态只接受 `CLEAR` 或带当前 official chapter hash、当前 review body hash、人工理由的 `ACCEPTED_BY_HUMAN`；`CLEAR` 必须至少有一条能在正文中匹配的 `Evidence Quotes`。若正文发生人格变化，必须有 `character_state_change` 事件和合法 `personality_delta`。
+Ship close 必须具备：结构化候选选择、官方正文落章 provenance、Codex/DeepSeek 审查、review manifest、model_disagreement、无 P0/P1 continuity、辅助审查、`style-check`、`ai-taste-check`、`dialogue-function-check`、`emotion-relationship-gate`、`semantic-reader-review`、`memorable-scene-check`、`deepseek-anti-ai-review` 与 post-warmup `series-style-check`；若直采 DeepSeek，必须证明人类已选择 DeepSeek 且 landing 记录为 `deepseek_direct_adoption`。
+Ship close 还必须具备：前三章 `opening_retention.md`，全章 `ai_taste.md/json`、`dialogue_function.md/json`、`emotion_relationship_gate.md/json`、`semantic_reader_review.md/json`、`memorable_scene.md/json`、`codex_anti_ai_review.md/json`、`deepseek_anti_ai_review.md/json`、`personality_drift.md`、`hook_retention.md`、`protagonist_charm.md`、`world_reveal.md`、`suspense_ladder.md`、`language_memorability.md`、`genre_fit.md`。Markdown review 状态只接受 `CLEAR` 或带当前 official chapter hash、当前 review body hash、人工理由的 `ACCEPTED_BY_HUMAN`；`CLEAR` 必须至少有一条能在正文中匹配的 `Evidence Quotes`。若正文发生人格变化，必须有 `character_state_change` 事件和合法 `personality_delta`。
 Ship close 还必须具备收章控制面证据：`review_arbitration.json/md`、`revision_plan.json/md`（若此前已 `Revise once`）、Codex anti-AI manifest、DeepSeek `review/anti_ai_review` run manifests、`gray_consequence.json/md`（高影响灰度行为时硬门禁）、`chapter_shape.json/md`（第 6 章起硬门禁）、`reader_feedback.json/md`（单章辅助，Gate 层硬汇总）。`accept-review` 只能接受审美/风格争议，不能接受 hash、schema、quote、manifest、event ledger、continuity P0/P1 或未授权破局错误。
 
 跨章文风与系列感：前三章是 warmup；第 4 章起必须有 `reviews/{chapter}/series_style.json`；第 4-5 章允许 `WARNING` 作为人工观察期，第 6 章起 Ship evidence 只接受 `READY` 或 `ACCEPTED_BY_HUMAN`。可选 DeepSeek 独立文风审查由 `deepseek-style-review` 生成，若本章使用 `series-style-check --require-deepseek`，缺失或过期的 DeepSeek 文风审查必须阻断收章。
@@ -155,3 +158,14 @@ Gate 命令只检查证据和记录人类裁决，永不自动通过 Gate。
 - 正式收章时应记录 `chapter_anchor` 人类确认事件；`build_derived_state` 会生成 `state/derived/chapter_anchors/{chapter}.json`，供下一章 brief pack、context pack 和 continuity 检查使用。
 - 正式 brief 的进展契约会生成 `state/derived/pacing/progress_index.json`；高推进、兑现或解决伏笔产生的后果债务会进入 `state/derived/pacing/aftermath_obligations.json`，供下一章 brief、context pack、pacing check 和 Ship evidence 使用。
 - Gate F/G/H 已纳入长期治理：F=200 章状态索引与伏笔账本，G=500 章重复套路/设定债务/长线兑现，H=800 章终局治理并限制新长期机制。
+
+## Semantic Reader Review Update
+
+`semantic-reader-review` is no longer a keyword heuristic. Ship evidence requires a real dual-LLM chain:
+
+1. `python scripts/novel.py codex-semantic-reader-review-start {chapter}`
+2. Run an isolated Codex LLM/subagent from `reviews/{chapter}/codex_semantic_reader_review_prompt.md`, writing `codex_semantic_reader_review.md/json`.
+3. `python scripts/novel.py deepseek-semantic-reader-review {chapter}` writes `deepseek_semantic_reader_review.md/json` plus `external_runs/deepseek/{chapter}/semantic_reader_review.manifest.json`.
+4. `python scripts/novel.py semantic-reader-review {chapter} --write` only aggregates and hard-gates the two LLM reviews.
+
+The aggregate cannot satisfy Ship by itself. `chapter-evidence` rejects missing/stale Codex semantic manifest, missing/stale DeepSeek semantic run manifest, missing source Markdown/JSON, stale official chapter hashes, missing evidence quotes, and unresolved semantic blockers.
