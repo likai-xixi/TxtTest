@@ -30,7 +30,7 @@ def build_payload(args: argparse.Namespace) -> dict:
 
 固定输出结构：
 
-## Direction A：最强商业钩子
+## Direction A：最强前三章追读钩子
 - 一句话卖点
 - 主角欲望
 - 核心冲突

@@ -2,9 +2,26 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "PersonalMode",
   "type": "object",
-  "required": ["mode", "ship_gates", "literary_reviews", "reader_feedback", "infrastructure"],
+  "required": ["mode", "scope", "ship_gates", "literary_reviews", "reader_feedback", "infrastructure"],
   "properties": {
     "mode": { "enum": ["personal_noncommercial"] },
+    "scope": {
+      "type": "object",
+      "required": [
+        "main_goal",
+        "commercial_advisory_enabled",
+        "platform_adaptation_enabled",
+        "monetization_optimization_enabled",
+        "treat_legacy_commercial_tools_as_main_flow"
+      ],
+      "properties": {
+        "main_goal": { "const": "personal_writing_pilot" },
+        "commercial_advisory_enabled": { "const": false },
+        "platform_adaptation_enabled": { "const": false },
+        "monetization_optimization_enabled": { "const": false },
+        "treat_legacy_commercial_tools_as_main_flow": { "const": false }
+      }
+    },
     "ship_gates": {
       "type": "object",
       "required": ["always_required", "allow_route_to_skip_ship_gates"],

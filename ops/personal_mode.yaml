@@ -1,5 +1,12 @@
 mode: personal_noncommercial
 
+scope:
+  main_goal: personal_writing_pilot
+  commercial_advisory_enabled: false
+  platform_adaptation_enabled: false
+  monetization_optimization_enabled: false
+  treat_legacy_commercial_tools_as_main_flow: false
+
 ship_gates:
   always_required: true
   allow_route_to_skip_ship_gates: false

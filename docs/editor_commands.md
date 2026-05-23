@@ -56,8 +56,6 @@ python scripts/novel.py personality-check
 python scripts/novel.py suspense-check
 python scripts/novel.py world-reveal-check
 python scripts/novel.py protagonist-progression-check
-python scripts/novel.py idea-form --commercial --id idea_xxx
-python scripts/novel.py market-scan --id idea_xxx
 python scripts/novel.py table-build
 python scripts/novel.py polish-start v01_c001
 ```

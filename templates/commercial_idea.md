@@ -37,7 +37,7 @@ status: WARNING
 
 ## 不模仿声明
 
-商业辅助不授权模仿具体作品；相似风险仍以逐章 similarity_risk 和 Ship evidence 为准。
+旧商业辅助不授权模仿具体作品；个人版主流程不使用本文件，相似风险仍以逐章 similarity_risk 和 Ship evidence 为准。
 
 ## Boundary
 

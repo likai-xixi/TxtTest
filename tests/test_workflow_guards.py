@@ -448,7 +448,7 @@ deepseek_action: Ship
 
 IDEA_SYNTHESIS_READY = """# Codex Synthesis: {idea}
 
-## Direction A：最强商业钩子
+## Direction A：最强前三章追读钩子
 
 - 一句话卖点：A hook.
 - 主角欲望：A desire.
@@ -1204,7 +1204,7 @@ def write_ready_book_outline(repo: Path, idea: str = "idea_core") -> None:
         "protagonist_long_term_desire": "Protect the anchor and solve the mystery.",
         "core_opposition": "A hard opposition.",
         "worldview_reveal_strategy": "Reveal through scenes.",
-        "commercial_hook": "A test hook.",
+        "opening_hook": "A test hook.",
         "emotional_hook": "A test emotional hook.",
         "differentiation_angle": "Pilot-first governance.",
         "volume_plan": [
@@ -4353,7 +4353,7 @@ class WorkflowGuardTests(unittest.TestCase):
                 "--choice",
                 "A",
                 "--reason",
-                "商业钩子最强",
+                "前三章追读钩子最强",
             )
 
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

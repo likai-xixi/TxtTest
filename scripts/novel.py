@@ -617,7 +617,7 @@ Codex 汇总必须写入：
 
 - `state/idea_lab/{idea_id}/codex_synthesis.md`
 
-汇总固定包含 A/B/C 三个方向：商业钩子、人物驱动、差异化/反套路。
+汇总固定包含 A/B/C 三个方向：前三章追读钩子、人物驱动、差异化/反套路。
 """,
     )
     print(f"OK: idea lab created at state/idea_lab/{idea_id}")
@@ -2136,7 +2136,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("idea-form", help="Create a short idea seed form.")
     p.add_argument("--output", default="idea_seed.md")
     p.add_argument("--id", default=None, help="When used with --commercial, write into state/idea_lab/{id}.")
-    p.add_argument("--commercial", action="store_true", help="Create a commercial advisory idea form.")
+    p.add_argument("--commercial", action="store_true", help="Legacy manual advisory only; personal mode excludes it from the main workflow.")
     p.add_argument("--force", action="store_true")
     p.set_defaults(func=command_idea_form)
 
@@ -2749,15 +2749,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--write", action="store_true")
     p.set_defaults(func=command_fact_cards)
 
-    p = sub.add_parser("market-scan", help="Build advisory market scan evidence for an idea lab.")
+    p = sub.add_parser("market-scan", help="Legacy manual advisory only; personal mode excludes market scan from the main workflow.")
     p.add_argument("--id", required=True)
     p.set_defaults(func=command_market_scan)
 
-    p = sub.add_parser("market-scan-check", help="Check advisory market scan evidence.")
+    p = sub.add_parser("market-scan-check", help="Check legacy market scan evidence; not required in personal mode.")
     p.add_argument("--id", required=True)
     p.set_defaults(func=command_market_scan_check)
 
-    p = sub.add_parser("commercial-idea-check", help="Check commercial idea advisory evidence.")
+    p = sub.add_parser("commercial-idea-check", help="Check legacy commercial idea advisory evidence; not required in personal mode.")
     p.add_argument("--id", required=True)
     p.set_defaults(func=command_commercial_idea_check)
 

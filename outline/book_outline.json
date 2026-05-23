@@ -5,7 +5,7 @@
   "created_at": "2000-01-01T00:00:00+00:00",
   "core_setting_freeze_ref": {},
   "book_title_working": "Working Title",
-  "genre_lane": "commercial long-form genre fiction",
+  "genre_lane": "personal long-form genre fiction",
   "target_reader": "readers who want strong serialized hooks and clear protagonist agency",
   "target_word_count": 3000000,
   "word_count_range": {
@@ -22,7 +22,7 @@
   "protagonist_long_term_desire": "Draft protagonist desire; must be landed before drafting.",
   "core_opposition": "Draft opposition; must be landed before drafting.",
   "worldview_reveal_strategy": "Reveal rules through scene pressure, not encyclopedia exposition.",
-  "commercial_hook": "Draft commercial hook; must be landed before drafting.",
+  "opening_hook": "Draft opening hook; must be landed before drafting.",
   "emotional_hook": "Draft emotional hook; must be landed before drafting.",
   "differentiation_angle": "Pilot first, then expand by gate evidence.",
   "volume_plan": [

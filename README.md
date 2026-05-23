@@ -88,7 +88,7 @@ python scripts/novel.py idea-agent-manifest --id idea_xxx
 Codex 汇总后，你只需要选择：
 
 ```bash
-python scripts/novel.py idea-select --id idea_xxx --choice A --reason "商业钩子最强"
+python scripts/novel.py idea-select --id idea_xxx --choice A --reason "前三章追读钩子最强"
 ```
 
 选择后会生成开正文前的核心设定冻结：`state/idea_lab/{idea_id}/core_setting_freeze.json` 和 `.md`。它必须固定世界观核心规则、世界观硬边界、主角异常原因、主角家属/亲密关系、家属剧情功能与风险、前三章约束、不可违背红线、仍可开放的问题。

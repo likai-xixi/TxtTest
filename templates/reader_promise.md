@@ -8,7 +8,7 @@ source_boundary: instruction_only_not_fact_source
 - 主类型：待定
 - 副类型：待定
 - 目标读者：待定
-- 平台预期：待定
+- 写作场景：个人自用，不做平台适配
 - genre_profile：待定
 - 本书核心卖点：待定
 - core_sell_point：待定

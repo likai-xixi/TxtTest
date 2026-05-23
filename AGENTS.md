@@ -19,19 +19,17 @@
 
 正式流程以 `scripts/novel.py` 为准。底层脚本保留给统一入口、测试和排查调用；不得绕过 `novel.py` 直接落候选选择、裁决、Gate、事件或提交。
 
-## 商业辅助 + 事实硬门禁
+## 个人版辅助 + 事实硬门禁
 
-商业化、标题、简介、赛道扫描、表格视图、章末阅读理由、润色，只能作为总编辅助层；不得直接写入 `bible/canon.md`、`chapters/`、`state/event_ledger.jsonl`，不得进入 `state/context_pack/*.manifest.json` 的事实源输入链。
+本仓库按个人非商业写作使用。商业化、平台适配、付费转化、标题营销、简介营销、赛道扫描、榜单/算法优化、IP 衍生，均不进入主流程、不作为 P0/P1 优先级、不作为 Ship 或 Gate 门禁。若遗留脚本仍存在，只能作为手动参考，不得直接写入 `bible/canon.md`、`chapters/`、`state/event_ledger.jsonl`，不得进入 `state/context_pack/*.manifest.json` 的事实源输入链。
+
+个人版保留的辅助层只包括：表格视图、章末继续阅读理由、润色、相似风险提示、fact card 草案与人味/节奏/读者体验观察。这些辅助层仍不得替代事实、设定、授权、因果、后果和落账门禁。
 
 事实、设定、授权、因果、后果、相似风险、落账，继续作为 Ship 硬门禁。防 AI 味也是 Ship 硬门禁：`state/context_pack/{chapter}_review_context.md/json`、`reviews/{chapter}/ai_taste.md/json`、`reviews/{chapter}/dialogue_function.md/json`、Codex 子 agent 独立 `reviews/{chapter}/codex_anti_ai_review.md/json`、DeepSeek 独立 `reviews/{chapter}/deepseek_anti_ai_review.md/json`、`reviews/{chapter}/similarity_risk.md`、`reviews/{chapter}/fact_cards.json` 与至少一张已通过 `accept-fact-card` 写入 event ledger 的 fact card，是 `chapter-evidence` 的必查证据。fact card 只能写 `state/event_ledger.jsonl`，不能写 canon。
 
-辅助入口：
+个人版辅助入口：
 
 ```bash
-python scripts/novel.py idea-form --commercial --id idea_xxx
-python scripts/novel.py commercial-idea-check --id idea_xxx
-python scripts/novel.py market-scan --id idea_xxx
-python scripts/novel.py market-scan-check --id idea_xxx
 python scripts/novel.py table-build
 python scripts/novel.py table-check
 python scripts/novel.py polish-start v01_c001
@@ -40,7 +38,7 @@ python scripts/novel.py similarity-risk-check v01_c001
 python scripts/novel.py fact-card-check v01_c001
 ```
 
-`audit --mode project/release` 会汇总这些辅助检查，但硬裁决仍以 `core-freeze-check`、`brief-check`、`context-quality` 和 `chapter-evidence` 为准。
+`audit --mode project/release` 在个人非商业模式下不要求商业定位或赛道扫描；硬裁决仍以 `core-freeze-check`、`brief-check`、`context-quality` 和 `chapter-evidence` 为准。
 
 ## 总编口令
 
@@ -71,7 +69,7 @@ python scripts/novel.py fact-card-check v01_c001
 - 如果 `DEEPSEEK_API_KEY` 不可用，必须停止；开书实验不能用 dry-run 替代。
 - idea-lab 只能写 `state/idea_lab/`、`external_runs/deepseek/` 和被人类选择后的试点资产；不得写 `bible/canon.md`、`chapters/`、`state/event_ledger.jsonl`。
 - 三类 agent 审查完成后，必须运行 `python scripts/novel.py idea-agent-manifest --id idea_xxx` 记录 role、输入 hash、输出 hash 和完成时间；缺该 manifest 不得 `idea-select`。
-- Codex 汇总必须固定给三种方向：A 最强商业钩子、B 最强人物驱动、C 最大差异化/反套路。
+- Codex 汇总必须固定给三种方向：A 最强前三章追读钩子、B 最强人物驱动、C 最大差异化/反套路。
 - 每个方向必须包含：一句话卖点、主角欲望、核心冲突、世界异常、世界观核心规则、世界观硬边界、主角异常原因、主角家属/亲密关系、家属剧情功能与风险、前三章约束、不可违背红线、仍可开放的问题、前三章验证点、最大风险、适合继续/不适合继续的信号。
 - `core_setting_freeze.json` 是开正文硬门禁；`start`、`write`、`build_context_pack`、`deepseek-generate` 均不得绕过它，包括 `--allow-placeholders`。
 

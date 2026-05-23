@@ -12,7 +12,7 @@
   "interiority_ratio": "controlled",
   "action_style": "continuous_scene_motion_with_concrete_cost",
   "exposition_policy": "reveal_in_scene_or_after_action; no encyclopedia dumps",
-  "emotional_tone": "tense, restrained, commercially readable",
+  "emotional_tone": "tense, restrained, clearly readable",
   "humor_level": "low",
   "payoff_style": [
     "information_gap_payoff",

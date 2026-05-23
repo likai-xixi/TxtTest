@@ -103,7 +103,7 @@ def default_contract(idea_id: str, *, status: str = "CANDIDATE") -> dict[str, An
         "interiority_ratio": "controlled",
         "action_style": "continuous_scene_motion_with_concrete_cost",
         "exposition_policy": "reveal_in_scene_or_after_action; no encyclopedia dumps",
-        "emotional_tone": "tense, restrained, commercially readable",
+        "emotional_tone": "tense, restrained, clearly readable",
         "humor_level": "low",
         "payoff_style": ["information_gap_payoff", "choice_payoff", "costly_progress"],
         "metaphor_sources": ["daily life", "urban pressure", "technology when authorized by brief"],
