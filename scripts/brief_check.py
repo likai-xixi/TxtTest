@@ -85,6 +85,14 @@ END_STATE_CHANGE_TYPES = {"关系改变", "代价落地", "认知更新", "选�
 READER_RETENTION_SECTIONS = ("本章留存合同", "Reader Retention Contract")
 PLACEHOLDER_TITLES = {"标题", "章节标题", "chapter title", "todo", "tbd", "待定", "待填", "无题"}
 V2_STORY_CARD_SECTIONS = ("Story Card",)
+HUMAN_FLAVOR_SECTIONS = ("本章人味焦点", "Human Flavor Focus")
+LIFE_TEXTURE_SECTIONS = ("本章生活毛边", "Life Texture")
+DO_NOT_FLATTEN_SECTIONS = ("本章禁止写平", "Do Not Flatten")
+HUMAN_FLAVOR_REQUIRED_SECTIONS = (
+    HUMAN_FLAVOR_SECTIONS,
+    LIFE_TEXTURE_SECTIONS,
+    DO_NOT_FLATTEN_SECTIONS,
+)
 V2_MACHINE_APPENDIX_SECTIONS = ("Machine Contract Appendix",)
 V2_STORY_FIELDS = (
     "第一屏扰动",
@@ -259,6 +267,46 @@ def check_v2_story_and_machine_sections(parsed: dict[str, str]) -> list[str]:
             failures.append(f"Machine Contract Appendix missing field: {field}")
         elif has_placeholder(value) or (field not in V2_MACHINE_ALLOW_NONE and is_none_body(value)):
             failures.append(f"Machine Contract Appendix field is not ready: {field}")
+    return failures
+
+
+def section_ready_value_count(body: str) -> int:
+    count = 0
+    for raw in body.splitlines():
+        line = raw.strip().lstrip("-*+0123456789. ").strip()
+        if not line:
+            continue
+        value = line
+        for separator in (":", "：", "锛"):
+            if separator in line:
+                value = line.split(separator, 1)[1].strip()
+                break
+        if concrete_value(value, min_chars=2) and not has_placeholder(value) and not is_none_body(value):
+            count += 1
+    return count
+
+
+def check_human_flavor_sections(parsed: dict[str, str]) -> list[str]:
+    failures: list[str] = []
+    minimum_values = {
+        HUMAN_FLAVOR_SECTIONS[0]: 3,
+        LIFE_TEXTURE_SECTIONS[0]: 1,
+        DO_NOT_FLATTEN_SECTIONS[0]: 2,
+    }
+    for aliases in HUMAN_FLAVOR_REQUIRED_SECTIONS:
+        label = aliases[0]
+        if missing_section(parsed, aliases):
+            failures.append(f"missing required human-flavor section: {label}")
+            continue
+        body = section_body(parsed, aliases)
+        if not body:
+            failures.append(f"empty required human-flavor section: {label}")
+            continue
+        if has_placeholder(body):
+            failures.append(f"human-flavor section still has placeholder text: {label}")
+        ready_count = section_ready_value_count(body)
+        if ready_count < minimum_values[label]:
+            failures.append(f"human-flavor section has too few ready values: {label}")
     return failures
 
 
@@ -490,6 +538,7 @@ def check_brief(path: Path) -> list[str]:
         elif has_placeholder(body):
             failures.append(f"section still has placeholder text: {label}")
     failures.extend(check_pacing_sections(parsed))
+    failures.extend(check_human_flavor_sections(parsed))
     failures.extend(check_scene_continuity_sections(path.stem, parsed))
     failures.extend(check_progress_contract_sections(parsed))
     if schema_version != 2:
@@ -543,6 +592,11 @@ def brief_warnings(path: Path) -> list[str]:
         warnings.append("章节简介 should be 80-180 non-space characters")
     if missing_section(parsed, STRUCTURE_HINT_SECTIONS):
         warnings.append("本章结构提示 is missing")
+    for aliases in (HUMAN_FLAVOR_SECTIONS, LIFE_TEXTURE_SECTIONS, DO_NOT_FLATTEN_SECTIONS):
+        if missing_section(parsed, aliases):
+            warnings.append(f"{aliases[0]} is missing")
+        elif has_placeholder(section_body(parsed, aliases)):
+            warnings.append(f"{aliases[0]} still has placeholder text")
     if not end_state:
         warnings.append("章末状态变化 is missing")
     else:

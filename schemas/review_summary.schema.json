@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReviewSummary",
+  "type": "object",
+  "required": ["schema_version", "chapter", "generated_at", "status", "route", "ship_gates", "one_line_decision", "must_fix", "must_preserve", "ai_risk", "input_hashes"],
+  "properties": {
+    "schema_version": { "type": "integer" },
+    "chapter": { "type": "string" },
+    "generated_at": { "type": "string" },
+    "status": { "enum": ["可收", "小修", "重修", "暂停"] },
+    "route": { "enum": ["FAST", "NORMAL", "HEAVY", "GATE"] },
+    "ship_gates": { "enum": ["CLEAR", "BLOCKED"] },
+    "one_line_decision": { "type": "string" },
+    "must_fix": { "type": "array" },
+    "must_preserve": { "type": "array" },
+    "ai_risk": {
+      "type": "object",
+      "required": ["status", "sources", "issues"],
+      "properties": {
+        "status": { "type": "string" },
+        "sources": { "type": "array" },
+        "issues": { "type": "array" }
+      }
+    },
+    "input_hashes": { "type": "array" }
+  }
+}

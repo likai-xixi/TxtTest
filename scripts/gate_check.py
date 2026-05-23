@@ -299,14 +299,31 @@ def check_context_governance(gate: str, config: dict, failures: list[str]) -> No
                     failures.append(f"context governance missing simulated long-range chunk: {chunk.relative_to(ROOT)}")
 
     missing_quality = []
+    context_health_failures = []
     for number in range(1, config["needed"] + 1):
         chapter = chapter_id(number)
-        if not context_quality_path(chapter).exists():
+        quality_path = context_quality_path(chapter)
+        if not quality_path.exists():
             missing_quality.append(chapter)
             if len(missing_quality) >= 5:
                 break
+            continue
+        try:
+            quality = json.loads(quality_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            context_health_failures.append(f"{chapter}: invalid context quality JSON: {exc}")
+            continue
+        health = quality.get("context_health") if isinstance(quality, dict) else None
+        if not isinstance(health, dict):
+            context_health_failures.append(f"{chapter}: missing context_health in context quality report")
+            continue
+        blockers = health.get("blockers") if isinstance(health.get("blockers"), list) else []
+        if blockers:
+            context_health_failures.append(f"{chapter}: context health blockers: {', '.join(map(str, blockers[:5]))}")
     if missing_quality:
         failures.append(f"context governance missing context quality reports, first missing: {', '.join(missing_quality)}")
+    if context_health_failures:
+        failures.append(f"context governance context health not clear: {'; '.join(context_health_failures[:5])}")
 
 
 def check_reader_experience_governance(gate: str, config: dict, failures: list[str]) -> None:

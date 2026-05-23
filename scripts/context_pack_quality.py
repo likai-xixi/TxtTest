@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -9,6 +11,11 @@ from typing import Any
 from _common import ROOT, chapter_number, read_json, read_text, write_json, write_text
 from context_governance import context_manifest_path, context_quality_path, sha256
 from core_setting_freeze import freeze_markdown_path
+
+try:
+    import yaml
+except ImportError:  # pragma: no cover
+    yaml = None
 
 
 REQUIRED_SECTIONS = {
@@ -34,7 +41,20 @@ READER_DERIVED_SUFFIXES = (
     "state/derived/concept_index.json",
     "state/derived/world_reveal_ledger.json",
     "state/derived/suspense_ledger.json",
+    "state/derived/thread_debt_ledger.json",
+    "state/derived/character_arc_ledger.json",
+    "state/derived/style_voice_ledger.json",
 )
+
+DEFAULT_CONTEXT_HEALTH = {
+    "near_limit_ratio": 0.85,
+    "due_thread_omission_warning_count": 1,
+    "inactive_entity_max_ratio": 0.35,
+    "repeated_summary_min_chars": 80,
+    "repeated_summary_max_count": 3,
+    "hot_warm_cold_min_hot_ratio": 0.2,
+    "hot_warm_cold_max_cold_ratio": 0.7,
+}
 
 
 def has_placeholder(text: str) -> bool:
@@ -87,6 +107,105 @@ def load_events() -> list[dict[str, Any]]:
     return [json.loads(line) for line in ledger.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
+def load_context_health_config() -> dict[str, Any]:
+    config = dict(DEFAULT_CONTEXT_HEALTH)
+    path = ROOT / "ops" / "process_budget.yaml"
+    if yaml is None or not path.exists():
+        return config
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    if not isinstance(data, dict):
+        return config
+    pack = data.get("context_pack")
+    if isinstance(pack, dict) and isinstance(pack.get("context_health"), dict):
+        config.update(pack["context_health"])
+    return config
+
+
+def section_temperature(section: dict[str, Any]) -> str:
+    text = " ".join(
+        str(section.get(key, ""))
+        for key in ("temperature", "tier", "heat", "included_reason", "id")
+    ).lower()
+    if any(marker in text for marker in ("hot", "active", "current", "urgent")):
+        return "hot"
+    if "warm" in text:
+        return "warm"
+    if any(marker in text for marker in ("cold", "inactive", "archive", "background")):
+        return "cold"
+    return "unknown"
+
+
+def repeated_summary_count(pack_text: str, min_chars: int) -> int:
+    paragraphs = [
+        re.sub(r"\s+", " ", paragraph.strip().lower())
+        for paragraph in re.split(r"\n\s*\n", pack_text)
+        if len(paragraph.strip()) >= min_chars
+    ]
+    counts = Counter(paragraphs)
+    return max(counts.values(), default=0)
+
+
+def evaluate_context_health(
+    *,
+    pack_text: str,
+    sections: list[Any],
+    pack_chars: int,
+    budget: int,
+    hard_max: int,
+    critical_missing: list[dict[str, Any]],
+    deferred_threads: list[dict[str, Any]],
+) -> dict[str, Any]:
+    config = load_context_health_config()
+    limit = hard_max or budget
+    limit_ratio = pack_chars / limit if limit else None
+    normalized_sections = [section for section in sections if isinstance(section, dict)]
+    temperatures = Counter(section_temperature(section) for section in normalized_sections)
+    temperature_total = sum(temperatures.get(key, 0) for key in ("hot", "warm", "cold"))
+    cold_count = temperatures.get("cold", 0)
+    hot_count = temperatures.get("hot", 0)
+    inactive_ratio = cold_count / len(normalized_sections) if normalized_sections else 0.0
+    cold_ratio = cold_count / temperature_total if temperature_total else 0.0
+    hot_ratio = hot_count / temperature_total if temperature_total else 0.0
+    repeated_count = repeated_summary_count(pack_text, int(config.get("repeated_summary_min_chars", 80) or 80))
+
+    blockers: list[str] = []
+    warnings: list[str] = []
+    if limit_ratio is not None and limit_ratio >= float(config.get("near_limit_ratio", 0.85) or 0.85):
+        warnings.append(f"context pack is near limit: {limit_ratio:.2f}")
+    if critical_missing:
+        blockers.append(
+            "critical due threads omitted: " + ", ".join(str(item.get("thread_id")) for item in critical_missing[:10])
+        )
+    if len(deferred_threads) >= int(config.get("due_thread_omission_warning_count", 1) or 1):
+        warnings.append(
+            "due lower-priority threads omitted: " + ", ".join(str(item.get("thread_id")) for item in deferred_threads[:10])
+        )
+    if inactive_ratio > float(config.get("inactive_entity_max_ratio", 0.35) or 0.35):
+        warnings.append(f"inactive/cold section ratio is high: {inactive_ratio:.2f}")
+    if repeated_count > int(config.get("repeated_summary_max_count", 3) or 3):
+        warnings.append(f"repeated summary appears {repeated_count} times")
+    if temperature_total >= 3 and hot_ratio < float(config.get("hot_warm_cold_min_hot_ratio", 0.2) or 0.2):
+        warnings.append(f"hot/warm/cold balance has too little hot context: {hot_ratio:.2f}")
+    if temperature_total >= 3 and cold_ratio > float(config.get("hot_warm_cold_max_cold_ratio", 0.7) or 0.7):
+        warnings.append(f"hot/warm/cold balance has too much cold context: {cold_ratio:.2f}")
+
+    return {
+        "status": "NOT_READY" if blockers else ("WARNING" if warnings else "READY"),
+        "metrics": {
+            "limit_ratio": limit_ratio,
+            "deferred_thread_count": len(deferred_threads),
+            "critical_missing_thread_count": len(critical_missing),
+            "inactive_section_ratio": inactive_ratio,
+            "repeated_summary_count": repeated_count,
+            "temperature_counts": dict(sorted(temperatures.items())),
+            "hot_ratio": hot_ratio,
+            "cold_ratio": cold_ratio,
+        },
+        "blockers": blockers,
+        "warnings": warnings,
+    }
+
+
 def manifest_event_ids(manifest: dict[str, Any]) -> set[str]:
     ids: set[str] = set()
     for section in manifest.get("sections", []):
@@ -131,6 +250,45 @@ def active_threads(chapter: str, events: list[dict[str, Any]]) -> dict[str, dict
         elif event["type"] == "correction":
             item["status"] = "corrected"
     return {key: value for key, value in threads.items() if value["status"] != "paid_off"}
+
+
+def due_thread_debt_coverage(pack_text: str, included_event_ids: set[str]) -> tuple[list[dict[str, Any]], list[str]]:
+    path = ROOT / "state" / "derived" / "thread_debt_ledger.json"
+    if not path.exists():
+        return [], []
+    try:
+        data = read_json(path, {})
+    except Exception as exc:
+        return [], [f"thread_debt_ledger cannot be parsed: {exc}"]
+    if not isinstance(data, dict):
+        return [], ["thread_debt_ledger must be a JSON object"]
+    failures: list[str] = []
+    source = data.get("source_event_ledger")
+    ledger = ROOT / "state" / "event_ledger.jsonl"
+    if not isinstance(source, dict):
+        failures.append("thread_debt_ledger source_event_ledger missing")
+    elif ledger.exists() and source.get("sha256") != sha256(ledger):
+        failures.append("thread_debt_ledger source_event_ledger hash is stale")
+    items: list[dict[str, Any]] = []
+    for thread in data.get("threads", []):
+        if not isinstance(thread, dict):
+            continue
+        if not (thread.get("due") or thread.get("advance_due") or thread.get("payoff_due")):
+            continue
+        thread_id = str(thread.get("thread_id", "")).strip()
+        event_ids = [str(item) for item in thread.get("event_ids", []) if str(item).strip()]
+        covered = bool(thread_id and thread_id in pack_text) or any(event_id in included_event_ids for event_id in event_ids)
+        items.append(
+            {
+                "thread_id": thread_id,
+                "level": str(thread.get("level", "P2")),
+                "advance_due": bool(thread.get("advance_due")),
+                "payoff_due": bool(thread.get("payoff_due")),
+                "covered": covered,
+                "event_ids": event_ids,
+            }
+        )
+    return items, failures
 
 
 def source_trace_failures(manifest: dict[str, Any]) -> list[str]:
@@ -280,6 +438,25 @@ def evaluate_context_pack(chapter: str) -> dict[str, Any]:
             + ", ".join(str(item["thread_id"]) for item in deferred_threads[:10])
         )
 
+    due_debt_threads, due_debt_failures = due_thread_debt_coverage(pack_text, included_event_ids)
+    blockers.extend(due_debt_failures)
+    critical_due_missing = [
+        item for item in due_debt_threads if not item["covered"] and item.get("level") in {"P0", "P1"}
+    ]
+    lower_due_missing = [
+        item for item in due_debt_threads if not item["covered"] and item.get("level") not in {"P0", "P1"}
+    ]
+    if critical_due_missing:
+        blockers.append(
+            "due P0/P1 thread debt missing from context pack: "
+            + ", ".join(str(item["thread_id"]) for item in critical_due_missing)
+        )
+    if lower_due_missing:
+        warnings.append(
+            "due lower-priority thread debt not explicitly included: "
+            + ", ".join(str(item["thread_id"]) for item in lower_due_missing[:10])
+        )
+
     truncation_count = sum(1 for section in sections if isinstance(section, dict) and section.get("truncated"))
     empty_sections = sum(
         1
@@ -290,6 +467,18 @@ def evaluate_context_pack(chapter: str) -> dict[str, Any]:
     irrelevant_section_ratio = 0.0 if section_count == 0 else empty_sections / section_count
     if irrelevant_section_ratio > 0.5:
         warnings.append(f"high irrelevant/empty section ratio: {irrelevant_section_ratio:.2f}")
+
+    context_health = evaluate_context_health(
+        pack_text=pack_text,
+        sections=sections,
+        pack_chars=pack_chars,
+        budget=budget,
+        hard_max=hard_max,
+        critical_missing=critical_missing + critical_due_missing,
+        deferred_threads=deferred_threads + lower_due_missing,
+    )
+    blockers.extend(f"context health: {item}" for item in context_health.get("blockers", []))
+    warnings.extend(f"context health: {item}" for item in context_health.get("warnings", []))
 
     manifest_sha = sha256(manifest_path)
     pack_sha = sha256(pack_path)
@@ -319,6 +508,8 @@ def evaluate_context_pack(chapter: str) -> dict[str, Any]:
             "critical_missing": critical_missing,
             "summarized_covered": [item for item in thread_coverage_items if item["covered"]],
             "budget_deferred": deferred_threads,
+            "due_debt_threads": due_debt_threads,
+            "due_debt_critical_missing": critical_due_missing,
         },
         "irrelevant_section_ratio": irrelevant_section_ratio,
         "truncation_count": truncation_count,
@@ -326,6 +517,7 @@ def evaluate_context_pack(chapter: str) -> dict[str, Any]:
             "ok": not source_failures,
             "failure_count": len(source_failures),
         },
+        "context_health": context_health,
         "input_hashes": {str(item.get("path")): str(item.get("sha256")) for item in input_hashes if isinstance(item, dict)},
         "object_ids": manifest.get("object_ids", []),
         "ability_ids": manifest.get("ability_ids", []),
@@ -376,6 +568,14 @@ def render_markdown_report(report: dict[str, Any]) -> str:
             f"- source_traceability: {report.get('source_traceability', {}).get('ok', 'unknown')}",
             f"- critical_missing_threads: {len(report.get('thread_coverage', {}).get('critical_missing', []))}",
             f"- budget_deferred_threads: {len(report.get('thread_coverage', {}).get('budget_deferred', []))}",
+            "",
+            "## Context Health",
+            "",
+            f"- status: {report.get('context_health', {}).get('status', 'UNKNOWN')}",
+            f"- limit_ratio: {report.get('context_health', {}).get('metrics', {}).get('limit_ratio', 'unknown')}",
+            f"- inactive_section_ratio: {report.get('context_health', {}).get('metrics', {}).get('inactive_section_ratio', 'unknown')}",
+            f"- repeated_summary_count: {report.get('context_health', {}).get('metrics', {}).get('repeated_summary_count', 'unknown')}",
+            f"- temperature_counts: {report.get('context_health', {}).get('metrics', {}).get('temperature_counts', {})}",
             "",
             "## Authorized IDs",
             "",

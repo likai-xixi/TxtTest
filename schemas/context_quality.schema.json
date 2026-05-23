@@ -2,10 +2,42 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "ContextQuality",
   "type": "object",
-  "required": ["chapter", "status", "blockers", "warnings"],
+  "required": ["chapter", "status", "context_health", "blockers", "warnings"],
   "properties": {
     "chapter": { "type": "string" },
     "status": { "enum": ["READY", "NOT_READY"] },
+    "context_health": {
+      "type": "object",
+      "required": ["status", "metrics", "blockers", "warnings"],
+      "properties": {
+        "status": { "enum": ["READY", "WARNING", "NOT_READY"] },
+        "metrics": {
+          "type": "object",
+          "required": [
+            "limit_ratio",
+            "deferred_thread_count",
+            "critical_missing_thread_count",
+            "inactive_section_ratio",
+            "repeated_summary_count",
+            "temperature_counts",
+            "hot_ratio",
+            "cold_ratio"
+          ],
+          "properties": {
+            "limit_ratio": { "type": ["number", "null"] },
+            "deferred_thread_count": { "type": "integer" },
+            "critical_missing_thread_count": { "type": "integer" },
+            "inactive_section_ratio": { "type": "number" },
+            "repeated_summary_count": { "type": "integer" },
+            "temperature_counts": { "type": "object" },
+            "hot_ratio": { "type": "number" },
+            "cold_ratio": { "type": "number" }
+          }
+        },
+        "blockers": { "type": "array", "items": { "type": "string" } },
+        "warnings": { "type": "array", "items": { "type": "string" } }
+      }
+    },
     "blockers": { "type": "array", "items": { "type": "string" } },
     "warnings": { "type": "array", "items": { "type": "string" } }
   }

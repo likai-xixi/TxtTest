@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ThreadDebtLedger",
+  "type": "object",
+  "required": ["schema_version", "generated_at", "through", "status", "source_priority", "source_event_ledger", "threads", "blockers", "warnings"],
+  "properties": {
+    "schema_version": { "type": "integer" },
+    "generated_at": { "type": "string" },
+    "through": { "type": "string" },
+    "status": { "enum": ["READY", "WARNING", "BLOCKED"] },
+    "source_priority": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "human decision",
+          "event_ledger",
+          "official chapter evidence",
+          "official brief",
+          "review artifacts",
+          "generated suggestions"
+        ]
+      }
+    },
+    "source_event_ledger": { "type": "object" },
+    "threads": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "thread_id",
+          "level",
+          "status",
+          "opened_at",
+          "last_advanced_at",
+          "next_required_advance_by",
+          "payoff_due_by",
+          "allowed_deferrals",
+          "current_deferrals",
+          "due",
+          "advance_due",
+          "payoff_due",
+          "event_ids",
+          "source_priority_applied"
+        ],
+        "properties": {
+          "thread_id": { "type": "string" },
+          "level": { "enum": ["P0", "P1", "P2", "P3"] },
+          "status": { "enum": ["open", "active", "deferred", "paid_off", "abandoned_by_human"] },
+          "opened_at": { "type": "string" },
+          "last_advanced_at": { "type": "string" },
+          "next_required_advance_by": { "type": "string" },
+          "payoff_due_by": { "type": "string" },
+          "allowed_deferrals": { "type": "integer" },
+          "current_deferrals": { "type": "integer" },
+          "due": { "type": "boolean" },
+          "advance_due": { "type": "boolean" },
+          "payoff_due": { "type": "boolean" },
+          "event_ids": { "type": "array", "items": { "type": "string" } },
+          "source_priority_applied": { "type": "string" }
+        }
+      }
+    },
+    "blockers": { "type": "array" },
+    "warnings": { "type": "array" }
+  }
+}

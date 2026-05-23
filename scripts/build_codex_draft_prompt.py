@@ -29,6 +29,8 @@ def compose_prompt(chapter: str, style_block: str, brief: str, context: str) -> 
             "- Begin from visible action, pressure, abnormality, misjudgment, or conflict.\n"
             "- The midpoint must change the situation; do not let the chapter proceed exactly as planned.\n"
             "- Deliver the reader reward promised in the Story Card with visible prose evidence.\n"
+            "- Preserve the brief's human-flavor focus: cost or misjudgment, private motive, life texture, and the rough edge that must not be flattened.\n"
+            "- Review may mark risks, but do not pre-sanitize the prose into perfect correctness; leave intentional ambiguity and lived texture where the brief asks for it.\n"
             "- Show world rules through choices, misuse, costs, or ordinary-person reactions instead of explanation blocks.\n"
             "- Do not narrate in terms like 本章、合同、证据、门禁、流程 unless those words naturally appear inside the story world.\n"
             "- If any required style, fact, or authorization input is missing or contradictory, stop and list the blocker instead of drafting.\n",

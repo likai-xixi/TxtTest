@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "StyleVoiceLedger",
+  "type": "object",
+  "required": ["schema_version", "generated_at", "through", "status", "source_priority", "source_event_ledger", "voices", "chapters", "blockers", "warnings"],
+  "properties": {
+    "schema_version": { "type": "integer" },
+    "generated_at": { "type": "string" },
+    "through": { "type": "string" },
+    "status": { "enum": ["READY", "WARNING", "BLOCKED"] },
+    "source_priority": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "human decision",
+          "event_ledger",
+          "official chapter evidence",
+          "official brief",
+          "review artifacts",
+          "generated suggestions"
+        ]
+      }
+    },
+    "source_event_ledger": { "type": "object" },
+    "voices": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["character_id", "voice_traits", "forbidden_traits", "sample_lines", "source_priority_applied"],
+        "properties": {
+          "character_id": { "type": "string" },
+          "voice_traits": { "type": "array", "items": { "type": "string" } },
+          "forbidden_traits": { "type": "array", "items": { "type": "string" } },
+          "sample_lines": { "type": "array", "items": { "type": "string" } },
+          "source_priority_applied": { "type": "string" }
+        }
+      }
+    },
+    "chapters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["chapter", "source_refs", "review_statuses", "source_priority_applied"],
+        "properties": {
+          "chapter": { "type": "string" },
+          "source_refs": { "type": "array", "items": { "type": "object" } },
+          "review_statuses": { "type": "object" },
+          "source_priority_applied": { "type": "string" }
+        }
+      }
+    },
+    "blockers": { "type": "array" },
+    "warnings": { "type": "array" }
+  }
+}

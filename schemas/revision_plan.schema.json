@@ -12,7 +12,32 @@
     "input_hashes": {"type": "array"},
     "must_fix": {"type": "array"},
     "should_fix": {"type": "array"},
-    "human_acceptance_allowed": {"type": "array"}
+    "human_acceptance_allowed": {"type": "array"},
+    "must_preserve": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "highlight_id": {"type": "string"},
+          "type": {"type": "string"},
+          "quote": {"type": "string"},
+          "quote_sha256": {"type": "string"},
+          "protection_level": {"type": "string"},
+          "source": {"type": "string"}
+        }
+      }
+    },
+    "highlight_revisions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "highlight_id": {"type": "string"},
+          "action": {"type": "string"},
+          "human_override_reason": {"type": "string"}
+        }
+      }
+    }
   },
   "additionalProperties": false
 }

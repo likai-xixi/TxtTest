@@ -15,6 +15,9 @@
     "events",
     "counts_by_type",
     "reader_experience_ledgers",
+    "context_health_window",
+    "context_health_blockers",
+    "context_health_warnings",
     "rolling_blockers",
     "rolling_warnings",
     "risk_flags"
@@ -37,6 +40,31 @@
     "setting_debt_index": { "type": "integer" },
     "gate_risks": { "type": "array", "items": { "type": "string" } },
     "reader_experience_ledgers": { "type": "object" },
+    "context_health_window": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["chapter", "context_quality", "status"],
+        "properties": {
+          "chapter": { "type": "string" },
+          "context_quality": {
+            "type": "object",
+            "required": ["path", "exists", "sha256"],
+            "properties": {
+              "path": { "type": "string", "minLength": 1 },
+              "exists": { "type": "boolean" },
+              "sha256": { "type": "string" }
+            }
+          },
+          "status": { "type": "string" },
+          "context_health_status": { "type": "string" },
+          "warnings": { "type": "array", "items": { "type": "string" } },
+          "blockers": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "context_health_blockers": { "type": "array", "items": { "type": "string" } },
+    "context_health_warnings": { "type": "array", "items": { "type": "string" } },
     "rolling_blockers": { "type": "array", "items": { "type": "string" } },
     "rolling_warnings": { "type": "array", "items": { "type": "string" } },
     "risk_flags": { "type": "array", "items": { "type": "string" } }

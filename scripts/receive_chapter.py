@@ -10,6 +10,59 @@ from typing import Any
 
 from _common import ROOT, chapter_number, chapter_parts, now_iso, read_json, read_text, write_json, write_text
 from context_governance import sha256
+from product_kernel import (
+    context_manifest_path,
+    event_ledger_path,
+    file_ref,
+    official_brief_path,
+    review_json_stale_failures,
+    review_route_path,
+    route_artifact_status,
+)
+
+
+ROUTED_STEP_KEYS = {
+    "style-check": {"style_voice"},
+    "series-style-check": {"series_style", "style_voice"},
+    "ai-taste-check": {"ai_taste"},
+    "dialogue-function-check": {"dialogue_function"},
+    "emotion-relationship-gate": {"emotion_relationship"},
+    "semantic-reader-review": {"semantic_reader"},
+    "memorable-scene-check": {"memorable_scene"},
+    "compare": {"codex_integrated", "deepseek_integrated"},
+    "review-arbitration": {"review_arbitration"},
+    "gray-consequence": {"review_arbitration"},
+    "chapter-shape-check": {"long_health"},
+    "prose-risk-check": {"prose_risk"},
+    "prose-risk-index": {"prose_risk"},
+    "reader-reward-check": {"reader_reward"},
+    "reader-reward-index": {"reader_reward"},
+    "long-health": {"long_health"},
+    "reader-feedback": {"reader_risk"},
+    "reader-risk-index": {"reader_risk"},
+    "revision-plan": {"revision_plan"},
+    "revision-closure": {"revision_plan"},
+    "codex_anti_ai_start": {"codex_anti_ai"},
+    "codex_anti_ai_review": {"codex_anti_ai"},
+    "codex_semantic_reader_review_start": {"codex_semantic"},
+    "codex_semantic_reader_review": {"codex_semantic"},
+    "deepseek_review": {"deepseek_integrated"},
+    "deepseek_anti_ai": {"deepseek_anti_ai"},
+    "deepseek_semantic_reader_review": {"deepseek_semantic"},
+}
+
+PRE_ROUTE_PREVIEW_STEPS = {
+    "selection",
+    "landing",
+    "codex_review",
+    "review_context",
+    "context-quality",
+    "human-flavor-check",
+    "highlights-review",
+    "ai-taste-check",
+    "prose-risk-check",
+    "route-reviews",
+}
 
 
 def rel(path: Path) -> str:
@@ -94,6 +147,24 @@ def chapter_number_safe(chapter: Any) -> int:
 
 
 def derived_artifact_failures(name: str, primary: Path, chapter: str) -> list[str]:
+    if name == "context-quality":
+        data = read_json(primary, {}) if primary.exists() else {}
+        if not isinstance(data, dict) or not data:
+            return ["context-quality is not a JSON object"]
+        failures: list[str] = []
+        pack = ROOT / "state" / "context_pack" / f"{chapter}.md"
+        manifest = ROOT / "state" / "context_pack" / f"{chapter}.manifest.json"
+        if not pack.exists():
+            failures.append(f"context-quality source pack is missing: {rel(pack)}")
+        elif data.get("context_pack_sha256") != sha256(pack):
+            failures.append("context-quality context_pack_sha256 is stale")
+        if not manifest.exists():
+            failures.append(f"context-quality source manifest is missing: {rel(manifest)}")
+        elif data.get("manifest_sha256") != sha256(manifest):
+            failures.append("context-quality manifest_sha256 is stale")
+        if data.get("status") != "READY":
+            failures.append(f"context-quality status is {data.get('status', 'MISSING')}")
+        return failures
     if name not in {"reader-reward-index", "reader-risk-index", "prose-risk-index", "long-health"}:
         return []
     data = read_json(primary, {}) if primary.exists() else {}
@@ -148,9 +219,33 @@ def derived_artifact_failures(name: str, primary: Path, chapter: str) -> list[st
     return failures
 
 
+def control_input_hashes(chapter: str) -> list[dict[str, Any]]:
+    return [
+        file_ref(official_path(chapter)),
+        file_ref(official_brief_path(chapter)),
+        file_ref(context_manifest_path(chapter)),
+        file_ref(event_ledger_path()),
+        file_ref(review_route_path(chapter)),
+    ]
+
+
 def should_skip(primary: Path | None, resume: bool, *, name: str = "", chapter: str = "") -> tuple[bool, str]:
     if not (resume and primary and primary.exists()):
         return False, ""
+    if name == "route-reviews" and chapter:
+        _route, failures, _data = route_artifact_status(chapter)
+        if failures:
+            return False, "; ".join(failures[:3])
+    review_json_names = {
+        "human-flavor-check": "human_flavor.json",
+        "highlights-review": "highlights_review.json",
+        "ai-taste-check": "ai_taste.json",
+        "prose-risk-check": "prose_risk.json",
+    }
+    if name in review_json_names and chapter:
+        failures = review_json_stale_failures(chapter, review_json_names[name])
+        if failures:
+            return False, "; ".join(failures[:3])
     failures = derived_artifact_failures(name, primary, chapter)
     if failures:
         return False, "; ".join(failures[:3])
@@ -163,6 +258,11 @@ def planned_steps(chapter: str, *, run_deepseek: bool) -> list[dict[str, Any]]:
         {"name": "landing", "command": [], "writes": []},
         {"name": "codex_review", "command": [], "writes": []},
         {"name": "review_context", "command": ["review-context", chapter, "--write"], "writes": [f"state/context_pack/{chapter}_review_context.json"]},
+        {"name": "human-flavor-check", "command": ["human-flavor-check", chapter, "--write"], "writes": [f"reviews/{chapter}/human_flavor.json"]},
+        {"name": "highlights-review", "command": ["highlights-review", chapter, "--write"], "writes": [f"reviews/{chapter}/highlights_review.json"]},
+        {"name": "ai-taste-check", "command": ["ai-taste-check", chapter], "writes": [f"reviews/{chapter}/ai_taste.json"]},
+        {"name": "prose-risk-check", "command": ["prose-risk-check", chapter, "--write"], "writes": [f"reviews/{chapter}/prose_risk.json"]},
+        {"name": "route-reviews", "command": ["route-reviews", chapter, "--write"], "writes": [f"reviews/{chapter}/review_route.json"]},
         {"name": "codex_anti_ai_start", "command": ["codex-anti-ai-review-start", chapter], "writes": [f"reviews/{chapter}/codex_anti_ai_review_manifest.json"]},
         {"name": "codex_anti_ai_review", "command": [], "writes": [f"reviews/{chapter}/codex_anti_ai_review.json"]},
         {"name": "codex_semantic_reader_review_start", "command": ["codex-semantic-reader-review-start", chapter], "writes": [f"reviews/{chapter}/codex_semantic_reader_review_manifest.json"]},
@@ -170,10 +270,9 @@ def planned_steps(chapter: str, *, run_deepseek: bool) -> list[dict[str, Any]]:
         {"name": "deepseek_review", "command": ["review", chapter, "--deepseek"] if run_deepseek else [], "writes": [f"reviews/{chapter}/deepseek_integrated_review.md"]},
         {"name": "deepseek_anti_ai", "command": ["deepseek-anti-ai-review", chapter] if run_deepseek else [], "writes": [f"reviews/{chapter}/deepseek_anti_ai_review.json"]},
         {"name": "deepseek_semantic_reader_review", "command": ["deepseek-semantic-reader-review", chapter] if run_deepseek else [], "writes": [f"reviews/{chapter}/deepseek_semantic_reader_review.json"]},
-        {"name": "context-quality", "command": ["context-quality", chapter], "writes": []},
+        {"name": "context-quality", "command": ["context-quality", chapter], "writes": [f"state/derived/context_quality/{chapter}.json"]},
         {"name": "style-check", "command": ["style-check", chapter], "writes": [f"reviews/{chapter}/style_metrics.json"]},
         {"name": "series-style-check", "command": ["series-style-check", chapter], "writes": [f"reviews/{chapter}/series_style.json"]},
-        {"name": "ai-taste-check", "command": ["ai-taste-check", chapter], "writes": [f"reviews/{chapter}/ai_taste.json"]},
         {"name": "dialogue-function-check", "command": ["dialogue-function-check", chapter], "writes": [f"reviews/{chapter}/dialogue_function.json"]},
         {"name": "emotion-relationship-gate", "command": ["emotion-relationship-gate", chapter, "--write"], "writes": [f"reviews/{chapter}/emotion_relationship_gate.json"]},
         {"name": "semantic-reader-review", "command": ["semantic-reader-review", chapter, "--write"], "writes": [f"reviews/{chapter}/semantic_reader_review.json"]},
@@ -184,7 +283,6 @@ def planned_steps(chapter: str, *, run_deepseek: bool) -> list[dict[str, Any]]:
         {"name": "review-arbitration", "command": ["review-arbitration", chapter], "writes": [f"reviews/{chapter}/review_arbitration.json"]},
         {"name": "gray-consequence", "command": ["gray-consequence", chapter, "--write"], "writes": [f"reviews/{chapter}/gray_consequence.json"]},
         {"name": "chapter-shape-check", "command": ["chapter-shape-check", chapter, "--write"], "writes": [f"reviews/{chapter}/chapter_shape.json"]},
-        {"name": "prose-risk-check", "command": ["prose-risk-check", chapter, "--write"], "writes": [f"reviews/{chapter}/prose_risk.json"]},
         {"name": "prose-risk-index", "command": ["prose-risk-index", "--to", chapter, "--write"], "writes": ["state/derived/prose_risk/latest.json"]},
         {"name": "reader-reward-check", "command": ["reader-reward-check", chapter, "--write"], "writes": [f"reviews/{chapter}/reader_reward_gate.json"]},
         {"name": "reader-reward-index", "command": ["reader-reward-index", "--write"], "writes": ["state/derived/pacing/reader_reward_index.json"]},
@@ -192,6 +290,7 @@ def planned_steps(chapter: str, *, run_deepseek: bool) -> list[dict[str, Any]]:
         {"name": "reader-risk-index", "command": ["reader-risk-index", "--to", chapter, "--write"], "writes": ["state/derived/reader_risk/latest.json"]},
         {"name": "revision-plan", "command": ["revision-plan", chapter], "writes": [f"reviews/{chapter}/revision_plan.json"]},
         {"name": "revision-closure", "command": ["revision-closure", chapter], "writes": []},
+        {"name": "review-summary", "command": ["review-summary", chapter, "--write"], "writes": [f"reviews/{chapter}/review_summary.json"]},
         {"name": "chapter-evidence", "command": ["evidence", chapter], "writes": []},
     ]
     if chapter_number(chapter) >= 10:
@@ -200,18 +299,65 @@ def planned_steps(chapter: str, *, run_deepseek: bool) -> list[dict[str, Any]]:
     return steps
 
 
+def route_aware_preview_steps(chapter: str, *, run_deepseek: bool) -> tuple[list[dict[str, Any]], str]:
+    steps = planned_steps(chapter, run_deepseek=run_deepseek)
+    route, failures, route_data = route_artifact_status(chapter)
+    if failures or not route_data:
+        pending = {
+            "name": "route-dependent-steps",
+            "command": [],
+            "writes": [],
+            "status": "PENDING",
+            "reason": "; ".join(failures[:3]) if failures else "route artifact is not ready",
+        }
+        return [step for step in steps if step.get("name") in PRE_ROUTE_PREVIEW_STEPS] + [pending], "route-dependent steps pending until review_route.json is READY"
+
+    route_reviews = set(route_data.get("additional_literary_reviews", [])) if isinstance(route_data, dict) else set()
+    route_name = str(route_data.get("route", route)).lower() if isinstance(route_data, dict) else route
+    filtered: list[dict[str, Any]] = []
+    for step in steps:
+        name = str(step.get("name", ""))
+        required_keys = ROUTED_STEP_KEYS.get(name)
+        if required_keys is not None and not (route_reviews & required_keys) and route_name not in {"heavy", "gate"}:
+            continue
+        filtered.append(step)
+    return filtered, f"route-aware preview using {route_name.upper()} route"
+
+
 def evaluate(args: argparse.Namespace) -> dict[str, Any]:
     chapter_parts(args.chapter)
     review_dir = ROOT / "reviews" / args.chapter
     steps: list[dict[str, Any]] = []
 
     if args.preview:
+        steps, preview_note = route_aware_preview_steps(args.chapter, run_deepseek=args.run_deepseek)
+        if not getattr(args, "verbose", False):
+            return {
+                "schema_version": 1,
+                "chapter": args.chapter,
+                "generated_at": now_iso(),
+                "status": "PREVIEW",
+                "mode": "compact",
+                "input_hashes": control_input_hashes(args.chapter),
+                "editor_lines": [
+                    "status: PREVIEW",
+                    preview_note,
+                    "ship_gates: always required; route cannot skip them",
+                    "next: run receive-chapter without --preview, or add --verbose for the full step plan",
+                    "writes: none in preview",
+                ],
+                "hidden_step_count": len(steps),
+                "next_action": "Run without --preview when ready, or add --verbose to inspect the route-aware step plan.",
+            }
         return {
             "schema_version": 1,
             "chapter": args.chapter,
             "generated_at": now_iso(),
             "status": "PREVIEW",
-            "steps": planned_steps(args.chapter, run_deepseek=args.run_deepseek),
+            "mode": "verbose",
+            "input_hashes": control_input_hashes(args.chapter),
+            "route_note": preview_note,
+            "steps": steps,
             "next_action": "Run without --preview when ready to execute local checks.",
         }
 
@@ -219,34 +365,88 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         (ROOT / "state" / "selections" / f"{args.chapter}.json", "candidate_selection"),
         (review_dir / "chapter_landing.json", "chapter_landing"),
         (official_path(args.chapter), "official_chapter"),
-        (review_dir / "codex_integrated_review.md", "codex_integrated_review"),
-        (review_dir / "codex_anti_ai_review.json", "codex_anti_ai_review"),
-        (review_dir / "codex_semantic_reader_review.json", "codex_semantic_reader_review"),
     ]
     for path, label in prerequisites:
         steps.append(file_status(path, label))
 
+    pre_route_steps = [
+        ("review-context", ["review-context", args.chapter, "--write"], ROOT / "state" / "context_pack" / f"{args.chapter}_review_context.json"),
+        ("context-quality", ["context-quality", args.chapter], ROOT / "state" / "derived" / "context_quality" / f"{args.chapter}.json"),
+        ("human-flavor-check", ["human-flavor-check", args.chapter, "--write"], review_dir / "human_flavor.json"),
+        ("highlights-review", ["highlights-review", args.chapter, "--write"], review_dir / "highlights_review.json"),
+        ("ai-taste-check", ["ai-taste-check", args.chapter], review_dir / "ai_taste.json"),
+        ("prose-risk-check", ["prose-risk-check", args.chapter, "--write"], review_dir / "prose_risk.json"),
+        ("route-reviews", ["route-reviews", args.chapter, "--write"], review_dir / "review_route.json"),
+    ]
+    for name, command, primary in pre_route_steps:
+        skip, stale_reason = should_skip(primary, args.resume, name=name, chapter=args.chapter)
+        if skip:
+            steps.append({"name": name, "command": ["python", "scripts/novel.py", *command], "status": "SKIPPED", "returncode": 0, "output": f"resume kept {rel(primary)}", "artifacts": [rel(primary)]})
+            continue
+        result = run_command(name, command)
+        if stale_reason:
+            result["output"] = f"resume reran because {stale_reason}\n{result['output']}".strip()
+        steps.append(result)
+
+    try:
+        route_data = read_json(review_dir / "review_route.json", {})
+    except Exception:
+        route_data = {}
+    route_reviews = set(route_data.get("additional_literary_reviews", [])) if isinstance(route_data, dict) else set()
+    route_name = str(route_data.get("route", "heavy")).lower() if isinstance(route_data, dict) else "heavy"
+    if not route_reviews:
+        route_reviews = {
+            "style_voice",
+            "ai_taste",
+            "dialogue_function",
+            "emotion_relationship",
+            "memorable_scene",
+            "reader_reward",
+            "reader_risk",
+            "codex_integrated",
+            "deepseek_integrated",
+            "codex_anti_ai",
+            "deepseek_anti_ai",
+            "codex_semantic",
+            "deepseek_semantic",
+            "semantic_reader",
+            "review_arbitration",
+            "revision_plan",
+            "series_style",
+            "long_health",
+        }
+
+    if "codex_integrated" in route_reviews:
+        steps.append(file_status(review_dir / "codex_integrated_review.md", "codex_integrated_review"))
+    if "codex_anti_ai" in route_reviews:
+        steps.append(file_status(review_dir / "codex_anti_ai_review.json", "codex_anti_ai_review"))
+    if "codex_semantic" in route_reviews:
+        steps.append(file_status(review_dir / "codex_semantic_reader_review.json", "codex_semantic_reader_review"))
+
     if args.run_deepseek:
-        skip, _reason = should_skip(review_dir / "deepseek_integrated_review.md", args.resume)
-        if not skip:
-            steps.append(run_command("deepseek_review", ["review", args.chapter, "--deepseek"]))
-        skip, _reason = should_skip(review_dir / "deepseek_anti_ai_review.json", args.resume)
-        if not skip:
-            steps.append(run_command("deepseek_anti_ai", ["deepseek-anti-ai-review", args.chapter]))
-        skip, _reason = should_skip(review_dir / "deepseek_semantic_reader_review.json", args.resume)
-        if not skip:
-            steps.append(run_command("deepseek_semantic_reader_review", ["deepseek-semantic-reader-review", args.chapter]))
+        if "deepseek_integrated" in route_reviews:
+            skip, _reason = should_skip(review_dir / "deepseek_integrated_review.md", args.resume)
+            if not skip:
+                steps.append(run_command("deepseek_review", ["review", args.chapter, "--deepseek"]))
+        if "deepseek_anti_ai" in route_reviews:
+            skip, _reason = should_skip(review_dir / "deepseek_anti_ai_review.json", args.resume)
+            if not skip:
+                steps.append(run_command("deepseek_anti_ai", ["deepseek-anti-ai-review", args.chapter]))
+        if "deepseek_semantic" in route_reviews:
+            skip, _reason = should_skip(review_dir / "deepseek_semantic_reader_review.json", args.resume)
+            if not skip:
+                steps.append(run_command("deepseek_semantic_reader_review", ["deepseek-semantic-reader-review", args.chapter]))
     else:
-        steps.append(file_status(review_dir / "deepseek_integrated_review.md", "deepseek_integrated_review"))
-        steps.append(file_status(review_dir / "deepseek_anti_ai_review.json", "deepseek_anti_ai_review"))
-        steps.append(file_status(review_dir / "deepseek_semantic_reader_review.json", "deepseek_semantic_reader_review"))
+        if "deepseek_integrated" in route_reviews:
+            steps.append(file_status(review_dir / "deepseek_integrated_review.md", "deepseek_integrated_review"))
+        if "deepseek_anti_ai" in route_reviews:
+            steps.append(file_status(review_dir / "deepseek_anti_ai_review.json", "deepseek_anti_ai_review"))
+        if "deepseek_semantic" in route_reviews:
+            steps.append(file_status(review_dir / "deepseek_semantic_reader_review.json", "deepseek_semantic_reader_review"))
 
     command_steps = [
-        ("review-context", ["review-context", args.chapter, "--write"], ROOT / "state" / "context_pack" / f"{args.chapter}_review_context.json"),
-        ("context-quality", ["context-quality", args.chapter], None),
         ("style-check", ["style-check", args.chapter], review_dir / "style_metrics.json"),
         ("series-style-check", ["series-style-check", args.chapter], review_dir / "series_style.json"),
-        ("ai-taste-check", ["ai-taste-check", args.chapter], review_dir / "ai_taste.json"),
         ("dialogue-function-check", ["dialogue-function-check", args.chapter], review_dir / "dialogue_function.json"),
         ("emotion-relationship-gate", ["emotion-relationship-gate", args.chapter, "--write"], review_dir / "emotion_relationship_gate.json"),
         ("semantic-reader-review", ["semantic-reader-review", args.chapter, "--write"], review_dir / "semantic_reader_review.json"),
@@ -257,7 +457,6 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         ("review-arbitration", ["review-arbitration", args.chapter], review_dir / "review_arbitration.json"),
         ("gray-consequence", ["gray-consequence", args.chapter, "--write"], review_dir / "gray_consequence.json"),
         ("chapter-shape-check", ["chapter-shape-check", args.chapter, "--write"], review_dir / "chapter_shape.json"),
-        ("prose-risk-check", ["prose-risk-check", args.chapter, "--write"], review_dir / "prose_risk.json"),
         ("prose-risk-index", ["prose-risk-index", "--to", args.chapter, "--write"], ROOT / "state" / "derived" / "prose_risk" / "latest.json"),
         ("reader-reward-check", ["reader-reward-check", args.chapter, "--write"], review_dir / "reader_reward_gate.json"),
         ("reader-reward-index", ["reader-reward-index", "--write"], ROOT / "state" / "derived" / "pacing" / "reader_reward_index.json"),
@@ -270,9 +469,14 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         ("reader-risk-index", ["reader-risk-index", "--to", args.chapter, "--write"], ROOT / "state" / "derived" / "reader_risk" / "latest.json"),
         ("revision-plan", ["revision-plan", args.chapter], review_dir / "revision_plan.json"),
         ("revision-closure", ["revision-closure", args.chapter], None),
+        ("review-summary", ["review-summary", args.chapter, "--write"], review_dir / "review_summary.json"),
         ("chapter-evidence", ["evidence", args.chapter], None),
     ]
     for name, command, primary in command_steps:
+        required_keys = ROUTED_STEP_KEYS.get(name)
+        if required_keys is not None and not (route_reviews & required_keys) and route_name not in {"heavy", "gate"}:
+            steps.append({"name": name, "command": ["python", "scripts/novel.py", *command], "status": "SKIPPED", "returncode": 0, "output": f"route {route_name.upper()} skipped routed literary step", "artifacts": [rel(primary)] if primary else []})
+            continue
         skip, stale_reason = should_skip(primary, args.resume, name=name, chapter=args.chapter)
         if skip:
             steps.append({"name": name, "command": ["python", "scripts/novel.py", *command], "status": "SKIPPED", "returncode": 0, "output": f"resume kept {rel(primary)}", "artifacts": [rel(primary)]})
@@ -302,6 +506,7 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         "chapter": args.chapter,
         "generated_at": now_iso(),
         "status": "READY" if not failed else "NOT_READY",
+        "input_hashes": control_input_hashes(args.chapter),
         "steps": steps,
         "next_action": next_action(args.chapter, failed),
     }
@@ -325,7 +530,28 @@ def next_action(chapter: str, failed: list[dict[str, Any]]) -> str:
     return mapping.get(first, f"Fix `{first}` and rerun `python scripts/novel.py receive-chapter {chapter} --resume`.")
 
 
-def render_markdown(report: dict[str, Any]) -> str:
+def render_markdown(report: dict[str, Any], *, verbose: bool = False) -> str:
+    failed = [step for step in report.get("steps", []) if step.get("status") not in {"READY", "SKIPPED", "WARNING"}]
+    if not verbose:
+        first = failed[0]["name"] if failed else "none"
+        route = "UNKNOWN"
+        route_path = ROOT / "reviews" / report["chapter"] / "review_route.json"
+        if route_path.exists():
+            try:
+                route_data = read_json(route_path, {})
+                if isinstance(route_data, dict):
+                    route = str(route_data.get("route", "unknown")).upper()
+            except Exception:
+                route = "INVALID"
+        return "\n".join(
+            [
+                f"status: {report['status']}",
+                f"route: {route}",
+                f"first_blocker: {first}",
+                f"next: {report.get('next_action', '')}",
+                f"failed_steps: {len(failed)}",
+            ]
+        ).rstrip() + "\n"
     lines = [
         f"# Receive Chapter: {report['chapter']}",
         "",
@@ -350,6 +576,7 @@ def main() -> int:
     parser.add_argument("chapter")
     parser.add_argument("--preview", action="store_true")
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--verbose", action="store_true", help="Show the full receive step plan in preview output.")
     parser.add_argument("--run-deepseek", action="store_true", help="Call live DeepSeek review steps when their artifacts are missing.")
     args = parser.parse_args()
     report = evaluate(args)
@@ -358,8 +585,8 @@ def main() -> int:
         return 0
     out_dir = ROOT / "reviews" / args.chapter
     write_json(out_dir / "receive_chapter.json", report)
-    write_text(out_dir / "receive_chapter.md", render_markdown(report))
-    print(render_markdown(report), end="")
+    write_text(out_dir / "receive_chapter.md", render_markdown(report, verbose=args.verbose))
+    print(render_markdown(report, verbose=args.verbose), end="")
     return 0 if report["status"] == "READY" else 1
 
 

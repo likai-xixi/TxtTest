@@ -5,6 +5,7 @@ import html
 import json
 
 from _common import ROOT, write_text
+from product_kernel import personal_mode_is_noncommercial
 from workflow_state import dashboard
 
 
@@ -107,6 +108,7 @@ def main() -> int:
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--write-report", action="store_true", help="Write state/audit/dashboard.md.")
     parser.add_argument("--html", action="store_true", help="Also write state/audit/dashboard.html when used with --write-report.")
+    parser.add_argument("--verbose", action="store_true", help="Show the legacy detailed dashboard.")
     args = parser.parse_args()
 
     state = dashboard(args.chapter)
@@ -120,6 +122,13 @@ def main() -> int:
             print(f"wrote_report: {html_path.relative_to(ROOT).as_posix()}")
     if args.json:
         print(json.dumps(state, ensure_ascii=False, indent=2))
+        return 0
+    if not args.verbose:
+        print(f"status: {state.get('phase_id')}")
+        print(f"blocker: {state.get('blocker')}")
+        print(f"next: {state.get('human_action')}")
+        print(f"risk_flags: {', '.join(state.get('risk_flags', [])) or 'none'}")
+        print(f"evidence: {', '.join(state.get('evidence_paths', [])[:3]) or 'none'}")
         return 0
     idea = state["idea"]
 
@@ -176,8 +185,9 @@ def main() -> int:
     print()
     print("## Advisory Signals")
     advisory = state.get("advisory", {})
-    print(f"- 商业定位: {advisory.get('commercial_positioning', 'unknown')}")
-    print(f"- 赛道扫描: {advisory.get('market_scan', 'unknown')}")
+    if not personal_mode_is_noncommercial():
+        print(f"- 商业定位: {advisory.get('commercial_positioning', 'unknown')}")
+        print(f"- 赛道扫描: {advisory.get('market_scan', 'unknown')}")
     print(f"- 章节结构: {advisory.get('chapter_structure', 'unknown')}")
     print(f"- 章末状态变化: {advisory.get('end_state_change', 'unknown')}")
     print(f"- 润色状态: {advisory.get('polish', 'unknown')}")

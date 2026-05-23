@@ -32,6 +32,8 @@ python scripts/novel.py ci
 
 底层脚本保留给排查和测试；正式写入候选选择、落章、审查、裁决、Gate、事件和提交时使用 `scripts/novel.py`。`desk/status` 会给出当前阶段、卡点、下一条总编口令、风险标记和证据路径。`audit` 是总编体检，会报告业务 NOT_READY；`audit --write-report` 会额外生成 `state/audit/latest.md` 和时间戳报告；`ci` 是本地模板 CI，只检查代码与流程回归。
 
+个人版 v2 的人类入口要保持短：`总编台` 看五行卡点，`查状态` 看一句话，`轻审 v01_c001` 运行 route preview + `review-summary --preview-route`，首跑不要求先落 `review_route.json`；`重审 v01_c001` 才展开完整收章流水线。`人味检查 v01_c001` 只做 advisory；`保留毛边：...` 用来保护有效不工整，修订删除 protected highlight 必须写人工理由。
+
 ## 复制后开工
 
 最省事的方式是反复跑一个命令：
@@ -172,7 +174,7 @@ python scripts/novel.py desk
 - v1 旧 brief 仍可读取和检查，但新模板、新候选 brief、新 DeepSeek prompt、新首章试点 brief 都应输出 v2。
 - 正文候选 prompt 只接收 `Story Card + Hard Boundaries + Context Pack + Candidate Style Requirements`，不再把“防 AI 味合同 / 对白功能合同 / 句式破整合同 / 细节经济合同”整段塞进创作输入。
 
-`python scripts/novel.py brief-precheck {chapter}` 是生成候选 brief 前的智能预检；`python scripts/novel.py brief-check {chapter}` 是正式 brief 的单章硬门禁，会拦截缺 `before -> after`、缺 R 档、缺主角主动动作、缺小兑现和缺点击理由。`python scripts/novel.py reader-reward-check {chapter} --write` 会检查 R2+ 正文回报 quote、主角主动选择 evidence 和世界规则场景测试。`python scripts/novel.py pacing-check {chapter} --write` 会拦截三章窗口无有效推进、高推进无消化和连续小事；`python scripts/novel.py reader-reward-index --write` 会跟踪三章无小兑现、低戏剧载体重复和章末钩子重复。10 章后还要跑 `python scripts/novel.py long-health --to {chapter} --write`，用最近 5 章窗口拦主角被动、只调查/会议/解释、只开不合和无小兑现。
+`python scripts/novel.py brief-precheck {chapter}` 是生成候选 brief 前的智能预检；`python scripts/novel.py brief-check {chapter}` 是正式 brief 的单章硬门禁，会拦截缺 `before -> after`、缺 R 档、缺主角主动动作、缺小兑现、缺点击理由，以及缺 `本章人味焦点` / `本章生活毛边` / `本章禁止写平` 或这些字段仍为空、TODO、占位。`python scripts/novel.py reader-reward-check {chapter} --write` 会检查 R2+ 正文回报 quote、主角主动选择 evidence 和世界规则场景测试。`python scripts/novel.py pacing-check {chapter} --write` 会拦截三章窗口无有效推进、高推进无消化和连续小事；`python scripts/novel.py reader-reward-index --write` 会跟踪三章无小兑现、低戏剧载体重复和章末钩子重复。10 章后还要跑 `python scripts/novel.py long-health --to {chapter} --write`，用最近 5 章窗口拦主角被动、只调查/会议/解释、只开不合和无小兑现。
 
 `build_derived_state` 会从 `chapter_anchor` 人类确认事件生成 `state/derived/chapter_anchors/{chapter}.json`，也会从正式 brief 生成 `state/derived/pacing/progress_index.json` 和 `state/derived/pacing/aftermath_obligations.json`。下一章 brief pack 和 context pack 会读取上一章章末锚点与后果承接债务。`chapter_evidence` 会检查 brief 承诺的 `最低落账事件` 是否真的写入 `state/event_ledger.jsonl`。`build_context_pack` 会按 ID 拉完整道具/技能条目；未列入 ID 或新增授权的元素，只能做细节、线索或伏笔，不能临场破局。
 

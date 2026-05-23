@@ -184,6 +184,7 @@ def relevant_entity_cards(brief_text: str, object_ids: list[str], ability_ids: l
 
 def thread_sources() -> list[SourceRef]:
     return [
+        SourceRef(ROOT / "state" / "derived" / "thread_debt_ledger.json"),
         SourceRef(ROOT / "state" / "derived" / "threads" / "active.yaml"),
         SourceRef(ROOT / "state" / "derived" / "threads" / "open.yaml"),
     ]
@@ -193,7 +194,8 @@ def thread_body() -> str:
     parts = []
     for source in thread_sources():
         if source.path and source.path.exists():
-            parts.append(f"### {source.path.stem}\n\n```yaml\n{read_text(source.path).strip()}\n```")
+            fence = "json" if source.path.suffix == ".json" else "yaml"
+            parts.append(f"### {source.path.stem}\n\n```{fence}\n{read_text(source.path).strip()}\n```")
     return "\n\n".join(parts) if parts else "none"
 
 
@@ -376,6 +378,9 @@ def derived_reader_body() -> str:
         ROOT / "state" / "derived" / "concept_index.json",
         ROOT / "state" / "derived" / "world_reveal_ledger.json",
         ROOT / "state" / "derived" / "suspense_ledger.json",
+        ROOT / "state" / "derived" / "thread_debt_ledger.json",
+        ROOT / "state" / "derived" / "character_arc_ledger.json",
+        ROOT / "state" / "derived" / "style_voice_ledger.json",
     ]
     parts = []
     for path in paths:
@@ -390,6 +395,9 @@ def derived_reader_sources() -> list[SourceRef]:
         SourceRef(ROOT / "state" / "derived" / "concept_index.json"),
         SourceRef(ROOT / "state" / "derived" / "world_reveal_ledger.json"),
         SourceRef(ROOT / "state" / "derived" / "suspense_ledger.json"),
+        SourceRef(ROOT / "state" / "derived" / "thread_debt_ledger.json"),
+        SourceRef(ROOT / "state" / "derived" / "character_arc_ledger.json"),
+        SourceRef(ROOT / "state" / "derived" / "style_voice_ledger.json"),
     ]
 
 

@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 from _common import ROOT
-from schema_validate import validate_json_file, validate_jsonl_file, validate_schema_document
+from schema_validate import validate_instance, validate_json_file, validate_jsonl_file, validate_schema_document
 from validate_event_ledger import validate as validate_ledger
 from workflow_errors import format_issue
 
@@ -53,6 +53,8 @@ REQUIRED_PATHS = [
     "ops/model_routing.yaml",
     "ops/gate_rules.yaml",
     "ops/stop_rules.yaml",
+    "ops/personal_mode.yaml",
+    "ops/review_routing.yaml",
     "ops/process_budget.yaml",
     "ops/return_code_registry.json",
     "ops/privacy_checklist.md",
@@ -98,6 +100,15 @@ REQUIRED_PATHS = [
     "schemas/long_health.schema.json",
     "schemas/gate_a_reader_experience.schema.json",
     "schemas/reader_feedback.schema.json",
+    "schemas/personal_mode.schema.json",
+    "schemas/review_routing.schema.json",
+    "schemas/review_route.schema.json",
+    "schemas/human_flavor.schema.json",
+    "schemas/highlights_review.schema.json",
+    "schemas/review_summary.schema.json",
+    "schemas/thread_debt_ledger.schema.json",
+    "schemas/character_arc_ledger.schema.json",
+    "schemas/style_voice_ledger.schema.json",
     "schemas/candidate_style_requirements.schema.json",
     "schemas/candidate_prompt_manifest.schema.json",
     "schemas/selection.schema.json",
@@ -138,6 +149,8 @@ REQUIRED_PATHS = [
     "templates/prose_risk.md",
     "templates/reader_reward_gate.md",
     "templates/reader_feedback.md",
+    "templates/human_flavor.md",
+    "templates/highlights_review.md",
     "templates/receive_chapter.md",
     "templates/web_satisfaction.md",
     "templates/retention_risk.md",
@@ -216,6 +229,14 @@ REQUIRED_PATHS = [
     "scripts/reader_risk_index.py",
     "scripts/reader_reward_migration_report.py",
     "scripts/reader_feedback.py",
+    "scripts/product_kernel.py",
+    "scripts/human_flavor_check.py",
+    "scripts/highlights_review.py",
+    "scripts/route_reviews.py",
+    "scripts/review_summary.py",
+    "scripts/thread_debt_ledger_build.py",
+    "scripts/character_arc_ledger_build.py",
+    "scripts/style_voice_ledger_build.py",
     "scripts/receive_chapter.py",
     "scripts/build_codex_draft_prompt.py",
     "scripts/gate_policy.py",
@@ -336,6 +357,15 @@ SCHEMA_PATHS = [
     "schemas/long_health.schema.json",
     "schemas/gate_a_reader_experience.schema.json",
     "schemas/reader_feedback.schema.json",
+    "schemas/personal_mode.schema.json",
+    "schemas/review_routing.schema.json",
+    "schemas/review_route.schema.json",
+    "schemas/human_flavor.schema.json",
+    "schemas/highlights_review.schema.json",
+    "schemas/review_summary.schema.json",
+    "schemas/thread_debt_ledger.schema.json",
+    "schemas/character_arc_ledger.schema.json",
+    "schemas/style_voice_ledger.schema.json",
     "schemas/candidate_style_requirements.schema.json",
     "schemas/candidate_prompt_manifest.schema.json",
     "schemas/selection.schema.json",
@@ -388,6 +418,13 @@ RUNTIME_SCHEMA_GLOBS = [
     ("state/derived/prose_risk/*.json", "schemas/prose_risk_index.schema.json"),
     ("reviews/*/reader_reward_gate.json", "schemas/reader_reward_gate.schema.json"),
     ("reviews/*/reader_feedback.json", "schemas/reader_feedback.schema.json"),
+    ("reviews/*/review_route.json", "schemas/review_route.schema.json"),
+    ("reviews/*/human_flavor.json", "schemas/human_flavor.schema.json"),
+    ("reviews/*/highlights_review.json", "schemas/highlights_review.schema.json"),
+    ("reviews/*/review_summary.json", "schemas/review_summary.schema.json"),
+    ("state/derived/thread_debt_ledger.json", "schemas/thread_debt_ledger.schema.json"),
+    ("state/derived/character_arc_ledger.json", "schemas/character_arc_ledger.schema.json"),
+    ("state/derived/style_voice_ledger.json", "schemas/style_voice_ledger.schema.json"),
     ("external_runs/deepseek/*/review.manifest.json", "schemas/deepseek_run_manifest.schema.json"),
     ("external_runs/deepseek/*/anti_ai_review.manifest.json", "schemas/deepseek_run_manifest.schema.json"),
     ("external_runs/deepseek/*/semantic_reader_review.manifest.json", "schemas/deepseek_run_manifest.schema.json"),
@@ -508,6 +545,55 @@ def check_yaml_root(path_text: str, expected_key: str) -> list[str]:
     return []
 
 
+def check_yaml_against_schema(path_text: str, schema_text: str) -> list[str]:
+    if yaml is None:
+        return [f"{path_text}: PyYAML is required to validate YAML"]
+    path = ROOT / path_text
+    schema_path = ROOT / schema_text
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return [f"{path_text}: invalid YAML: {exc}"]
+    try:
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return [f"{schema_text}: invalid JSON schema: {exc}"]
+    errors = [f"{path_text}: {item}" for item in validate_instance(data, schema)]
+    if path_text == "ops/personal_mode.yaml" and isinstance(data, dict):
+        ship_gates = data.get("ship_gates") if isinstance(data.get("ship_gates"), dict) else {}
+        infrastructure = data.get("infrastructure") if isinstance(data.get("infrastructure"), dict) else {}
+        literary = data.get("literary_reviews") if isinstance(data.get("literary_reviews"), dict) else {}
+        reader = data.get("reader_feedback") if isinstance(data.get("reader_feedback"), dict) else {}
+        if ship_gates.get("always_required") is not True:
+            errors.append("ops/personal_mode.yaml: ship_gates.always_required must be true")
+        if ship_gates.get("allow_route_to_skip_ship_gates") is not False:
+            errors.append("ops/personal_mode.yaml: routes must not be allowed to skip Ship gates")
+        if literary.get("default_blocking") is not False:
+            errors.append("ops/personal_mode.yaml: literary_reviews.default_blocking must be false")
+        if reader.get("simulated_reader_must_be_labeled") is not True:
+            errors.append("ops/personal_mode.yaml: simulated readers must be labeled")
+        for key in ("sqlite_enabled", "vector_memory_enabled", "knowledge_graph_enabled"):
+            if infrastructure.get(key) is not False:
+                errors.append(f"ops/personal_mode.yaml: infrastructure.{key} must remain false")
+    if path_text == "ops/review_routing.yaml" and isinstance(data, dict):
+        routes = data.get("routes") if isinstance(data.get("routes"), dict) else {}
+        for route in ("fast", "normal", "heavy", "gate"):
+            if route not in routes:
+                errors.append(f"ops/review_routing.yaml: missing route {route}")
+            else:
+                reviews = routes[route].get("additional_literary_reviews") if isinstance(routes[route], dict) else None
+                if not isinstance(reviews, list) or not reviews:
+                    errors.append(f"ops/review_routing.yaml: route {route} needs additional_literary_reviews")
+                if route in {"heavy", "gate"} and isinstance(reviews, list):
+                    for required in ("codex_integrated", "deepseek_integrated"):
+                        if required not in reviews:
+                            errors.append(f"ops/review_routing.yaml: route {route} missing {required}")
+        gates = data.get("always_required_ship_gates")
+        if not isinstance(gates, list) or "continuity_p0_p1" not in gates:
+            errors.append("ops/review_routing.yaml: always_required_ship_gates must include continuity_p0_p1")
+    return errors
+
+
 def main() -> int:
     errors: list[str] = []
     for item in REQUIRED_PATHS:
@@ -519,6 +605,8 @@ def main() -> int:
     errors.extend(check_roles_yaml())
     errors.extend(check_json_files(SCHEMA_PATHS))
     errors.extend(check_runtime_json_against_schemas())
+    errors.extend(check_yaml_against_schema("ops/personal_mode.yaml", "schemas/personal_mode.schema.json"))
+    errors.extend(check_yaml_against_schema("ops/review_routing.yaml", "schemas/review_routing.schema.json"))
     errors.extend(check_yaml_root("bible/objects.yaml", "objects"))
     errors.extend(check_yaml_root("bible/abilities.yaml", "abilities"))
     errors.extend(f"event ledger: {error}" for error in validate_ledger(ROOT / "state" / "event_ledger.jsonl"))

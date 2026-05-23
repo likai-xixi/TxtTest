@@ -21,6 +21,7 @@ from record_idea_selection import (
 )
 from style_contract import CONTRACT_JSON, STYLE_PROFILE, validate_contract as validate_style_contract
 from reader_personality_contracts import load_reader_promise, validate_reader_promise
+from product_kernel import personal_mode_is_noncommercial
 
 
 PLACEHOLDERS = ("待定", "待填", "待评", "待生成", "待人类裁决", "寰呭畾", "寰呭～", "寰呰瘎", "TODO")
@@ -547,10 +548,11 @@ def thread_has_ledger_entry(chapter: str, thread_id: str) -> bool:
 
 
 def advisory_snapshot(chapter: str, idea_id: str | None) -> dict[str, str]:
+    noncommercial = personal_mode_is_noncommercial()
     lab = idea_lab_root() / idea_id if idea_id else None
-    commercial = "缺"
-    market = "缺"
-    if lab is not None:
+    commercial = "disabled_by_personal_mode" if noncommercial else "缺"
+    market = "disabled_by_personal_mode" if noncommercial else "缺"
+    if lab is not None and not noncommercial:
         commercial_data = _json_or_none(lab / "commercial_idea.json")
         if commercial_data:
             risk_text = json.dumps(commercial_data, ensure_ascii=False)
@@ -942,15 +944,17 @@ def dashboard(chapter: str | None = None) -> dict[str, Any]:
                 f"state/idea_lab/{idea_id}/core_setting_freeze.json",
             ]
         )
-        for path in (
-            f"state/idea_lab/{idea_id}/commercial_idea.json",
-            f"state/idea_lab/{idea_id}/market_scan.json",
-        ):
-            if (ROOT / path).exists():
-                evidence_paths.append(path)
+        if not personal_mode_is_noncommercial():
+            for path in (
+                f"state/idea_lab/{idea_id}/commercial_idea.json",
+                f"state/idea_lab/{idea_id}/market_scan.json",
+            ):
+                if (ROOT / path).exists():
+                    evidence_paths.append(path)
 
     return {
         "root": str(ROOT),
+        "personal_mode": "personal_noncommercial" if personal_mode_is_noncommercial() else "unknown_or_commercial",
         "git": git_status(),
         "deepseek_api_key": "set" if os.environ.get("DEEPSEEK_API_KEY") else "missing",
         "env_status": readiness["env_status"],

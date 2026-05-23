@@ -93,7 +93,7 @@ def category_result(
     issue: str,
     action: str,
 ) -> dict[str, Any]:
-    hard_blocked = blocked and severity in {"P0", "P1"}
+    hard_blocked = blocked and severity == "P0"
     return {
         "status": "BLOCKED" if hard_blocked else "CLEAR",
         "severity": severity if blocked else "P3",
@@ -180,11 +180,13 @@ def evaluate(chapter: str) -> dict[str, Any]:
             action="补即时收益、他人损失和后续反噬；必要时进入 event ledger。",
         ),
     }
-    blockers = [
-        f"{name}: {item['issue']}"
+    p1_evidence_flags = [
+        name
         for name, item in categories.items()
-        if item["status"] == "BLOCKED" and item["severity"] in {"P0", "P1"}
+        if item.get("machine_flagged") and item.get("severity") == "P1" and item.get("evidence_quotes")
     ]
+    extreme_whole_chapter = len(p1_evidence_flags) >= 4 and len(compact) >= 1200
+    blockers = [f"extreme whole-chapter AI-taste risk: {', '.join(p1_evidence_flags)}"] if extreme_whole_chapter else []
     status = "BLOCKED" if blockers else "CLEAR"
     return {
         "schema_version": 1,
@@ -206,7 +208,11 @@ def evaluate(chapter: str) -> dict[str, Any]:
         "warnings": [
             f"{name}: {item['issue']}"
             for name, item in categories.items()
-            if item.get("machine_flagged") and item["severity"] not in {"P0", "P1"}
+            if item.get("machine_flagged") and name not in p1_evidence_flags
+        ]
+        + [
+            f"{name}: {categories[name]['issue']}"
+            for name in p1_evidence_flags
         ],
         "human_acceptance": None,
     }

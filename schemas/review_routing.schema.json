@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReviewRoutingConfig",
+  "type": "object",
+  "required": ["route_version", "routes", "gate_chapters", "always_required_ship_gates", "fail_closed", "upgrade_rules"],
+  "properties": {
+    "route_version": { "type": "integer" },
+    "routes": {
+      "type": "object",
+      "required": ["fast", "normal", "heavy", "gate"],
+      "properties": {
+        "fast": {
+          "type": "object",
+          "required": ["label", "description", "additional_literary_reviews"],
+          "properties": {
+            "label": { "type": "string", "minLength": 1 },
+            "description": { "type": "string", "minLength": 1 },
+            "additional_literary_reviews": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+          }
+        },
+        "normal": {
+          "type": "object",
+          "required": ["label", "description", "additional_literary_reviews"],
+          "properties": {
+            "label": { "type": "string", "minLength": 1 },
+            "description": { "type": "string", "minLength": 1 },
+            "additional_literary_reviews": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+          }
+        },
+        "heavy": {
+          "type": "object",
+          "required": ["label", "description", "additional_literary_reviews"],
+          "properties": {
+            "label": { "type": "string", "minLength": 1 },
+            "description": { "type": "string", "minLength": 1 },
+            "additional_literary_reviews": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+          }
+        },
+        "gate": {
+          "type": "object",
+          "required": ["label", "description", "additional_literary_reviews"],
+          "properties": {
+            "label": { "type": "string", "minLength": 1 },
+            "description": { "type": "string", "minLength": 1 },
+            "additional_literary_reviews": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+          }
+        }
+      }
+    },
+    "gate_chapters": { "type": "array", "items": { "type": "integer" } },
+    "always_required_ship_gates": { "type": "array", "items": { "type": "string" } },
+    "fail_closed": { "type": "object" },
+    "upgrade_rules": { "type": "object" }
+  }
+}

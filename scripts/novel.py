@@ -766,6 +766,8 @@ def command_receive_chapter(args: argparse.Namespace) -> int:
         script_args.append("--preview")
     if args.resume:
         script_args.append("--resume")
+    if args.verbose:
+        script_args.append("--verbose")
     if args.run_deepseek:
         script_args.append("--run-deepseek")
     return run_script("receive_chapter.py", *script_args, check=False)
@@ -1164,9 +1166,14 @@ def command_close(args: argparse.Namespace) -> int:
         run_script("reader_risk_index.py", "--to", args.chapter, "--write", check=False)
         if chapter_number(args.chapter) >= 10:
             run_script("long_health.py", "--to", args.chapter, "--write", check=False)
+        run_script("human_flavor_check.py", args.chapter, "--write", check=False)
+        run_script("highlights_review.py", args.chapter, "--write", check=False)
+        run_script("route_reviews.py", args.chapter, "--write", check=False)
         run_script("revision_plan.py", args.chapter, check=False)
         run_script("revision_closure.py", args.chapter, check=False)
         run_script("chapter_evidence.py", "--chapter", args.chapter)
+        run_script("receive_chapter.py", args.chapter, "--resume")
+        run_script("chapter_evidence.py", "--chapter", args.chapter, "--require-receive")
 
     command_decision(args)
     run_script("build_derived_state.py")
@@ -1423,6 +1430,52 @@ def command_prose_risk_index(args: argparse.Namespace) -> int:
     return run_script("prose_risk_index.py", *script_args, check=False)
 
 
+def command_human_flavor_check(args: argparse.Namespace) -> int:
+    script_args = [args.chapter]
+    if args.write:
+        script_args.append("--write")
+    if args.json:
+        script_args.append("--json")
+    if args.no_write:
+        script_args.append("--no-write")
+    return run_script("human_flavor_check.py", *script_args, check=False)
+
+
+def command_highlights_review(args: argparse.Namespace) -> int:
+    script_args = [args.chapter]
+    if args.write:
+        script_args.append("--write")
+    if args.json:
+        script_args.append("--json")
+    if args.no_write:
+        script_args.append("--no-write")
+    return run_script("highlights_review.py", *script_args, check=False)
+
+
+def command_route_reviews(args: argparse.Namespace) -> int:
+    script_args = [args.chapter]
+    if args.preview:
+        script_args.append("--preview")
+    if args.write:
+        script_args.append("--write")
+    if args.json:
+        script_args.append("--json")
+    return run_script("route_reviews.py", *script_args, check=False)
+
+
+def command_review_summary(args: argparse.Namespace) -> int:
+    script_args = [args.chapter]
+    if args.write:
+        script_args.append("--write")
+    if args.json:
+        script_args.append("--json")
+    if getattr(args, "verbose", False):
+        script_args.append("--verbose")
+    if getattr(args, "preview_route", False):
+        script_args.append("--preview-route")
+    return run_script("review_summary.py", *script_args, check=False)
+
+
 def command_emotion_relationship_gate(args: argparse.Namespace) -> int:
     script_args = [args.chapter]
     if args.write:
@@ -1671,6 +1724,33 @@ def command_long_health(args: argparse.Namespace) -> int:
     return run_script("long_health.py", *script_args, check=False)
 
 
+def command_thread_debt_ledger_build(args: argparse.Namespace) -> int:
+    script_args = ["--to", args.to]
+    if args.write:
+        script_args.append("--write")
+    if args.json:
+        script_args.append("--json")
+    return run_script("thread_debt_ledger_build.py", *script_args, check=False)
+
+
+def command_character_arc_ledger_build(args: argparse.Namespace) -> int:
+    script_args = ["--to", args.to]
+    if args.write:
+        script_args.append("--write")
+    if args.json:
+        script_args.append("--json")
+    return run_script("character_arc_ledger_build.py", *script_args, check=False)
+
+
+def command_style_voice_ledger_build(args: argparse.Namespace) -> int:
+    script_args = ["--to", args.to]
+    if args.write:
+        script_args.append("--write")
+    if args.json:
+        script_args.append("--json")
+    return run_script("style_voice_ledger_build.py", *script_args, check=False)
+
+
 def command_pilot_reader_experience(args: argparse.Namespace) -> int:
     script_args = [args.gate]
     if getattr(args, "to", None):
@@ -1880,6 +1960,8 @@ def command_status(_args: argparse.Namespace) -> int:
     script_args: list[str] = []
     if getattr(_args, "json", False):
         script_args.append("--json")
+    if getattr(_args, "verbose", False):
+        script_args.append("--verbose")
     return run_script("project_status.py", *script_args, check=False)
 
 
@@ -1893,6 +1975,8 @@ def command_desk(args: argparse.Namespace) -> int:
         script_args.append("--html")
     if args.json:
         script_args.append("--json")
+    if getattr(args, "verbose", False):
+        script_args.append("--verbose")
     return run_script_text("editor_desk.py", *script_args)
 
 
@@ -2149,6 +2233,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("chapter")
     p.add_argument("--preview", action="store_true")
     p.add_argument("--resume", action="store_true")
+    p.add_argument("--verbose", action="store_true")
     p.add_argument("--run-deepseek", action="store_true")
     p.set_defaults(func=command_receive_chapter)
 
@@ -2550,6 +2635,35 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=command_prose_risk_index)
 
+    p = sub.add_parser("human-flavor-check", help="Run advisory human-flavor review for a chapter.")
+    p.add_argument("chapter")
+    p.add_argument("--write", action="store_true")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--no-write", action="store_true")
+    p.set_defaults(func=command_human_flavor_check)
+
+    p = sub.add_parser("highlights-review", help="Protect chapter highlights from being over-smoothed.")
+    p.add_argument("chapter")
+    p.add_argument("--write", action="store_true")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--no-write", action="store_true")
+    p.set_defaults(func=command_highlights_review)
+
+    p = sub.add_parser("route-reviews", help="Route literary reviews without skipping Ship gates.")
+    p.add_argument("chapter")
+    p.add_argument("--preview", action="store_true")
+    p.add_argument("--write", action="store_true")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=command_route_reviews)
+
+    p = sub.add_parser("review-summary", help="Show the five-line editor review dashboard.")
+    p.add_argument("chapter")
+    p.add_argument("--write", action="store_true")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--verbose", action="store_true")
+    p.add_argument("--preview", "--preview-route", dest="preview_route", action="store_true")
+    p.set_defaults(func=command_review_summary)
+
     p = sub.add_parser("emotion-relationship-gate", help="Check chapter emotion and relationship continuity.")
     p.add_argument("chapter")
     p.add_argument("--write", action="store_true")
@@ -2702,6 +2816,24 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--write", action="store_true")
     p.set_defaults(func=command_long_health)
 
+    p = sub.add_parser("thread-debt-ledger-build", help="Rebuild the derived thread debt ledger.")
+    p.add_argument("--to", required=True)
+    p.add_argument("--write", action="store_true")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=command_thread_debt_ledger_build)
+
+    p = sub.add_parser("character-arc-ledger-build", help="Rebuild the derived character arc ledger.")
+    p.add_argument("--to", required=True)
+    p.add_argument("--write", action="store_true")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=command_character_arc_ledger_build)
+
+    p = sub.add_parser("style-voice-ledger-build", help="Rebuild the derived style voice ledger.")
+    p.add_argument("--to", required=True)
+    p.add_argument("--write", action="store_true")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=command_style_voice_ledger_build)
+
     p = sub.add_parser("pilot-reader-experience", help="Summarize Gate A three-chapter reader experience evidence.")
     p.add_argument("gate", choices=["A", "a"])
     p.add_argument("--to", default=None)
@@ -2807,11 +2939,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("status", help="Show project status and next likely action.")
     p.add_argument("--json", action="store_true")
+    p.add_argument("--verbose", action="store_true")
     p.set_defaults(func=command_status)
 
     p = sub.add_parser("desk", help="Show the editor dashboard, daily shortcuts, status, and next Codex prompt.")
     p.add_argument("--chapter", default=None)
     p.add_argument("--json", action="store_true")
+    p.add_argument("--verbose", action="store_true")
     p.add_argument("--write-report", action="store_true")
     p.add_argument("--html", action="store_true")
     p.set_defaults(func=command_desk)

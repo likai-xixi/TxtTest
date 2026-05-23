@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PersonalMode",
+  "type": "object",
+  "required": ["mode", "ship_gates", "literary_reviews", "reader_feedback", "infrastructure"],
+  "properties": {
+    "mode": { "enum": ["personal_noncommercial"] },
+    "ship_gates": {
+      "type": "object",
+      "required": ["always_required", "allow_route_to_skip_ship_gates"],
+      "properties": {
+        "always_required": { "const": true },
+        "allow_route_to_skip_ship_gates": { "const": false }
+      }
+    },
+    "literary_reviews": {
+      "type": "object",
+      "required": ["default_blocking", "human_flavor_default", "highlights_default", "ai_taste_default"],
+      "properties": {
+        "default_blocking": { "const": false },
+        "human_flavor_default": { "enum": ["warning"] },
+        "highlights_default": { "enum": ["advisory"] },
+        "ai_taste_default": { "enum": ["warning"] }
+      }
+    },
+    "reader_feedback": {
+      "type": "object",
+      "required": ["require_real_reader", "allow_self_review", "allow_simulated_reader", "simulated_reader_must_be_labeled"],
+      "properties": {
+        "require_real_reader": { "const": false },
+        "allow_self_review": { "const": true },
+        "allow_simulated_reader": { "const": true },
+        "simulated_reader_must_be_labeled": { "const": true }
+      }
+    },
+    "infrastructure": {
+      "type": "object",
+      "required": ["sqlite_enabled", "vector_memory_enabled", "knowledge_graph_enabled"],
+      "properties": {
+        "sqlite_enabled": { "const": false },
+        "vector_memory_enabled": { "const": false },
+        "knowledge_graph_enabled": { "const": false }
+      }
+    }
+  }
+}

@@ -193,6 +193,45 @@ def check_long_health(chapter: str) -> tuple[list[str], list[dict[str, Any]]]:
     return checked, issues
 
 
+def check_derived_ledger(path: Path, chapter: str, label: str) -> tuple[list[str], list[dict[str, Any]]]:
+    checked = [rel(path)]
+    issues: list[dict[str, Any]] = []
+    if not path.exists():
+        return checked, issues
+    data, error = _json(path)
+    if error:
+        issues.append(error)
+        return checked, issues
+    if not data:
+        return checked, issues
+    through = str(data.get("through") or "")
+    if through and chapter_number_safe(through) < chapter_number_safe(chapter):
+        issues.append(issue("STALE", f"{label} only covers {through}, not {chapter}", rel(path)))
+    ledger = ROOT / "state" / "event_ledger.jsonl"
+    if ledger.exists() and _mtime(path) + 0.001 < _mtime(ledger):
+        issues.append(issue("STALE", f"{label} is older than event ledger", rel(path)))
+    issues.extend(check_file_ref(path, data.get("source_event_ledger"), f"{label} source_event_ledger", ledger))
+    chapters = data.get("chapters", [])
+    if chapters is not None:
+        if not isinstance(chapters, list):
+            issues.append(issue("SCHEMA", f"{label} chapters must be a list", rel(path)))
+        else:
+            for chapter_index, item in enumerate(chapters, start=1):
+                if not isinstance(item, dict):
+                    issues.append(issue("SCHEMA", f"{label} chapters[{chapter_index}] must be an object", rel(path)))
+                    continue
+                refs = item.get("source_refs")
+                if refs is None:
+                    continue
+                if not isinstance(refs, list):
+                    issues.append(issue("SCHEMA", f"{label} chapters[{chapter_index}].source_refs must be a list", rel(path)))
+                    continue
+                item_chapter = item.get("chapter") or f"chapter#{chapter_index}"
+                for ref_index, ref in enumerate(refs, start=1):
+                    issues.extend(check_file_ref(path, ref, f"{label} {item_chapter} source_refs[{ref_index}]"))
+    return checked, issues
+
+
 def check_nested_review_inputs(path: Path, data: dict[str, Any]) -> list[dict[str, Any]]:
     issues: list[dict[str, Any]] = []
     if "inputs" in data:
@@ -392,6 +431,9 @@ def check_chapter(chapter: str) -> dict[str, Any]:
         check_reader_reward_index(chapter),
         check_reader_risk_index(chapter),
         check_long_health(chapter),
+        check_derived_ledger(ROOT / "state" / "derived" / "thread_debt_ledger.json", chapter, "thread_debt_ledger"),
+        check_derived_ledger(ROOT / "state" / "derived" / "character_arc_ledger.json", chapter, "character_arc_ledger"),
+        check_derived_ledger(ROOT / "state" / "derived" / "style_voice_ledger.json", chapter, "style_voice_ledger"),
     ):
         checked.extend(extra_checked)
         issues.extend(extra_issues)

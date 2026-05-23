@@ -1,0 +1,22 @@
+mode: personal_noncommercial
+
+ship_gates:
+  always_required: true
+  allow_route_to_skip_ship_gates: false
+
+literary_reviews:
+  default_blocking: false
+  human_flavor_default: warning
+  highlights_default: advisory
+  ai_taste_default: warning
+
+reader_feedback:
+  require_real_reader: false
+  allow_self_review: true
+  allow_simulated_reader: true
+  simulated_reader_must_be_labeled: true
+
+infrastructure:
+  sqlite_enabled: false
+  vector_memory_enabled: false
+  knowledge_graph_enabled: false

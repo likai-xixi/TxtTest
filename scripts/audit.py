@@ -10,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 from _common import ROOT, write_text
+from product_kernel import personal_mode_is_noncommercial
 from workflow_state import dashboard
 
 
@@ -128,6 +129,12 @@ def step_defs_for(mode: str, chapter: str, gate: str) -> list[tuple[str, list[st
         ("self-test", ["self-test"]),
         ("deepseek-preflight", ["deepseek-preflight", "--no-live"]),
     ]
+    if personal_mode_is_noncommercial():
+        project = [
+            step
+            for step in project
+            if step[0] not in {"market-scan-check", "commercial-idea-check"}
+        ]
     if mode == "template":
         return [
             ("check", ["check"]),
@@ -181,8 +188,6 @@ def render_human_report(state: dict, steps: list[StepResult], chapter: str, gate
         "",
         "## Advisory Signals",
         "",
-        f"- commercial_positioning: {state.get('advisory', {}).get('commercial_positioning', 'unknown')}",
-        f"- market_scan: {state.get('advisory', {}).get('market_scan', 'unknown')}",
         f"- chapter_structure: {state.get('advisory', {}).get('chapter_structure', 'unknown')}",
         f"- end_state_change: {state.get('advisory', {}).get('end_state_change', 'unknown')}",
         f"- polish: {state.get('advisory', {}).get('polish', 'unknown')}",

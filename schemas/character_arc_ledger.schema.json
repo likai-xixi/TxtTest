@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CharacterArcLedger",
+  "type": "object",
+  "required": ["schema_version", "generated_at", "through", "status", "source_priority", "source_event_ledger", "arcs", "blockers", "warnings"],
+  "properties": {
+    "schema_version": { "type": "integer" },
+    "generated_at": { "type": "string" },
+    "through": { "type": "string" },
+    "status": { "enum": ["READY", "WARNING", "BLOCKED"] },
+    "source_priority": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "human decision",
+          "event_ledger",
+          "official chapter evidence",
+          "official brief",
+          "review artifacts",
+          "generated suggestions"
+        ]
+      }
+    },
+    "source_event_ledger": { "type": "object" },
+    "arcs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "character_id",
+          "chapter",
+          "desire",
+          "fear",
+          "default_strategy",
+          "changed_by_event",
+          "delta_type",
+          "allowed_future_behavior",
+          "forbidden_future_behavior",
+          "events",
+          "source_priority_applied"
+        ],
+        "properties": {
+          "character_id": { "type": "string" },
+          "chapter": { "type": "string" },
+          "desire": { "type": "string" },
+          "fear": { "type": "string" },
+          "default_strategy": { "type": "string" },
+          "changed_by_event": { "type": "string" },
+          "delta_type": { "type": "string" },
+          "allowed_future_behavior": { "type": "string" },
+          "forbidden_future_behavior": { "type": "string" },
+          "events": { "type": "array", "items": { "type": "object" } },
+          "source_priority_applied": { "type": "string" }
+        }
+      }
+    },
+    "blockers": { "type": "array" },
+    "warnings": { "type": "array" }
+  }
+}

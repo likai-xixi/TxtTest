@@ -8,6 +8,7 @@ from typing import Any
 
 from _common import ROOT, chapter_number, now_iso, read_json, write_json, write_text
 from artifact_integrity import file_ref, validate_chapter_shape, validate_reader_reward_gate
+from context_governance import context_quality_path
 from health_report import gate_risks, infer_last_chapter, load_events
 
 
@@ -54,6 +55,33 @@ def evaluate(to_chapter: str | None = None) -> dict[str, Any]:
         reader_ledgers[key] = {"path": rel_path, "exists": path.exists(), "blockers": blockers}
         if blockers:
             risks.append(f"{key}_blocker")
+    context_health_items: list[dict[str, Any]] = []
+    context_health_warnings: list[str] = []
+    context_health_blockers: list[str] = []
+    if max_chapter:
+        volume = target[:3]
+        for number in range(max(1, max_chapter - 4), max_chapter + 1):
+            chapter = f"{volume}_c{number:03d}"
+            path = context_quality_path(chapter)
+            ref = file_ref(path)
+            item: dict[str, Any] = {"chapter": chapter, "context_quality": ref, "status": "MISSING"}
+            if path.exists():
+                data = read_json(path, {})
+                health = data.get("context_health") if isinstance(data, dict) else {}
+                item["status"] = str(data.get("status", "UNKNOWN")) if isinstance(data, dict) else "MALFORMED"
+                item["context_health_status"] = str(health.get("status", "UNKNOWN")) if isinstance(health, dict) else "MISSING"
+                item["warnings"] = health.get("warnings", []) if isinstance(health, dict) else ["missing context_health"]
+                item["blockers"] = health.get("blockers", []) if isinstance(health, dict) else []
+            else:
+                item["warnings"] = [f"missing context quality report: {chapter}"]
+                item["blockers"] = []
+            context_health_items.append(item)
+            context_health_warnings.extend(f"{chapter}: {warning}" for warning in item.get("warnings", [])[:5])
+            context_health_blockers.extend(f"{chapter}: {blocker}" for blocker in item.get("blockers", [])[:5])
+    if context_health_blockers:
+        risks.append("context_health_blocker")
+    elif context_health_warnings:
+        risks.append("context_health_warning")
     rolling_blockers: list[str] = []
     rolling_warnings: list[str] = []
     if max_chapter >= 10:
@@ -116,7 +144,7 @@ def evaluate(to_chapter: str | None = None) -> dict[str, Any]:
             rolling_blockers.append("recent 5-chapter window opens suspense threads without advancement or payoff")
         if world_test == 0:
             rolling_warnings.append("recent 5-chapter window has no rule_reveal event; world rules may be explanation-only")
-    status = "BLOCKED" if rolling_blockers else ("WARNING" if risks or rolling_warnings else "READY")
+    status = "BLOCKED" if rolling_blockers or context_health_blockers else ("WARNING" if risks or rolling_warnings else "READY")
     return {
         "schema_version": 1,
         "generated_at": now_iso(),
@@ -142,8 +170,11 @@ def evaluate(to_chapter: str | None = None) -> dict[str, Any]:
         "setting_debt_index": setting_debt,
         "gate_risks": gate_risks(max_chapter),
         "reader_experience_ledgers": reader_ledgers,
+        "context_health_window": context_health_items,
         "rolling_blockers": rolling_blockers,
         "rolling_warnings": rolling_warnings,
+        "context_health_blockers": context_health_blockers,
+        "context_health_warnings": context_health_warnings,
         "risk_flags": risks,
     }
 
@@ -175,6 +206,15 @@ def render_markdown(report: dict[str, Any]) -> str:
     for key, item in report.get("reader_experience_ledgers", {}).items():
         blockers = item.get("blockers") or []
         lines.append(f"- {key}: {'blockers=' + str(len(blockers)) if blockers else 'clear'} ({item.get('path')})")
+    lines.extend(["", "## Context Health", ""])
+    health_items = report.get("context_health_window", [])
+    if health_items:
+        for item in health_items:
+            lines.append(
+                f"- {item.get('chapter')}: quality={item.get('status')} context_health={item.get('context_health_status', item.get('status'))}"
+            )
+    else:
+        lines.append("- none")
     lines.extend(["", "## Counts", ""])
     lines.extend(f"- {key}: {value}" for key, value in report["counts_by_type"].items()) if report["counts_by_type"] else lines.append("- none")
     return "\n".join(lines).rstrip() + "\n"

@@ -76,6 +76,14 @@
     ["emotion-relationship-gate", "v01_c001", "--json"],
     ["semantic-reader-review", "v01_c001", "--json"],
     ["memorable-scene-check", "v01_c001", "--json"],
+    ["human-flavor-check", "v01_c001", "--json", "--no-write"],
+    ["highlights-review", "v01_c001", "--json", "--no-write"],
+    ["route-reviews", "v01_c001", "--preview", "--json"],
+    ["review-summary", "v01_c001", "--json"],
+    ["receive-chapter", "v01_c001", "--preview"],
+    ["thread-debt-ledger-build", "--to", "v01_c001", "--json"],
+    ["character-arc-ledger-build", "--to", "v01_c001", "--json"],
+    ["style-voice-ledger-build", "--to", "v01_c001", "--json"],
     ["candidate-compare", "v01_c001", "--brief", "--json"],
     ["context-diff", "v01_c001", "--json"]
   ]

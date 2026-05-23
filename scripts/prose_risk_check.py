@@ -344,7 +344,7 @@ def evaluate(chapter: str) -> dict[str, Any]:
     run_count, run_subject, run_sample = max_subject_run(paras, names)
     if run_count >= 3:
         categories["subject_repetition"] = category(
-            status="BLOCKED",
+            status="WARNING",
             severity="P1",
             issue=f"连续 {run_count} 个段落以同一主语 {run_subject or 'unknown'} 起句，形成机械动作链。",
             quote=run_sample or first_quote(text),
@@ -376,7 +376,7 @@ def evaluate(chapter: str) -> dict[str, Any]:
     process, empty_process = process_result(text)
     if len(empty_process) >= 2:
         categories["process_bloat"] = category(
-            status="BLOCKED",
+            status="WARNING",
             severity="P1",
             issue="连续流程动作没有明确承担冲突、信息差、人物变化或代价。",
             quote=empty_process[0][:160],
@@ -410,7 +410,7 @@ def evaluate(chapter: str) -> dict[str, Any]:
     brief_pressure = any(marker in brief_text for marker in PRESSURE_MARKERS) or any(marker in brief_text for marker in ("代价", "后果", "压力"))
     if not has_cost_text and not has_cost_event and brief_pressure:
         categories["protagonist_invulnerable"] = category(
-            status="BLOCKED",
+            status="WARNING",
             severity="P1",
             issue="brief 声明压力/代价，但正文和事件账本未显示主角误判、代价、短期损失或被迫修正。",
             quote=first_quote(text),
@@ -444,7 +444,7 @@ def evaluate(chapter: str) -> dict[str, Any]:
     core_side_required = any(marker in brief_text for marker in ("核心配角", "配角私心", "反向行动", "交换条件", "遮掩"))
     if has_side_character and not has_side_agenda and core_side_required:
         categories["flat_side_character"] = category(
-            status="BLOCKED",
+            status="WARNING",
             severity="P1",
             issue="brief 要求核心配角功能，但正文只识别到功能性配角，未见私心、误解、交换或反向行动。",
             quote=first_quote(text, SIDE_CHARACTER_MARKERS),
@@ -500,7 +500,7 @@ def evaluate(chapter: str) -> dict[str, Any]:
     qa_has_change = any(marker in "\n".join(dlines) for marker in QA_CHANGE_MARKERS)
     if qa_run >= 4 and not qa_has_change:
         categories["qa_dialogue"] = category(
-            status="BLOCKED",
+            status="WARNING",
             severity="P1",
             issue="关键对话呈连续问答灌输，缺少遮掩、反问、交易、误导、权力或情绪变化。",
             quote=qa_sample or first_quote(text),
@@ -544,7 +544,7 @@ def evaluate(chapter: str) -> dict[str, Any]:
         )
     elif a_count >= 8 and not has_anomaly_consequence:
         categories["anomaly_density"] = category(
-            status="BLOCKED",
+            status="WARNING",
             severity="P1",
             issue="异常/规则/信号密度高，但缺少后果、代价、回收或消化段。",
             quote=first_quote(text, ANOMALY_MARKERS),

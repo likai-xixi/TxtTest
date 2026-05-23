@@ -29,6 +29,14 @@ context_pack:
     recent_events: 8000
     arc_summary: 8000
     rules_and_boundaries: 8000
+  context_health:
+    near_limit_ratio: 0.85
+    due_thread_omission_warning_count: 1
+    inactive_entity_max_ratio: 0.35
+    repeated_summary_min_chars: 80
+    repeated_summary_max_count: 3
+    hot_warm_cold_min_hot_ratio: 0.2
+    hot_warm_cold_max_cold_ratio: 0.7
 
 pilot:
   chapters: 3

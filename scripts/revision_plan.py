@@ -27,6 +27,8 @@ SOURCE_FILES = (
     "codex_anti_ai_review.json",
     "deepseek_anti_ai_review.json",
     "review_arbitration.json",
+    "human_flavor.json",
+    "highlights_review.json",
 )
 
 
@@ -145,6 +147,7 @@ def evaluate(chapter: str) -> dict[str, Any]:
     must_fix: list[dict[str, str]] = []
     should_fix: list[dict[str, str]] = []
     human_acceptance_allowed: list[dict[str, str]] = []
+    must_preserve: list[dict[str, str]] = []
     input_hashes = [ref(official)]
 
     for name in SOURCE_FILES:
@@ -160,6 +163,22 @@ def evaluate(chapter: str) -> dict[str, Any]:
         else:
             for found in markdown_findings(path):
                 (must_fix if found["severity"] in {"P0", "P1"} else should_fix).append(found)
+        if name == "highlights_review.json":
+            data = read_json(path, {})
+            if isinstance(data, dict):
+                for highlight in data.get("protected_highlights", []) if isinstance(data.get("protected_highlights"), list) else []:
+                    if not isinstance(highlight, dict):
+                        continue
+                    must_preserve.append(
+                        {
+                            "highlight_id": str(highlight.get("highlight_id", "")),
+                            "type": str(highlight.get("type", "")),
+                            "quote": str(highlight.get("quote", "")),
+                            "quote_sha256": str(highlight.get("quote_sha256", "")),
+                            "protection_level": str(highlight.get("protection_level", "preserve_or_human_reason")),
+                            "source": rel(path),
+                        }
+                    )
 
     for failure in chapter_evidence_failures(chapter, include_revision_closure=False):
         severity = "P1" if any(token in failure for token in ("missing", "BLOCKED", "P0", "P1", "hash", "stale")) else "P2"
@@ -182,6 +201,8 @@ def evaluate(chapter: str) -> dict[str, Any]:
         "must_fix": must_fix[:50],
         "should_fix": should_fix[:50],
         "human_acceptance_allowed": human_acceptance_allowed[:30],
+        "must_preserve": must_preserve[:30],
+        "highlight_revisions": [],
     }
 
 
@@ -197,6 +218,7 @@ def render_markdown(report: dict[str, Any]) -> str:
     for key, title in (
         ("must_fix", "Must Fix"),
         ("should_fix", "Should Fix"),
+        ("must_preserve", "Must Preserve"),
         ("human_acceptance_allowed", "Human Acceptance Allowed"),
     ):
         lines.extend([f"## {title}", ""])
@@ -204,6 +226,12 @@ def render_markdown(report: dict[str, Any]) -> str:
         if not values:
             lines.append("- none")
         for entry in values:
+            if key == "must_preserve":
+                lines.append(
+                    f"- {entry.get('highlight_id')}: preserve `{entry.get('quote')}` "
+                    f"(source={entry.get('source')}, protection={entry.get('protection_level')})"
+                )
+                continue
             quote = f" quote={entry.get('evidence_quote')}" if entry.get("evidence_quote") else ""
             lines.append(
                 f"- [{entry.get('severity')}] {entry.get('issue')} -> {entry.get('revision_action')} "

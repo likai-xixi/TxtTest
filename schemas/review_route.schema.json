@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReviewRoute",
+  "type": "object",
+  "required": ["schema_version", "chapter", "route", "route_version", "generated_at", "official_chapter", "official_brief", "context_manifest", "source_event_ledger", "routing_inputs", "fail_closed", "always_required_ship_gates", "additional_literary_reviews", "reasons", "warnings"],
+  "properties": {
+    "schema_version": { "type": "integer" },
+    "chapter": { "type": "string", "pattern": "^v[0-9]{2}_c[0-9]{3}$" },
+    "route": { "enum": ["fast", "normal", "heavy", "gate"] },
+    "route_version": { "type": "integer" },
+    "generated_at": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["READY", "BLOCKED", "WARNING"] },
+    "official_chapter": {
+      "type": "object",
+      "required": ["path", "exists", "sha256"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "exists": { "type": "boolean" },
+        "sha256": { "type": "string" }
+      }
+    },
+    "official_brief": {
+      "type": "object",
+      "required": ["path", "exists", "sha256"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "exists": { "type": "boolean" },
+        "sha256": { "type": "string" }
+      }
+    },
+    "context_manifest": {
+      "type": "object",
+      "required": ["path", "exists", "sha256"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "exists": { "type": "boolean" },
+        "sha256": { "type": "string" }
+      }
+    },
+    "source_event_ledger": {
+      "type": "object",
+      "required": ["path", "exists", "sha256"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "exists": { "type": "boolean" },
+        "sha256": { "type": "string" }
+      }
+    },
+    "routing_inputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "exists", "sha256"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "exists": { "type": "boolean" },
+          "sha256": { "type": "string" }
+        }
+      }
+    },
+    "fail_closed": { "type": "boolean" },
+    "always_required_ship_gates": { "type": "array", "items": { "type": "string" } },
+    "additional_literary_reviews": { "type": "array", "items": { "type": "string" } },
+    "reasons": { "type": "array", "items": { "type": "string" } },
+    "warnings": { "type": "array", "items": { "type": "string" } },
+    "blockers": { "type": "array", "items": { "type": "string" } }
+  }
+}

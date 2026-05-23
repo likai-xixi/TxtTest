@@ -2,12 +2,24 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Receive Chapter",
   "type": "object",
-  "required": ["schema_version", "chapter", "generated_at", "status", "steps", "next_action"],
+  "required": ["schema_version", "chapter", "generated_at", "status", "input_hashes", "steps", "next_action"],
   "properties": {
     "schema_version": {"type": "integer"},
     "chapter": {"type": "string"},
     "generated_at": {"type": "string"},
     "status": {"type": "string"},
+    "input_hashes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "exists", "sha256"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1},
+          "exists": {"type": "boolean"},
+          "sha256": {"type": "string"}
+        }
+      }
+    },
     "steps": {"type": "array"},
     "next_action": {"type": "string"}
   },

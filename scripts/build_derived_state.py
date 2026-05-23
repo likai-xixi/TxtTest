@@ -658,6 +658,23 @@ def build_reader_experience_ledgers() -> None:
     )
 
 
+def build_product_kernel_ledgers(latest_chapter: str) -> None:
+    if latest_chapter == "none":
+        latest_chapter = "v01_c001"
+    from character_arc_ledger_build import evaluate as character_arc_evaluate, render_markdown as character_arc_markdown
+    from style_voice_ledger_build import evaluate as style_voice_evaluate, render_markdown as style_voice_markdown
+    from thread_debt_ledger_build import evaluate as thread_debt_evaluate, render_markdown as thread_debt_markdown
+
+    outputs = [
+        ("thread_debt_ledger", thread_debt_evaluate(latest_chapter), thread_debt_markdown),
+        ("character_arc_ledger", character_arc_evaluate(latest_chapter), character_arc_markdown),
+        ("style_voice_ledger", style_voice_evaluate(latest_chapter), style_voice_markdown),
+    ]
+    for stem, report, render in outputs:
+        write_text(DERIVED / f"{stem}.json", json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+        write_text(DERIVED / f"{stem}.md", render(report))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Build derived state from event ledger.")
     parser.add_argument("--ledger", default=str(LEDGER))
@@ -697,6 +714,7 @@ def main() -> int:
             "context_quality": "state/derived/context_quality/",
             "personality": "state/derived/personality/",
             "reader_experience": "state/derived/protagonist_progression.json, state/derived/suspense_ledger.json, state/derived/world_reveal_ledger.json",
+            "product_kernel": "state/derived/thread_debt_ledger.json, state/derived/character_arc_ledger.json, state/derived/style_voice_ledger.json",
         },
     }
 
@@ -716,6 +734,7 @@ def main() -> int:
     write_text(DERIVED / "pacing" / "reader_reward_index.json", json.dumps(build_reader_reward_index(), ensure_ascii=False, indent=2) + "\n")
     build_personality_state(events)
     build_reader_experience_ledgers()
+    build_product_kernel_ledgers(latest_chapter)
 
     write_text(DERIVED / "current_state.yaml", dump_data(current_state))
     write_text(DERIVED / "latest_events.md", "\n".join(latest_events) + "\n")

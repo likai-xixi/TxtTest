@@ -311,6 +311,21 @@ def write_context_quality(repo: Path, chapter: str) -> None:
         "irrelevant_section_ratio": 0.0,
         "truncation_count": 0,
         "source_traceability": {"ok": True, "failure_count": 0},
+        "context_health": {
+            "status": "READY",
+            "metrics": {
+                "limit_ratio": manifest["pack_chars"] / 48000,
+                "deferred_thread_count": 0,
+                "critical_missing_thread_count": 0,
+                "inactive_section_ratio": 0.0,
+                "repeated_summary_count": 0,
+                "temperature_counts": {},
+                "hot_ratio": 0.0,
+                "cold_ratio": 0.0,
+            },
+            "blockers": [],
+            "warnings": [],
+        },
         "input_hashes": {context_rel: file_sha(repo, context_rel)},
         "object_ids": [],
         "ability_ids": [],
@@ -527,6 +542,21 @@ COMPLETE_BRIEF = """# {chapter} Brief
 ## 主角主动选择
 
 主角选择冒险保留关键异常证据。
+
+## Human Flavor Focus
+
+- Protagonist cost or misjudgment: 主角私下备份证据，承担被追责和误判同事意图的风险。
+- Private motive / evasion / displaced anger / self-deception: 主角想把责任推给流程，却又害怕证据消失后没人相信自己。
+- Cannot be perfectly correct: 主角保留证据的方式会伤害同组同事的信任。
+
+## Life Texture
+
+1. 主角紧张时反复摸硬盘边缘，值班灯闪一下他就停住手。
+
+## Do Not Flatten
+
+- Emotion not to explain through: 不解释主角的恐惧，只保留停顿、短句和手部动作。
+- Texture not to polish away: 保留备份硬盘、值班灯、重复确认这些笨拙毛边。
 
 ## 上章章末锚点
 
@@ -818,6 +848,21 @@ schema_version: 2
 - 章末点击理由：证据已经被主角保存，但平台追查会在下一章逼近他。
 - 本章只讲懂的一条世界规则：异常会留下证据痕迹，但平台流程会优先抹除让普通人无法追责的部分。
 - 禁止临场破局：不得靠未授权新道具、新能力或新规则证明异常根因，也不得直接揭开幕后主谜题。
+
+## Human Flavor Focus
+
+- Protagonist cost or misjudgment: 主角私下备份异常记录，承担被追责和误判值班员动机的风险。
+- Private motive / evasion / displaced anger / self-deception: 主角想先保住自己，短暂想把删除责任推给系统流程。
+- Cannot be perfectly correct: 主角不立刻告知同组同事，会留下信任裂缝。
+
+## Life Texture
+
+1. 主角紧张时反复摸硬盘边缘，值班灯闪一下他就停住手。
+
+## Do Not Flatten
+
+- Emotion not to explain through: 不解释主角的恐惧，只保留停顿、短句和手部动作。
+- Texture not to polish away: 保留备份硬盘、值班灯、重复确认这些笨拙毛边。
 
 ## Machine Contract Appendix
 
@@ -2190,6 +2235,7 @@ def write_reader_risk_index(repo: Path, chapter: str) -> None:
         },
         "source_event_ledger": {
             "path": "state/event_ledger.jsonl",
+            "exists": True,
             "sha256": file_sha(repo, "state/event_ledger.jsonl"),
         },
         "blockers": [],
@@ -2307,17 +2353,31 @@ def write_prose_risk_index(repo: Path, chapter: str, *, status: str = "READY") -
 
 def write_long_health_ready(repo: Path, chapter: str, number: int) -> None:
     rolling_refs = []
+    context_health_refs = []
     if number >= 10:
         for item in range(max(1, number - 4), number + 1):
             item_chapter = f"{chapter[:3]}_c{item:03d}"
             gate_rel = f"reviews/{item_chapter}/reader_reward_gate.json"
             shape_rel = f"reviews/{item_chapter}/chapter_shape.json"
+            context_quality_rel = f"state/derived/context_quality/{item_chapter}.json"
             if (repo / gate_rel).exists() and (repo / shape_rel).exists():
                 rolling_refs.append(
                     {
                         "chapter": item_chapter,
                         "reader_reward_gate": {"path": gate_rel, "sha256": file_sha(repo, gate_rel)},
                         "chapter_shape": {"path": shape_rel, "sha256": file_sha(repo, shape_rel)},
+                    }
+                )
+            if (repo / context_quality_rel).exists():
+                context_health_refs.append(
+                    {
+                        "chapter": item_chapter,
+                        "context_quality": {
+                            "path": context_quality_rel,
+                            "exists": True,
+                            "sha256": file_sha(repo, context_quality_rel),
+                        },
+                        "status": "READY",
                     }
                 )
     report = {
@@ -2328,13 +2388,18 @@ def write_long_health_ready(repo: Path, chapter: str, number: int) -> None:
         "chapters": number,
         "source_event_ledger": {
             "path": "state/event_ledger.jsonl",
+            "exists": True,
             "sha256": file_sha(repo, "state/event_ledger.jsonl"),
         },
         "source_reader_promise": {
             "path": "state/project_reader_promise.json",
+            "exists": True,
             "sha256": file_sha(repo, "state/project_reader_promise.json"),
         },
         "rolling_input_refs": rolling_refs,
+        "context_health_window": context_health_refs,
+        "context_health_blockers": [],
+        "context_health_warnings": [],
         "events": 0,
         "counts_by_type": {},
         "unresolved_thread_count": 0,
@@ -2403,6 +2468,142 @@ def write_fact_cards_report(repo: Path, chapter: str) -> None:
     }
     write(repo, f"reviews/{chapter}/fact_cards.json", json.dumps(report, ensure_ascii=False, indent=2) + "\n")
     write(repo, f"reviews/{chapter}/fact_cards.md", f"# Fact Cards: {chapter}\n\nstatus: READY\n")
+
+
+def write_v2_human_flavor_review(repo: Path, chapter: str) -> None:
+    volume = chapter[:3]
+    chapter_file = f"c{int(chapter[-3:]):03d}.md"
+    chapter_rel = f"chapters/{volume}/{chapter_file}"
+    brief_rel = f"outline/chapter_briefs/{chapter}.md"
+    chapter_text = (repo / chapter_rel).read_text(encoding="utf-8")
+    quote = next((line.strip() for line in chapter_text.splitlines() if line.strip() and not line.startswith("#")), "")
+    report = {
+        "schema_version": 1,
+        "chapter": chapter,
+        "generated_at": "2000-01-01T00:00:00+00:00",
+        "status": "WARNING",
+        "blocking": False,
+        "official_chapter": {"path": chapter_rel, "exists": True, "sha256": file_sha(repo, chapter_rel)},
+        "official_brief": {"path": brief_rel, "exists": True, "sha256": file_sha(repo, brief_rel)},
+        "input_hashes": [
+            {"path": chapter_rel, "exists": True, "sha256": file_sha(repo, chapter_rel)},
+            {"path": brief_rel, "exists": True, "sha256": file_sha(repo, brief_rel)},
+        ],
+        "signals": {
+            "has_cost_or_misjudgment": False,
+            "has_private_motive_or_flaw": True,
+            "has_life_texture": True,
+            "does_not_flatten": True,
+            "protagonist_is_too_correct": False,
+        },
+        "window": {
+            "last_3_missing_cost_or_misjudgment": 1,
+            "last_5_human_flavor_warnings": 1,
+        },
+        "evidence_quotes": [quote],
+        "warnings": ["fixture advisory human flavor warning"],
+        "blockers": [],
+    }
+    write(repo, f"reviews/{chapter}/human_flavor.json", json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+    write(repo, f"reviews/{chapter}/human_flavor.md", f"# Human Flavor: {chapter}\n\nstatus: WARNING\nblocking: false\n")
+
+
+def write_v2_highlights_review(repo: Path, chapter: str) -> None:
+    volume = chapter[:3]
+    chapter_file = f"c{int(chapter[-3:]):03d}.md"
+    chapter_rel = f"chapters/{volume}/{chapter_file}"
+    chapter_text = (repo / chapter_rel).read_text(encoding="utf-8")
+    quote = next((line.strip() for line in chapter_text.splitlines() if line.strip() and not line.startswith("#")), "")
+    report = {
+        "schema_version": 1,
+        "chapter": chapter,
+        "generated_at": "2000-01-01T00:00:00+00:00",
+        "status": "CLEAR",
+        "official_chapter": {"path": chapter_rel, "exists": True, "sha256": file_sha(repo, chapter_rel)},
+        "input_hashes": [
+            {"path": chapter_rel, "exists": True, "sha256": file_sha(repo, chapter_rel)},
+        ],
+        "protected_highlights": [
+            {
+                "highlight_id": "h001",
+                "type": "life_texture",
+                "quote": quote,
+                "reason": "fixture protectable human detail",
+                "protection_level": "preserve_or_human_reason",
+            }
+        ],
+        "warnings": [],
+        "blockers": [],
+    }
+    write(repo, f"reviews/{chapter}/highlights_review.json", json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+    write(repo, f"reviews/{chapter}/highlights_review.md", f"# Highlights Review: {chapter}\n\nstatus: CLEAR\n\n- h001\n")
+
+
+def write_v2_review_route(repo: Path, chapter: str, route: str = "heavy") -> None:
+    volume = chapter[:3]
+    chapter_file = f"c{int(chapter[-3:]):03d}.md"
+    chapter_rel = f"chapters/{volume}/{chapter_file}"
+    brief_rel = f"outline/chapter_briefs/{chapter}.md"
+    manifest_rel = f"state/context_pack/{chapter}.manifest.json"
+    ledger_rel = "state/event_ledger.jsonl"
+    additional = {
+        "fast": ["human_flavor", "highlights", "ai_taste"],
+        "normal": [
+            "human_flavor",
+            "highlights",
+            "ai_taste",
+            "dialogue_function",
+            "emotion_relationship",
+            "memorable_scene",
+            "prose_risk",
+            "reader_reward",
+            "reader_risk",
+        ],
+        "heavy": [
+            "human_flavor",
+            "highlights",
+            "style_voice",
+            "ai_taste",
+            "dialogue_function",
+            "emotion_relationship",
+            "memorable_scene",
+            "prose_risk",
+            "reader_reward",
+            "reader_risk",
+            "codex_integrated",
+            "deepseek_integrated",
+            "codex_anti_ai",
+            "deepseek_anti_ai",
+            "codex_semantic",
+            "deepseek_semantic",
+            "semantic_reader",
+            "review_arbitration",
+            "revision_plan",
+            "series_style",
+            "long_health",
+        ],
+    }[route]
+    report = {
+        "schema_version": 1,
+        "chapter": chapter,
+        "route": route,
+        "route_version": 1,
+        "generated_at": "2000-01-01T00:00:00+00:00",
+        "status": "READY",
+        "official_chapter": {"path": chapter_rel, "exists": True, "sha256": file_sha(repo, chapter_rel)},
+        "official_brief": {"path": brief_rel, "exists": True, "sha256": file_sha(repo, brief_rel)},
+        "context_manifest": {"path": manifest_rel, "exists": True, "sha256": file_sha(repo, manifest_rel)},
+        "source_event_ledger": {"path": ledger_rel, "exists": True, "sha256": file_sha(repo, ledger_rel)},
+        "routing_inputs": [],
+        "fail_closed": False,
+        "always_required_ship_gates": ["hash_stale", "provenance", "event_ledger", "fact_cards"],
+        "additional_literary_reviews": additional,
+        "reasons": ["fixture route"],
+        "warnings": [],
+        "blockers": [],
+    }
+    write(repo, f"reviews/{chapter}/review_route.json", json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+    write(repo, f"reviews/{chapter}/review_route.md", f"# Review Route: {chapter}\n\nroute: {route.upper()}\n")
 
 
 def write_style_metrics(repo: Path, chapter: str) -> None:
@@ -2691,6 +2892,9 @@ def write_complete_chapter_evidence(repo: Path, chapter: str, number: int) -> No
         write_long_health_ready(repo, chapter, number)
     write_element_usage_report(repo, chapter)
     write_fact_cards_report(repo, chapter)
+    write_v2_human_flavor_review(repo, chapter)
+    write_v2_highlights_review(repo, chapter)
+    write_v2_review_route(repo, chapter, "heavy")
 
 
 def write_human_events(repo: Path, count: int) -> None:
@@ -2717,6 +2921,11 @@ def write_human_events(repo: Path, count: int) -> None:
         write_reader_risk_index(repo, f"v01_c{count:03d}")
         if count >= 10:
             write_long_health_ready(repo, f"v01_c{count:03d}", count)
+    for number in range(1, count + 1):
+        chapter = f"v01_c{number:03d}"
+        route_path = repo / f"reviews/{chapter}/review_route.json"
+        if route_path.exists():
+            write_v2_review_route(repo, chapter, "heavy")
 
 
 class WorkflowGuardTests(unittest.TestCase):
@@ -2858,6 +3067,12 @@ class WorkflowGuardTests(unittest.TestCase):
                 "reader_reward_gate.json",
                 "reader_feedback.md",
                 "reader_feedback.json",
+                "human_flavor.md",
+                "human_flavor.json",
+                "highlights_review.md",
+                "highlights_review.json",
+                "review_route.json",
+                "review_summary.json",
                 "receive_chapter.md",
                 "receive_chapter.json",
             ):
@@ -3907,7 +4122,7 @@ class WorkflowGuardTests(unittest.TestCase):
             env = os.environ.copy()
             env["PYTHONIOENCODING"] = "gbk:strict"
 
-            result = run_with_env(repo, ("scripts/novel.py", "desk"), env)
+            result = run_with_env(repo, ("scripts/novel.py", "desk", "--verbose"), env)
 
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn("Project Status", result.stdout)
@@ -4082,7 +4297,7 @@ class WorkflowGuardTests(unittest.TestCase):
         with copy_repo() as temp:
             repo = temp
             write_ready_idea_lab(repo, "idea_status")
-            result = run(repo, "scripts/novel.py", "status")
+            result = run(repo, "scripts/novel.py", "status", "--verbose")
 
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn("idea-select --id idea_status", result.stdout)
@@ -4095,7 +4310,7 @@ class WorkflowGuardTests(unittest.TestCase):
                 if item.is_dir():
                     shutil.rmtree(item)
 
-            result = run(repo, "scripts/novel.py", "status")
+            result = run(repo, "scripts/novel.py", "status", "--verbose")
 
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn("python scripts/novel.py idea --text", result.stdout)
@@ -5281,6 +5496,9 @@ print("OK: stub deepseek idea")
             write_reader_risk_index(repo, "v01_c001")
             write_style_metrics(repo, "v01_c001")
             write_element_usage_report(repo, "v01_c001")
+            write_v2_human_flavor_review(repo, "v01_c001")
+            write_v2_highlights_review(repo, "v01_c001")
+            write_v2_review_route(repo, "v01_c001", "heavy")
 
             result = run(repo, "scripts/novel.py", "evidence", "v01_c001")
 
@@ -6846,10 +7064,11 @@ print("OK: stub deepseek idea")
             result = run(repo, "scripts/novel.py", "desk")
 
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            self.assertIn("## 当前卡点", result.stdout)
+            self.assertIn("blocker:", result.stdout)
             self.assertIn("缺核心设定冻结", result.stdout)
-            self.assertIn("## 推荐口令", result.stdout)
+            self.assertIn("next:", result.stdout)
             self.assertIn("想法：...", result.stdout)
+            self.assertLessEqual(len([line for line in result.stdout.splitlines() if line.strip()]), 5)
 
     def test_idea_status_reports_lab_readiness_states(self) -> None:
         with copy_repo() as temp:
@@ -7539,7 +7758,8 @@ print("OK: stub deepseek idea")
     def test_receive_chapter_preview_includes_long_health_after_chapter_ten(self) -> None:
         with copy_repo() as temp:
             repo = temp
-            result = run(repo, "scripts/novel.py", "receive-chapter", "v01_c010", "--preview")
+            write_complete_chapter_evidence(repo, "v01_c010", 10)
+            result = run(repo, "scripts/novel.py", "receive-chapter", "v01_c010", "--preview", "--verbose")
 
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             data = json.loads(result.stdout)
@@ -7548,7 +7768,7 @@ print("OK: stub deepseek idea")
             self.assertIn("prose-risk-check", step_names)
             self.assertIn("prose-risk-index", step_names)
             self.assertIn("reader-risk-index", step_names)
-            self.assertLess(step_names.index("chapter-shape-check"), step_names.index("prose-risk-check"))
+            self.assertLess(step_names.index("prose-risk-check"), step_names.index("route-reviews"))
             self.assertLess(step_names.index("prose-risk-check"), step_names.index("prose-risk-index"))
             self.assertLess(step_names.index("prose-risk-index"), step_names.index("reader-reward-check"))
             self.assertLess(step_names.index("reader-reward-index"), step_names.index("long-health"))

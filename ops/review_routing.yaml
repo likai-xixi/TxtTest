@@ -1,0 +1,109 @@
+route_version: 1
+
+routes:
+  fast:
+    label: FAST
+    description: Ordinary chapter with lightweight literary checks.
+    additional_literary_reviews:
+      - human_flavor
+      - highlights
+      - ai_taste
+  normal:
+    label: NORMAL
+    description: Relationship movement, thread movement, or small payoff.
+    additional_literary_reviews:
+      - human_flavor
+      - highlights
+      - ai_taste
+      - dialogue_function
+      - emotion_relationship
+      - memorable_scene
+      - prose_risk
+      - reader_reward
+      - reader_risk
+  heavy:
+    label: HEAVY
+    description: P0/P1 impact, L3/L4 changes, major protagonist change, or stale/uncertain routing.
+    additional_literary_reviews:
+      - human_flavor
+      - highlights
+      - style_voice
+      - ai_taste
+      - dialogue_function
+      - emotion_relationship
+      - memorable_scene
+      - prose_risk
+      - reader_reward
+      - reader_risk
+      - codex_integrated
+      - deepseek_integrated
+      - codex_anti_ai
+      - deepseek_anti_ai
+      - codex_semantic
+      - deepseek_semantic
+      - semantic_reader
+      - review_arbitration
+      - revision_plan
+      - series_style
+      - long_health
+  gate:
+    label: GATE
+    description: Formal gate recap chapter.
+    additional_literary_reviews:
+      - human_flavor
+      - highlights
+      - style_voice
+      - ai_taste
+      - dialogue_function
+      - emotion_relationship
+      - memorable_scene
+      - prose_risk
+      - reader_reward
+      - reader_risk
+      - codex_integrated
+      - deepseek_integrated
+      - codex_anti_ai
+      - deepseek_anti_ai
+      - codex_semantic
+      - deepseek_semantic
+      - semantic_reader
+      - review_arbitration
+      - revision_plan
+      - series_style
+      - long_health
+
+gate_chapters: [3, 10, 25, 125, 200, 500, 800]
+
+always_required_ship_gates:
+  - candidate_selection
+  - official_chapter_landing
+  - candidate_prompt_provenance
+  - context_quality
+  - review_context
+  - authorized_breakers
+  - element_usage
+  - deepseek_direct_adoption_provenance
+  - progress_contract_ledger
+  - fact_cards
+  - end_state_change
+  - continuity_p0_p1
+
+fail_closed:
+  on_missing_critical_input: block
+  on_parse_error: heavy
+  on_stale_route: block
+  on_stale_literary_review: heavy
+
+upgrade_rules:
+  normal:
+    - human_flavor_consecutive_warning
+    - ai_taste_high_risk
+    - human_flavor_five_chapter_warning_window
+    - weak_ending_click_reason
+    - relationship_change
+    - thread_advance_or_payoff
+  heavy:
+    - p0_p1_impact
+    - l3_l4_change
+    - major_protagonist_change
+    - core_mechanism_upgrade

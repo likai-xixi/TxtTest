@@ -3,6 +3,11 @@ __pycache__/
 *.pyc
 exports/
 backups/
+*.sqlite
+state/*.db
+state/*_index.db
+state/cache/
+vectorstore/
 state/audit/
 state/derived/long_health/
 state/derived/reader_risk/

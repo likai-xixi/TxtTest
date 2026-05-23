@@ -54,6 +54,11 @@ python scripts/novel.py fact-card-check v01_c001
 - `开章 v01_c001` / `写下一章` / `写书`：优先运行 `python scripts/novel.py write {chapter}`；无明确章节时运行 `python scripts/novel.py write`。若核心设定冻结缺失，停止并回到开书实验；若 brief 缺失或仍有占位，必须先走 brief 候选流程：Codex 写 `drafts/codex/{chapter}_brief.md`，DeepSeek 写 `drafts/deepseek/{chapter}_brief.md`，Codex 汇总优劣，等待人类选择 / 混合 / 修改后，再由 Codex 运行 `select-brief` 与 `land-brief` 落正式 `outline/chapter_briefs/{chapter}.md`；不得直接写正文。
 - `收章 v01_c001`：Codex 自行执行候选选择记录、正式落章 provenance、review context、Codex review manifest、DeepSeek review、Codex 子 agent 防 AI 味审查、DeepSeek 防 AI 味审查、continuity、model_disagreement、evidence 检查；缺人类裁决或 event ledger 事实时再问用户。
 - `收章 v01_c001`：优先运行 `python scripts/novel.py receive-chapter v01_c001 --resume`。该命令只做收章控制面编排与卡点报告，不自动 Ship、不写 canon、不写 event ledger。缺 DeepSeek run manifest、审查仲裁、修订计划、灰度后果、章节形状、读者反馈或人工裁决时，按报告给出的下一步继续。
+- `轻审 v01_c001`：运行 `python scripts/novel.py route-reviews v01_c001 --preview` 和 `python scripts/novel.py review-summary v01_c001 --preview-route`；首跑不要求先落 `review_route.json`，只给 FAST/NORMAL/HEAVY/GATE、Ship 门禁状态、下一步和必须保留/修复项。
+- `重审 v01_c001`：运行 `python scripts/novel.py receive-chapter v01_c001 --resume --verbose`；只在重大节点、Gate、P0/P1、L3/L4 或连续体验下降时使用。
+- `人味检查 v01_c001`：运行 `python scripts/novel.py human-flavor-check v01_c001 --write`；默认 advisory/WARNING，不因单章缺人味直接 Ship BLOCK。
+- `保留毛边：...`：把指定亮点或不工整处视为有效人味；修订计划删除它时必须给 `human_override_reason`。
+- `加代价：...`：把主角本章代价写入当章 brief 或修订要求，不直接晋升 canon。
 - `总编台` / `下一步`：运行 `python scripts/novel.py desk`，只给用户一句当前卡点和可选口令。
 - `查状态`：运行 `python scripts/novel.py status`，用一句话告诉用户现在卡在哪里。
 - `锁读者承诺` / `读者承诺`：运行 `python scripts/novel.py reader-promise-start` 或 `reader-promise-check`，引导人类补全后用 `reader-promise-land --ready` 落为 READY。
@@ -94,6 +99,8 @@ python scripts/novel.py self-test
 ## 每章流程
 
 每章 brief 必须声明：`上章章末锚点`、`本章开场落点`、`场景承接说明`、`主线牵引档位`、`外部压力档位`、`本章继承变化`、`本章节奏用途`、`节奏说明`、`本章进展契约`、`本章代价与后果契约`、`本章解决边界`、`本章可用道具 IDs`、`本章可用技能 IDs`、`本章允许新增元素`、`本章禁止临场解决`、`本章留存合同`、`本章主角魅力合同`、`本章初始人格挑战合同`、`本章世界观展示合同`、`本章名词预算`、`本章悬念推进合同`、`本章语言记忆点`、`本章防 AI 味合同`、`本章情绪越界合同`、`本章角色私心与使坏合同`、`本章对白功能合同`、`本章句式破整合同`、`本章细节经济合同`。`brief_check` 硬查字段完整、场景承接、档位合法、进展契约、代价后果、解决边界、读者体验合同和人味合同；`pacing_check` 硬查跨章连续低推进、连续小事、高推进后无消化，并保留过热预警。`build_derived_state` 必须生成 `state/derived/pacing/progress_index.json`、`state/derived/pacing/aftermath_obligations.json`、`state/derived/personality/protagonist.json`、`state/derived/protagonist_progression.json`、`state/derived/world_reveal_ledger.json` 和 `state/derived/suspense_ledger.json`；`build_context_pack` 只能按这些 ID 拉取完整道具/技能条目，并带入上一章人类确认的章末锚点、当前后果承接债务、当前人格、读者承诺、悬念和世界观预算；未授权的新道具、新能力或新规则不得成为本章破局钥匙。Ship evidence 必须核验 brief 承诺的 `最低落账事件` 已进入 `state/event_ledger.jsonl`，且新增专项 review 不缺失、不 stale、不 BLOCKED。
+
+个人版 v2 的正式 brief 还必须包含 `本章人味焦点`、`本章生活毛边`、`本章禁止写平` 三段；缺段、空值、TODO 或占位都由 `brief-check` 硬拦截。落章后的 `human-flavor-check` 仍是 advisory/window signal，不因单章 WARNING 直接 Ship BLOCK。
 
 ```text
 1. python scripts/novel.py brief-precheck {chapter}
