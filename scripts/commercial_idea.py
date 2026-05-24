@@ -12,6 +12,10 @@ FIELDS = (
     "target_platform",
     "target_reader",
     "genre_lane",
+    "ranking_goal",
+    "three_day_retention_design",
+    "paid_conversion_design",
+    "update_cadence",
     "expected_length",
     "core_satisfactions",
     "emotional_hook",
@@ -54,6 +58,10 @@ def render_markdown(report: dict[str, Any]) -> str:
         "target_platform": "目标平台",
         "target_reader": "目标读者",
         "genre_lane": "类型赛道",
+        "ranking_goal": "榜单/推荐目标",
+        "three_day_retention_design": "三日留存设计",
+        "paid_conversion_design": "付费卡点设计",
+        "update_cadence": "更新节奏",
         "expected_length": "预计字数/卷数",
         "core_satisfactions": "核心爽点",
         "emotional_hook": "情绪卖点",
@@ -75,7 +83,8 @@ def render_markdown(report: dict[str, Any]) -> str:
         [
             "## Boundary",
             "",
-            "- advisory_only: true",
+            "- commercial_mode_evidence: true",
+            "- fact_source: false",
             "- writes_canon: false",
             "- writes_event_ledger: false",
             "- writes_context_pack: false",
@@ -124,7 +133,7 @@ def print_check(idea_id: str) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Create or check commercial idea advisory evidence.")
+    parser = argparse.ArgumentParser(description="Create or check commercial-serial positioning evidence.")
     parser.add_argument("--id", default=None)
     parser.add_argument("--output", default="commercial_idea.md")
     parser.add_argument("--check", action="store_true")
@@ -152,6 +161,7 @@ def main() -> int:
         report = blank_report(args.id)
         write_json(json_path, report)
         write_text(md_path, render_markdown(report))
+        write_json(ROOT / "state" / "derived" / "commercial" / f"{args.id}.json", report)
         print(f"OK: wrote {rel(json_path)}")
         return 0
 

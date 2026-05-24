@@ -300,6 +300,60 @@ def review_context_body_and_sources(chapter: str) -> tuple[str, list[SourceRef]]
     return body, sources
 
 
+def shadow_memory_body_and_sources(chapter: str) -> tuple[str, list[SourceRef]]:
+    paths = [
+        ROOT / "state" / "shadow" / "local_window" / f"{chapter}.json",
+        ROOT / "state" / "shadow" / "rag_index" / f"{chapter}.json",
+        ROOT / "state" / "shadow" / "kg_edges" / f"{chapter}.json",
+        ROOT / "state" / "shadow" / "route_signals" / f"{chapter}.json",
+        ROOT / "state" / "shadow" / "manifests" / f"{chapter}.json",
+    ]
+    parts = [
+        "Shadow memory is advisory and may only upgrade review routing.",
+        "It is not canon, not an event ledger, and not plot-break authorization.",
+    ]
+    sources: list[SourceRef] = []
+    for path in paths:
+        if not path.exists():
+            continue
+        sources.append(SourceRef(path, note="shadow_advisory_not_fact_source"))
+        try:
+            data = json.loads(read_text(path))
+        except json.JSONDecodeError:
+            parts.append(f"### {path.stem}\n\ninvalid JSON")
+            continue
+        if not isinstance(data, dict):
+            parts.append(f"### {path.stem}\n\ninvalid artifact")
+            continue
+        if data.get("artifact") == "route_signals":
+            reasons = data.get("reasons") if isinstance(data.get("reasons"), list) else []
+            parts.append(
+                "\n".join(
+                    [
+                        "### route_signals",
+                        f"- route: {str(data.get('route', 'heavy')).upper()}",
+                        "- can_downgrade_route: false",
+                        "- must_not_skip_ship_evidence: true",
+                        "- reasons: " + ("; ".join(str(item) for item in reasons[:8]) if reasons else "none"),
+                    ]
+                )
+            )
+        else:
+            parts.append(
+                "\n".join(
+                    [
+                        f"### {data.get('artifact', path.stem)}",
+                        f"- status: {data.get('status', 'MISSING')}",
+                        f"- source_boundary: {data.get('source_boundary', 'MISSING')}",
+                        f"- confidence: {data.get('confidence', 'unknown')}",
+                    ]
+                )
+            )
+    if not sources:
+        return "none", [SourceRef(ROOT / "state" / "shadow", note="shadow artifacts not built")]
+    return "\n\n".join(parts), sources
+
+
 def validate_brief_element_sections(brief_sections: dict[str, str]) -> tuple[list[str], list[str], str, str] | None:
     for aliases in (
         USABLE_OBJECT_ID_SECTIONS,
@@ -450,6 +504,7 @@ def build_sections(chapter: str, brief_text: str, object_ids: list[str], ability
         return [], anchor_errors
     aftermath_body, aftermath_sources = active_aftermath_body_and_sources(chapter)
     review_context_body, review_context_sources = review_context_body_and_sources(chapter)
+    shadow_body, shadow_sources = shadow_memory_body_and_sources(chapter)
 
     return [
         Section(
@@ -474,6 +529,7 @@ def build_sections(chapter: str, brief_text: str, object_ids: list[str], ability
         Section("chapter_anchor_continuity", "上一章章末锚点连续性", anchor_body, budgets.get("chapter_anchor_continuity", 900), anchor_sources, "previous_chapter_end_anchor", 3),
         Section("active_aftermath_obligations", "Active Aftermath Obligations", aftermath_body, budgets.get("active_aftermath_obligations", 900), aftermath_sources, "unresolved_cost_and_consequence_debt", 4),
         Section("review_context_state_and_quotes", "Review Structured State And Key Quotes", review_context_body, budgets.get("review_context_state_and_quotes", 4000), review_context_sources, "review_only_prior_state_without_previous_full_chapters", 4),
+        Section("shadow_memory_advisory", "Shadow Memory Advisory Signals", shadow_body, budgets.get("shadow_memory_advisory", 2400), shadow_sources, "shadow_advisory_not_fact_source", 4),
         Section("book_outline_contract", "Book Outline Strategic Map", book_outline_body(), budgets.get("book_outline_contract", 1800), [SourceRef(BOOK_JSON, note="strategic_plan_not_fact_source"), SourceRef(BOOK_MD, note="strategic_plan_not_fact_source")], "strategic_plan_not_fact_source", 5),
         Section("style_instruction", "Style Instruction", style_instruction_body(), budgets.get("style_instruction", 1800), style_sources(), "style_instruction_not_fact_source", 6),
         Section("reader_promise", "Project Reader Promise", reader_promise_body(), budgets.get("reader_promise", 1400), reader_promise_sources(), "reader_promise_instruction_not_fact_source", 6),

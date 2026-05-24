@@ -79,6 +79,7 @@ always_required_ship_gates:
   - official_chapter_landing
   - candidate_prompt_provenance
   - context_quality
+  - shadow_memory
   - review_context
   - authorized_breakers
   - element_usage

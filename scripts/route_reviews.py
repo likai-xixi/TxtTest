@@ -42,6 +42,8 @@ OPTIONAL_REVIEW_JSONS = (
 THREAD_DEBT_LEDGER = ROOT / "state" / "derived" / "thread_debt_ledger.json"
 CHARACTER_ARC_LEDGER = ROOT / "state" / "derived" / "character_arc_ledger.json"
 STYLE_VOICE_LEDGER = ROOT / "state" / "derived" / "style_voice_ledger.json"
+SHADOW_ROUTE_SIGNAL_DIR = ROOT / "state" / "shadow" / "route_signals"
+SHADOW_MANIFEST_DIR = ROOT / "state" / "shadow" / "manifests"
 RELATIONSHIP_TERMS = ("关系变化", "relationship_change", "relationship shift", "relationship")
 THREAD_TERMS = ("伏笔推进", "推进伏笔", "解决伏笔", "thread_advanced", "thread_paid_off", "payoff")
 HEAVY_TERMS = ("P0", "P1", "L3", "L4", "核心机制", "core mechanism", "major protagonist")
@@ -220,6 +222,37 @@ def text_route_reasons(brief_text: str, chapter_text: str) -> tuple[str, list[st
     return route, reasons
 
 
+def shadow_route_reasons(chapter: str) -> tuple[str, list[str], list[str], bool]:
+    path = SHADOW_ROUTE_SIGNAL_DIR / f"{chapter}.json"
+    if not path.exists():
+        return "fast", [], [], False
+    try:
+        data = read_json(path, {})
+    except Exception as exc:
+        return "heavy", [], [f"shadow route signals cannot be parsed: {exc}"], True
+    if not isinstance(data, dict):
+        return "heavy", [], ["shadow route signals must be a JSON object"], True
+    route = str(data.get("route") or "fast").lower()
+    if route not in {"fast", "normal", "heavy", "gate"}:
+        route = "heavy"
+    reasons = [f"shadow route signal: {item}" for item in data.get("reasons", []) if str(item).strip()]
+    warnings = [f"shadow route warning: {item}" for item in data.get("warnings", []) if str(item).strip()]
+    fail_closed = False
+    if data.get("status") == "BLOCKED":
+        warnings.extend(f"shadow route blocker: {item}" for item in data.get("blockers", []) if str(item).strip())
+        fail_closed = True
+        route = "heavy"
+    if data.get("can_downgrade_route") is not False:
+        warnings.append("shadow route signals must not downgrade route")
+        fail_closed = True
+        route = "heavy"
+    if data.get("must_not_skip_ship_evidence") is not True:
+        warnings.append("shadow route signals must assert Ship evidence remains mandatory")
+        fail_closed = True
+        route = "heavy"
+    return route, reasons, warnings, fail_closed
+
+
 def max_route(left: str, right: str) -> str:
     order = {"fast": 0, "normal": 1, "heavy": 2, "gate": 3}
     return left if order[left] >= order[right] else right
@@ -293,6 +326,14 @@ def evaluate(chapter: str) -> dict[str, Any]:
         route = max_route(route, "normal")
         reasons.extend(high_risk_reasons)
 
+    shadow_route, shadow_reasons, shadow_warnings, shadow_fail_closed = shadow_route_reasons(chapter)
+    route = max_route(route, shadow_route)
+    reasons.extend(shadow_reasons)
+    if shadow_warnings:
+        warnings.extend(shadow_warnings)
+    if shadow_fail_closed:
+        fail_closed = True
+
     routing_inputs = []
     for name in OPTIONAL_REVIEW_JSONS:
         path = review_dir(chapter) / name
@@ -304,6 +345,9 @@ def evaluate(chapter: str) -> dict[str, Any]:
                 fail_closed = True
                 warnings.extend(stale)
     for path in (THREAD_DEBT_LEDGER, CHARACTER_ARC_LEDGER, STYLE_VOICE_LEDGER):
+        if path.exists():
+            routing_inputs.append(file_ref(path))
+    for path in (SHADOW_ROUTE_SIGNAL_DIR / f"{chapter}.json", SHADOW_MANIFEST_DIR / f"{chapter}.json"):
         if path.exists():
             routing_inputs.append(file_ref(path))
     status = "BLOCKED" if blockers or fail_closed else ("WARNING" if warnings else "READY")

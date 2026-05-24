@@ -193,6 +193,7 @@ def main() -> int:
     data = build_index()
     if args.write:
         write_json(ROOT / "state" / "derived" / "pacing" / "reader_reward_index.json", data)
+        write_json(ROOT / "state" / "derived" / "reader_reward" / "latest.json", data)
     print("# Reader Reward Index")
     print()
     print(f"status: {data['status']}")

@@ -16,6 +16,10 @@ REQUIRED_FIELDS = (
     "target_reader",
     "reader_expectations",
     "common_hooks",
+    "ranking_goal",
+    "three_day_retention_design",
+    "paid_conversion_design",
+    "update_cadence",
     "saturation_risks",
     "differentiation_angle",
     "copyright_risk",
@@ -94,6 +98,10 @@ def build_report(idea_id: str) -> dict[str, Any]:
         "target_reader": commercial_field(commercial, "target_reader", "unspecified"),
         "reader_expectations": commercial.get("reader_expectations") or [],
         "common_hooks": commercial.get("core_satisfactions") or [],
+        "ranking_goal": commercial_field(commercial, "ranking_goal", "unspecified"),
+        "three_day_retention_design": commercial_field(commercial, "three_day_retention_design", "unspecified"),
+        "paid_conversion_design": commercial_field(commercial, "paid_conversion_design", "unspecified"),
+        "update_cadence": commercial_field(commercial, "update_cadence", "unspecified"),
         "saturation_risks": ["Advisory only: compare against source_log and forbidden_similarity before drafting."],
         "differentiation_angle": commercial_field(commercial, "differentiation_one_liner", summary or "unspecified"),
         "copyright_risk": commercial_field(commercial, "copyright_similarity_risk_statement", "unreviewed"),
@@ -108,7 +116,16 @@ def build_report(idea_id: str) -> dict[str, Any]:
         "writes_brief": False,
         "input_hashes": input_hashes(lab),
     }
-    if all(str(report[field]).strip() and str(report[field]) != "unspecified" for field in ("target_platform", "genre_lane", "target_reader")):
+    readiness_fields = (
+        "target_platform",
+        "genre_lane",
+        "target_reader",
+        "ranking_goal",
+        "three_day_retention_design",
+        "paid_conversion_design",
+        "update_cadence",
+    )
+    if all(str(report[field]).strip() and str(report[field]) != "unspecified" for field in readiness_fields):
         report["status"] = "READY"
     return report
 
@@ -128,7 +145,8 @@ def render_markdown(report: dict[str, Any]) -> str:
         [
             "## Boundary",
             "",
-            "- advisory_only: true",
+            "- commercial_mode_evidence: true",
+            "- fact_source: false",
             "- writes_canon: false",
             "- writes_event_ledger: false",
             "- writes_context_pack: false",
@@ -148,7 +166,7 @@ def check_report(idea_id: str) -> tuple[str, list[str], list[str]]:
     warnings: list[str] = []
     for field in REQUIRED_FIELDS:
         value = report.get(field)
-        if value in (None, "", [], {}):
+        if value in (None, "", [], {}) or value == "unspecified":
             warnings.append(f"missing field: {field}")
     for flag in WRITE_FLAGS:
         if report.get(flag) is not False:
@@ -200,6 +218,7 @@ def main() -> int:
     report = build_report(idea_id)
     write_json(lab / "market_scan.json", report)
     write_text(lab / "market_scan.md", render_markdown(report))
+    write_json(ROOT / "state" / "derived" / "platform_fit" / f"{idea_id}.json", report)
     print(f"OK: wrote {rel(lab / 'market_scan.json')}")
     return 0
 

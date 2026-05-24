@@ -53,6 +53,8 @@ CLONE_FORBIDDEN_PATTERNS = (
     "reviews/*/candidate_selection.md",
     "reader_tests/chapter_feedback/*/*.json",
     "reader_tests/responses/*/*.json",
+    "state/shadow/*/*.json",
+    "state/shadow/*/*.md",
 )
 
 

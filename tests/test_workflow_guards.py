@@ -2606,6 +2606,157 @@ def write_v2_review_route(repo: Path, chapter: str, route: str = "heavy") -> Non
     write(repo, f"reviews/{chapter}/review_route.md", f"# Review Route: {chapter}\n\nroute: {route.upper()}\n")
 
 
+def write_shadow_memory_ready(repo: Path, chapter: str, route: str = "fast") -> None:
+    volume = chapter[:3]
+    chapter_rel = f"chapters/{volume}/c{int(chapter[-3:]):03d}.md"
+    brief_rel = f"outline/chapter_briefs/{chapter}.md"
+    context_manifest_rel = f"state/context_pack/{chapter}.manifest.json"
+    ledger_rel = "state/event_ledger.jsonl"
+
+    def ref(relative: str, boundary: str = "shadow_advisory_not_fact_source") -> dict:
+        path = repo / relative
+        item = {"path": relative, "exists": path.exists(), "source_boundary": boundary, "stale": False}
+        item["sha256"] = file_sha(repo, relative) if path.exists() else ""
+        return item
+
+    source_refs = [
+        ref(ledger_rel),
+        ref(brief_rel),
+        ref(context_manifest_rel),
+        ref(chapter_rel),
+    ]
+    event_refs = [
+        {
+            "event_id": f"{chapter}_e001",
+            "chapter": chapter,
+            "type": "character_decision",
+            "importance": "P1",
+            "confidence": 1.0,
+            "source_boundary": "event_ledger_fact_source",
+        }
+    ]
+
+    def artifact_base(name: str, extra: dict | None = None, refs: list[dict] | None = None) -> dict:
+        data = {
+            "schema_version": 1,
+            "shadow_version": 1,
+            "artifact": name,
+            "chapter": chapter,
+            "generated_at": "2000-01-01T00:00:00+00:00",
+            "status": "READY",
+            "source_boundary": "shadow_advisory_not_fact_source",
+            "can_write_context_pack": False,
+            "can_write_canon": False,
+            "can_write_event_ledger": False,
+            "source_refs": refs or source_refs,
+            "blockers": [],
+            "warnings": [],
+            "stale": False,
+            "confidence": 0.8,
+        }
+        if extra:
+            data.update(extra)
+        return data
+
+    artifacts = {
+        "local_window": artifact_base(
+            "local_window",
+            {
+                "recent_events": event_refs,
+                "continuity_notes": [],
+                "voice_carryover": [],
+                "emotion_carryover": [],
+                "action_carryover": [],
+            },
+        ),
+        "rag_index": artifact_base(
+            "rag_index",
+            {
+                "entries": [
+                    {
+                        "source": ref(brief_rel),
+                        "event_ids": [f"{chapter}_e001"],
+                        "terms": ["fixture", chapter],
+                        "confidence": 0.8,
+                        "stale": False,
+                        "source_boundary": "shadow_advisory_not_fact_source",
+                    }
+                ]
+            },
+        ),
+        "kg_edges": artifact_base(
+            "kg_edges",
+            {
+                "edges": [
+                    {
+                        "from": "protagonist",
+                        "to": f"{chapter}_e001",
+                        "relation": "touched_by_event",
+                        "evidence": event_refs[0],
+                        "confidence": 0.8,
+                        "source_boundary": "shadow_advisory_not_fact_source",
+                    }
+                ]
+            },
+        ),
+    }
+    for name, data in artifacts.items():
+        write(repo, f"state/shadow/{name}/{chapter}.json", json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+        write(repo, f"state/shadow/{name}/{chapter}.md", f"# Shadow {name}: {chapter}\n\nstatus: READY\n")
+
+    route_refs = source_refs + [
+        ref(f"state/shadow/local_window/{chapter}.json"),
+        ref(f"state/shadow/rag_index/{chapter}.json"),
+        ref(f"state/shadow/kg_edges/{chapter}.json"),
+    ]
+    route_signals = artifact_base(
+        "route_signals",
+        {
+            "route": route,
+            "route_upper_bound_only": True,
+            "can_downgrade_route": False,
+            "must_not_skip_ship_evidence": True,
+            "required_review_floor": "always_required_ship_gates",
+            "reasons": ["fixture shadow route"],
+            "shadow_inputs": {
+                "local_window": ref(f"state/shadow/local_window/{chapter}.json"),
+                "rag_index": ref(f"state/shadow/rag_index/{chapter}.json"),
+                "kg_edges": ref(f"state/shadow/kg_edges/{chapter}.json"),
+            },
+        },
+        route_refs,
+    )
+    write(repo, f"state/shadow/route_signals/{chapter}.json", json.dumps(route_signals, ensure_ascii=False, indent=2) + "\n")
+    write(repo, f"state/shadow/route_signals/{chapter}.md", f"# Shadow Route Signals: {chapter}\n\nstatus: READY\nroute: {route.upper()}\n")
+
+    manifest_refs = route_refs + [ref(f"state/shadow/route_signals/{chapter}.json")]
+    manifest = artifact_base(
+        "manifest",
+        {
+            "artifacts": {
+                "local_window": ref(f"state/shadow/local_window/{chapter}.json"),
+                "rag_index": ref(f"state/shadow/rag_index/{chapter}.json"),
+                "kg_edges": ref(f"state/shadow/kg_edges/{chapter}.json"),
+                "route_signals": ref(f"state/shadow/route_signals/{chapter}.json"),
+            },
+            "artifact_statuses": {
+                "local_window": "READY",
+                "rag_index": "READY",
+                "kg_edges": "READY",
+                "route_signals": "READY",
+            },
+            "route": route,
+            "can_downgrade_route": False,
+            "can_satisfy_ship_without_chapter_evidence": False,
+            "rebuild_command": f"python scripts/novel.py shadow-build {chapter} --write",
+            "check_command": f"python scripts/novel.py shadow-check {chapter}",
+        },
+        manifest_refs,
+    )
+    write(repo, f"state/shadow/manifests/{chapter}.json", json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
+    write(repo, f"state/shadow/manifests/{chapter}.md", f"# Shadow Manifest: {chapter}\n\nstatus: READY\nroute: {route.upper()}\n")
+
+
 def write_style_metrics(repo: Path, chapter: str) -> None:
     volume = chapter[:3]
     chapter_file = f"c{int(chapter[-3:]):03d}.md"
@@ -2895,6 +3046,7 @@ def write_complete_chapter_evidence(repo: Path, chapter: str, number: int) -> No
     write_v2_human_flavor_review(repo, chapter)
     write_v2_highlights_review(repo, chapter)
     write_v2_review_route(repo, chapter, "heavy")
+    write_shadow_memory_ready(repo, chapter)
 
 
 def write_human_events(repo: Path, count: int) -> None:
@@ -3487,6 +3639,8 @@ class WorkflowGuardTests(unittest.TestCase):
                 "下一章必须承接主角完成选择后的状态和证据去向",
             )
             self.assertEqual(anchor_event.returncode, 0, anchor_event.stdout + anchor_event.stderr)
+            shadow = run(repo, "scripts/novel.py", "shadow-build", "v01_c001", "--write")
+            self.assertEqual(shadow.returncode, 0, shadow.stdout + shadow.stderr)
             close = run(
                 repo,
                 "scripts/novel.py",

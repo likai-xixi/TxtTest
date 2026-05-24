@@ -14,6 +14,8 @@ def should_include(path: Path) -> bool:
     rel = path.relative_to(ROOT)
     if any(part in EXCLUDE_PARTS for part in rel.parts):
         return False
+    if len(rel.parts) >= 2 and rel.parts[0] == "state" and rel.parts[1] == "shadow":
+        return False
     if path.name.endswith(".raw.json") or path.name.endswith(".prompt.md"):
         return False
     if path.name == ".env":

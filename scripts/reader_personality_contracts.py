@@ -369,7 +369,7 @@ def default_reader_promise() -> dict[str, Any]:
         "primary_genre": "待定",
         "secondary_genre": "待定",
         "target_reader": "待定",
-        "platform_expectation": "个人自用，不做平台适配",
+        "platform_expectation": "商业连载发布，需声明目标平台、追读目标、付费转化节奏和平台合规边界",
         "genre_profile": "待定",
         "core_hook": "待定",
         "core_sell_point": "待定",

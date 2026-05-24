@@ -9,6 +9,7 @@ from _common import ROOT, chapter_parts, read_json, read_text
 from context_governance import sha256
 from deepseek_run_manifest import validate_run_manifest
 from review_binding import review_hash_is_current, review_status
+from shadow_check import evaluate as evaluate_shadow
 from workflow_errors import issue
 
 
@@ -193,6 +194,34 @@ def check_long_health(chapter: str) -> tuple[list[str], list[dict[str, Any]]]:
     return checked, issues
 
 
+def check_shadow_memory(chapter: str) -> tuple[list[str], list[dict[str, Any]]]:
+    paths = [
+        ROOT / "state" / "shadow" / "local_window" / f"{chapter}.json",
+        ROOT / "state" / "shadow" / "rag_index" / f"{chapter}.json",
+        ROOT / "state" / "shadow" / "kg_edges" / f"{chapter}.json",
+        ROOT / "state" / "shadow" / "route_signals" / f"{chapter}.json",
+        ROOT / "state" / "shadow" / "manifests" / f"{chapter}.json",
+    ]
+    checked = [rel(path) for path in paths]
+    required = (ROOT / "state" / "context_pack" / f"{chapter}.manifest.json").exists()
+    if not required and not any(path.exists() for path in paths):
+        return checked, []
+    report = evaluate_shadow(chapter)
+    issues = []
+    for blocker in report.get("blockers", []):
+        lowered = blocker.lower()
+        if "missing" in lowered:
+            category = "MISSING"
+        elif "stale" in lowered or "hash" in lowered:
+            category = "STALE"
+        elif "json" in lowered or "schema" in lowered:
+            category = "SCHEMA"
+        else:
+            category = "POLICY"
+        issues.append(issue(category, blocker, "state/shadow"))
+    return checked, issues
+
+
 def check_derived_ledger(path: Path, chapter: str, label: str) -> tuple[list[str], list[dict[str, Any]]]:
     checked = [rel(path)]
     issues: list[dict[str, Any]] = []
@@ -315,6 +344,10 @@ def check_chapter(chapter: str) -> dict[str, Any]:
             issues.append(issue("STALE", "context quality manifest_sha256 is stale", rel(quality_path)))
         issues.extend(check_input_hashes(quality_path, quality))
     checked.append(rel(quality_path))
+
+    shadow_checked, shadow_issues = check_shadow_memory(chapter)
+    checked.extend(shadow_checked)
+    issues.extend(shadow_issues)
 
     for manifest_name in ("review_manifest.json", "codex_review_manifest.json"):
         path = ROOT / "reviews" / chapter / manifest_name
@@ -441,10 +474,10 @@ def check_chapter(chapter: str) -> dict[str, Any]:
     categories = {item["category"] for item in issues}
     if "SCHEMA" in categories:
         status = "SCHEMA"
-    elif "MISSING" in categories:
-        status = "MISSING"
     elif "STALE" in categories:
         status = "STALE"
+    elif "MISSING" in categories:
+        status = "MISSING"
     else:
         status = "CLEAR"
     return {"chapter": chapter, "status": status, "checked": checked, "issues": issues}

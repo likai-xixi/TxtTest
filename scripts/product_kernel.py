@@ -90,10 +90,42 @@ def personal_mode_runtime_failures() -> list[str]:
     if errors:
         return errors
     failures: list[str] = []
+    mode = str(data.get("mode", "")).strip()
+    scope = data.get("scope") if isinstance(data.get("scope"), dict) else {}
     ship = data.get("ship_gates") if isinstance(data.get("ship_gates"), dict) else {}
     literary = data.get("literary_reviews") if isinstance(data.get("literary_reviews"), dict) else {}
     feedback = data.get("reader_feedback") if isinstance(data.get("reader_feedback"), dict) else {}
     infra = data.get("infrastructure") if isinstance(data.get("infrastructure"), dict) else {}
+    if mode not in {"personal_noncommercial", "commercial_serial"}:
+        failures.append("ops/personal_mode.yaml: mode must be personal_noncommercial or commercial_serial")
+    if mode == "personal_noncommercial":
+        if scope.get("main_goal") != "personal_writing_pilot":
+            failures.append("ops/personal_mode.yaml: personal mode main_goal must be personal_writing_pilot")
+        for key in (
+            "commercial_advisory_enabled",
+            "platform_adaptation_enabled",
+            "monetization_optimization_enabled",
+            "ranking_optimization_enabled",
+            "paid_conversion_enabled",
+            "retention_optimization_enabled",
+            "treat_legacy_commercial_tools_as_main_flow",
+        ):
+            if scope.get(key) is not False:
+                failures.append(f"ops/personal_mode.yaml: personal mode scope.{key} must be false")
+    if mode == "commercial_serial":
+        if scope.get("main_goal") != "commercial_serial_monetization":
+            failures.append("ops/personal_mode.yaml: commercial mode main_goal must be commercial_serial_monetization")
+        for key in (
+            "commercial_advisory_enabled",
+            "platform_adaptation_enabled",
+            "monetization_optimization_enabled",
+            "ranking_optimization_enabled",
+            "paid_conversion_enabled",
+            "retention_optimization_enabled",
+            "treat_legacy_commercial_tools_as_main_flow",
+        ):
+            if scope.get(key) is not True:
+                failures.append(f"ops/personal_mode.yaml: commercial mode scope.{key} must be true")
     if ship.get("always_required") is not True:
         failures.append("ops/personal_mode.yaml: ship_gates.always_required must be true")
     if ship.get("allow_route_to_skip_ship_gates") is not False:
@@ -113,6 +145,18 @@ def personal_mode_is_noncommercial() -> bool:
     if errors:
         return False
     return str(data.get("mode", "")).strip() == "personal_noncommercial"
+
+
+def project_mode() -> str:
+    data, errors = load_personal_mode()
+    if errors:
+        return "unknown"
+    value = str(data.get("mode", "")).strip()
+    return value if value else "unknown"
+
+
+def commercial_mode_enabled() -> bool:
+    return project_mode() == "commercial_serial"
 
 
 def load_review_routing() -> tuple[dict[str, Any], list[str]]:

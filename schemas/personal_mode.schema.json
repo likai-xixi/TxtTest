@@ -1,10 +1,10 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "PersonalMode",
+  "title": "ProjectMode",
   "type": "object",
   "required": ["mode", "scope", "ship_gates", "literary_reviews", "reader_feedback", "infrastructure"],
   "properties": {
-    "mode": { "enum": ["personal_noncommercial"] },
+    "mode": { "enum": ["personal_noncommercial", "commercial_serial"] },
     "scope": {
       "type": "object",
       "required": [
@@ -12,14 +12,20 @@
         "commercial_advisory_enabled",
         "platform_adaptation_enabled",
         "monetization_optimization_enabled",
+        "ranking_optimization_enabled",
+        "paid_conversion_enabled",
+        "retention_optimization_enabled",
         "treat_legacy_commercial_tools_as_main_flow"
       ],
       "properties": {
-        "main_goal": { "const": "personal_writing_pilot" },
-        "commercial_advisory_enabled": { "const": false },
-        "platform_adaptation_enabled": { "const": false },
-        "monetization_optimization_enabled": { "const": false },
-        "treat_legacy_commercial_tools_as_main_flow": { "const": false }
+        "main_goal": { "enum": ["personal_writing_pilot", "commercial_serial_monetization"] },
+        "commercial_advisory_enabled": { "type": "boolean" },
+        "platform_adaptation_enabled": { "type": "boolean" },
+        "monetization_optimization_enabled": { "type": "boolean" },
+        "ranking_optimization_enabled": { "type": "boolean" },
+        "paid_conversion_enabled": { "type": "boolean" },
+        "retention_optimization_enabled": { "type": "boolean" },
+        "treat_legacy_commercial_tools_as_main_flow": { "type": "boolean" }
       }
     },
     "ship_gates": {

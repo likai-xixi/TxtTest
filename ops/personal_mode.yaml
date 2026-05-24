@@ -1,11 +1,14 @@
-mode: personal_noncommercial
+mode: commercial_serial
 
 scope:
-  main_goal: personal_writing_pilot
-  commercial_advisory_enabled: false
-  platform_adaptation_enabled: false
-  monetization_optimization_enabled: false
-  treat_legacy_commercial_tools_as_main_flow: false
+  main_goal: commercial_serial_monetization
+  commercial_advisory_enabled: true
+  platform_adaptation_enabled: true
+  monetization_optimization_enabled: true
+  ranking_optimization_enabled: true
+  paid_conversion_enabled: true
+  retention_optimization_enabled: true
+  treat_legacy_commercial_tools_as_main_flow: true
 
 ship_gates:
   always_required: true

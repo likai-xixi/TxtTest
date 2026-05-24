@@ -96,6 +96,7 @@ def step_defs_for(mode: str, chapter: str, gate: str) -> list[tuple[str, list[st
         ("style-profile-check", ["style-profile-check"]),
         ("reader-promise-check", ["reader-promise-check", "--require-ready"]),
         ("brief-check", ["brief-check", chapter]),
+        ("shadow-check", ["shadow-check", chapter]),
         ("reader-experience-check", ["reader-experience-check", chapter]),
         ("style-check", ["style-check", chapter, "--no-write"]),
         ("ai-taste-check", ["ai-taste-check", chapter, "--no-write"]),
@@ -192,6 +193,7 @@ def render_human_report(state: dict, steps: list[StepResult], chapter: str, gate
         f"- end_state_change: {state.get('advisory', {}).get('end_state_change', 'unknown')}",
         f"- polish: {state.get('advisory', {}).get('polish', 'unknown')}",
         f"- series_style: {state.get('advisory', {}).get('series_style', 'unknown')}",
+        f"- shadow_memory: {state.get('advisory', {}).get('shadow_memory', 'unknown')}",
         f"- reader_risk: {state.get('reader_risk', {}).get('status', 'unknown')} through {state.get('reader_risk', {}).get('through', '')}",
         f"- prose_risk: {state.get('prose_risk', {}).get('status', 'unknown')} through {state.get('prose_risk', {}).get('through', '')}",
         f"- long_health: {state.get('long_health', {}).get('status', 'unknown')} through {state.get('long_health', {}).get('through', '')}",
@@ -257,6 +259,7 @@ def json_report(state: dict, steps: list[StepResult], chapter: str, gate: str, m
         "reader_risk": state.get("reader_risk", {}),
         "prose_risk": state.get("prose_risk", {}),
         "long_health": state.get("long_health", {}),
+        "shadow_memory": state.get("advisory", {}).get("shadow_memory", "unknown"),
         "gate_countdown": state.get("gate_countdown", {}),
         "steps": [
             {

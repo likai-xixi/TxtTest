@@ -28,6 +28,20 @@
       "json_status_path": "summary.status"
     },
     {
+      "name": "shadow_build_json",
+      "args": ["shadow-build", "v01_c001", "--json"],
+      "class": "informational",
+      "unopened_template_expectation": "zero",
+      "json_status_path": "status"
+    },
+    {
+      "name": "shadow_check_json",
+      "args": ["shadow-check", "v01_c001", "--json"],
+      "class": "workflow_blocker",
+      "unopened_template_expectation": "any",
+      "json_status_path": "status"
+    },
+    {
       "name": "core_freeze_check",
       "args": ["core-freeze-check"],
       "class": "workflow_blocker",
@@ -62,7 +76,7 @@
       "name": "stale_check_strict",
       "args": ["stale-check", "--strict"],
       "class": "workflow_blocker",
-      "unopened_template_expectation": "zero"
+      "unopened_template_expectation": "any"
     }
   ],
   "no_write_commands": [
@@ -85,6 +99,10 @@
     ["character-arc-ledger-build", "--to", "v01_c001", "--json"],
     ["style-voice-ledger-build", "--to", "v01_c001", "--json"],
     ["candidate-compare", "v01_c001", "--brief", "--json"],
-    ["context-diff", "v01_c001", "--json"]
+    ["context-diff", "v01_c001", "--json"],
+    ["shadow-build", "v01_c001", "--json"],
+    ["shadow-route", "v01_c001", "--json"],
+    ["shadow-check", "v01_c001", "--json"],
+    ["shadow-audit", "--json"]
   ]
 }

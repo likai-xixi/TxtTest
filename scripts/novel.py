@@ -1798,6 +1798,45 @@ def command_context_diff(args: argparse.Namespace) -> int:
     return run_script("context_diff.py", *script_args, check=False)
 
 
+def command_shadow_build(args: argparse.Namespace) -> int:
+    script_args = ["build", args.chapter]
+    if args.write:
+        script_args.append("--write")
+    if args.json:
+        script_args.append("--json")
+    return run_script("shadow_check.py", *script_args, check=False)
+
+
+def command_shadow_check(args: argparse.Namespace) -> int:
+    script_args = ["check", args.chapter]
+    if args.json:
+        script_args.append("--json")
+    return run_script("shadow_check.py", *script_args, check=False)
+
+
+def command_shadow_diff(args: argparse.Namespace) -> int:
+    script_args = ["diff", args.chapter]
+    if args.json:
+        script_args.append("--json")
+    return run_script("shadow_check.py", *script_args, check=False)
+
+
+def command_shadow_route(args: argparse.Namespace) -> int:
+    script_args = [args.chapter]
+    if args.write:
+        script_args.append("--write")
+    if args.json:
+        script_args.append("--json")
+    return run_script("shadow_route_signals.py", *script_args, check=False)
+
+
+def command_shadow_audit(args: argparse.Namespace) -> int:
+    script_args = ["audit"]
+    if args.json:
+        script_args.append("--json")
+    return run_script("shadow_check.py", *script_args, check=False)
+
+
 def command_candidate_compare(args: argparse.Namespace) -> int:
     script_args = [args.chapter]
     if args.brief:
@@ -2136,7 +2175,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("idea-form", help="Create a short idea seed form.")
     p.add_argument("--output", default="idea_seed.md")
     p.add_argument("--id", default=None, help="When used with --commercial, write into state/idea_lab/{id}.")
-    p.add_argument("--commercial", action="store_true", help="Legacy manual advisory only; personal mode excludes it from the main workflow.")
+    p.add_argument("--commercial", action="store_true", help="Create commercial-serial positioning evidence for the idea lab.")
     p.add_argument("--force", action="store_true")
     p.set_defaults(func=command_idea_form)
 
@@ -2749,15 +2788,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--write", action="store_true")
     p.set_defaults(func=command_fact_cards)
 
-    p = sub.add_parser("market-scan", help="Legacy manual advisory only; personal mode excludes market scan from the main workflow.")
+    p = sub.add_parser("market-scan", help="Build commercial-serial market scan evidence for an idea lab.")
     p.add_argument("--id", required=True)
     p.set_defaults(func=command_market_scan)
 
-    p = sub.add_parser("market-scan-check", help="Check legacy market scan evidence; not required in personal mode.")
+    p = sub.add_parser("market-scan-check", help="Check market scan evidence.")
     p.add_argument("--id", required=True)
     p.set_defaults(func=command_market_scan_check)
 
-    p = sub.add_parser("commercial-idea-check", help="Check legacy commercial idea advisory evidence; not required in personal mode.")
+    p = sub.add_parser("commercial-idea-check", help="Check commercial positioning evidence.")
     p.add_argument("--id", required=True)
     p.set_defaults(func=command_commercial_idea_check)
 
@@ -2862,6 +2901,32 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("chapter")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=command_context_diff)
+
+    p = sub.add_parser("shadow-build", help="Build deterministic shadow-memory artifacts for a chapter.")
+    p.add_argument("chapter")
+    p.add_argument("--write", action="store_true")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=command_shadow_build)
+
+    p = sub.add_parser("shadow-check", help="Check shadow-memory artifacts, source hashes, and boundary rules.")
+    p.add_argument("chapter")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=command_shadow_check)
+
+    p = sub.add_parser("shadow-diff", help="Compare shadow-memory manifest source hashes with current sources.")
+    p.add_argument("chapter")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=command_shadow_diff)
+
+    p = sub.add_parser("shadow-route", help="Build shadow route signals without changing Ship evidence requirements.")
+    p.add_argument("chapter")
+    p.add_argument("--write", action="store_true")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=command_shadow_route)
+
+    p = sub.add_parser("shadow-audit", help="Audit shadow-memory artifacts across chapters.")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=command_shadow_audit)
 
     p = sub.add_parser("candidate-compare", help="Compare Codex and DeepSeek brief or chapter candidates without recording selection.")
     p.add_argument("chapter")

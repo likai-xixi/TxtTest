@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ShadowKgEdges",
+  "type": "object",
+  "required": ["schema_version", "shadow_version", "artifact", "chapter", "generated_at", "status", "source_boundary", "source_refs", "kg_kind", "edges", "confidence", "stale"],
+  "properties": {
+    "schema_version": { "type": "integer" },
+    "shadow_version": { "type": "integer" },
+    "artifact": { "const": "kg_edges" },
+    "chapter": { "type": "string", "pattern": "^v[0-9]{2}_c[0-9]{3}$" },
+    "generated_at": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["READY", "BLOCKED", "WARNING"] },
+    "source_boundary": { "const": "shadow_advisory_not_fact_source" },
+    "source_refs": { "type": "array", "items": { "type": "object" } },
+    "kg_kind": { "type": "string" },
+    "knowledge_graph_enabled": { "type": "boolean" },
+    "edge_policy": { "type": "string" },
+    "edges": { "type": "array" },
+    "event_refs": { "type": "array" },
+    "blockers": { "type": "array", "items": { "type": "string" } },
+    "warnings": { "type": "array", "items": { "type": "string" } },
+    "confidence": { "type": "number" },
+    "stale": { "type": "boolean" }
+  }
+}

@@ -10,11 +10,18 @@ Before publishing or copying this template:
 - Run `python scripts/novel.py longrun-smoke --chapters 10`.
 - Run `python scripts/novel.py audit --mode template`.
 - Capture `python scripts/novel.py audit --mode release --json`; an unopened template should be `NOT_READY` because of expected story blockers, never `ERROR`.
+- Run `python scripts/novel.py workflow-contracts` and confirm the shadow JSON/no-write checks pass without dirtying the worktree.
+- Confirm backups exclude `.env`, raw API JSON, prompt scratch files, and rebuildable `state/shadow/` artifacts.
 - Confirm `reader-promise-check` returns `NOT_READY` until the project manually declares `reader_reward_intensity_policy`; no template default R档 is inferred.
 - Confirm `reader-promise-check --require-ready` rejects missing Reader Promise v2 fields, placeholder arrays, and empty release/agency/language/efficiency policies.
 - Confirm `new-chapter` scaffolds opening/personality/retention/charm/world/suspense/language/genre review files plus `ai_taste.md/json`, `dialogue_function.md/json`, `codex_anti_ai_review.md/json`, `deepseek_anti_ai_review.md/json`, `codex_semantic_reader_review.md/json`, `deepseek_semantic_reader_review.md/json`, and `semantic_reader_review.md/json`.
 - Confirm `new-chapter` and `record_idea_selection` produce `schema_version: 2` briefs with `Story Card` first and `Machine Contract Appendix` second.
 - Confirm v1 legacy briefs still pass the compatibility path, while v2 `brief-check` blocks missing `Story Card.before -> after` and missing `reader_reward_intensity`.
+- Confirm `shadow-build v01_c001 --write --json` writes `state/shadow/local_window/`, `rag_index/`, `kg_edges/`, `route_signals/`, and `manifests/` artifacts with `source_boundary: shadow_advisory_not_fact_source`.
+- Confirm `shadow-check v01_c001 --json` rejects stale source hashes, malformed JSON, missing manifests, and any shadow artifact that claims it can write canon or event ledger.
+- Confirm `shadow-route v01_c001 --json` can only upgrade review strength and always reports `must_not_skip_ship_evidence: true`.
+- Confirm `start` runs derived state, shadow build/check, context pack, review context, and context quality in that order.
+- Confirm `chapter-evidence` rejects missing or stale shadow memory through the always-required `shadow_memory` gate.
 - Confirm `deepseek-brief --dry-run` emits a v2 brief prompt and `codex-draft-prompt` sends `Story Card + Hard Boundaries`, not the old long audit contract list.
 - Confirm `new-chapter` also scaffolds `revision_plan`, `review_arbitration`, `gray_consequence`, `chapter_shape`, `prose_risk`, `reader_reward_gate`, `reader_feedback`, and `receive_chapter` Markdown/JSON artifacts.
 - Confirm `receive-chapter --preview` writes nothing and lists the full control-plane sequence, including `prose-risk-check`, `prose-risk-index`, and `reader-risk-index` before `chapter-evidence`.

@@ -13,6 +13,7 @@ FULL_STEPS = [
     ("brief_pack", "brief-candidates pack"),
     ("brief_candidates", "Codex/DeepSeek brief candidates with reader contracts"),
     ("brief_landing", "select-brief + land-brief"),
+    ("shadow", "shadow memory: local_window + rag_index + kg_edges + route_signals"),
     ("context", "start: derived personality/suspense/world/progression + context pack + review context + quality"),
     ("drafts", "Codex/DeepSeek chapter candidates"),
     ("candidate_selection", "select-candidate"),

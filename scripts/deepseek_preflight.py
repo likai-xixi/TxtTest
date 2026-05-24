@@ -52,8 +52,9 @@ def main() -> int:
             {"role": "user", "content": "OK"},
         ],
         "temperature": 0,
-        "max_tokens": 8,
+        "max_tokens": 32,
         "stream": False,
+        "thinking": {"type": "disabled"},
     }
     try:
         response = call_deepseek(payload, api_key, timeout=args.timeout)

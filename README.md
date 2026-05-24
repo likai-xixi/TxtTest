@@ -32,7 +32,7 @@ python scripts/novel.py ci
 
 底层脚本保留给排查和测试；正式写入候选选择、落章、审查、裁决、Gate、事件和提交时使用 `scripts/novel.py`。`desk/status` 会给出当前阶段、卡点、下一条总编口令、风险标记和证据路径。`audit` 是总编体检，会报告业务 NOT_READY；`audit --write-report` 会额外生成 `state/audit/latest.md` 和时间戳报告；`ci` 是本地模板 CI，只检查代码与流程回归。
 
-个人版 v2 的人类入口要保持短：`总编台` 看五行卡点，`查状态` 看一句话，`轻审 v01_c001` 运行 route preview + `review-summary --preview-route`，首跑不要求先落 `review_route.json`；`重审 v01_c001` 才展开完整收章流水线。`人味检查 v01_c001` 只做 advisory；`保留毛边：...` 用来保护有效不工整，修订删除 protected highlight 必须写人工理由。
+商业连载 v2 的人类入口要保持短：`总编台` 看五行卡点，`查状态` 看一句话，`轻审 v01_c001` 运行 route preview + `review-summary --preview-route`，首跑不要求先落 `review_route.json`；`重审 v01_c001` 才展开完整收章流水线。`人味检查 v01_c001` 只做 advisory；`保留毛边：...` 用来保护有效不工整，修订删除 protected highlight 必须写人工理由。
 
 ## 复制后开工
 

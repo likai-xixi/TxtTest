@@ -21,7 +21,7 @@ from record_idea_selection import (
 )
 from style_contract import CONTRACT_JSON, STYLE_PROFILE, validate_contract as validate_style_contract
 from reader_personality_contracts import load_reader_promise, validate_reader_promise
-from product_kernel import personal_mode_is_noncommercial
+from product_kernel import personal_mode_is_noncommercial, project_mode
 
 
 PLACEHOLDERS = ("待定", "待填", "待评", "待生成", "待人类裁决", "寰呭畾", "寰呭～", "寰呰瘎", "TODO")
@@ -550,8 +550,8 @@ def thread_has_ledger_entry(chapter: str, thread_id: str) -> bool:
 def advisory_snapshot(chapter: str, idea_id: str | None) -> dict[str, str]:
     noncommercial = personal_mode_is_noncommercial()
     lab = idea_lab_root() / idea_id if idea_id else None
-    commercial = "disabled_by_personal_mode" if noncommercial else "缺"
-    market = "disabled_by_personal_mode" if noncommercial else "缺"
+    commercial = "disabled_by_noncommercial_mode" if noncommercial else "缺"
+    market = "disabled_by_noncommercial_mode" if noncommercial else "缺"
     if lab is not None and not noncommercial:
         commercial_data = _json_or_none(lab / "commercial_idea.json")
         if commercial_data:
@@ -603,6 +603,15 @@ def advisory_snapshot(chapter: str, idea_id: str | None) -> dict[str, str]:
     else:
         series_style = "warmup"
 
+    shadow_manifest = ROOT / "state" / "shadow" / "manifests" / f"{chapter}.json"
+    if shadow_manifest.exists():
+        shadow_data = _json_or_none(shadow_manifest) or {}
+        shadow_memory = str(shadow_data.get("status", "unknown")).lower()
+    elif (ROOT / "state" / "context_pack" / f"{chapter}.manifest.json").exists():
+        shadow_memory = "missing"
+    else:
+        shadow_memory = "not_built"
+
     return {
         "commercial_positioning": commercial,
         "market_scan": market,
@@ -610,6 +619,7 @@ def advisory_snapshot(chapter: str, idea_id: str | None) -> dict[str, str]:
         "end_state_change": end_state_status,
         "polish": polish,
         "series_style": series_style,
+        "shadow_memory": shadow_memory,
     }
 
 
@@ -954,7 +964,8 @@ def dashboard(chapter: str | None = None) -> dict[str, Any]:
 
     return {
         "root": str(ROOT),
-        "personal_mode": "personal_noncommercial" if personal_mode_is_noncommercial() else "unknown_or_commercial",
+        "project_mode": project_mode(),
+        "personal_mode": project_mode(),
         "git": git_status(),
         "deepseek_api_key": "set" if os.environ.get("DEEPSEEK_API_KEY") else "missing",
         "env_status": readiness["env_status"],

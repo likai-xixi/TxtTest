@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ShadowLocalWindow",
+  "type": "object",
+  "required": ["schema_version", "shadow_version", "artifact", "chapter", "generated_at", "status", "source_boundary", "source_refs", "recent_events", "confidence", "stale"],
+  "properties": {
+    "schema_version": { "type": "integer" },
+    "shadow_version": { "type": "integer" },
+    "artifact": { "const": "local_window" },
+    "chapter": { "type": "string", "pattern": "^v[0-9]{2}_c[0-9]{3}$" },
+    "generated_at": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["READY", "BLOCKED", "WARNING"] },
+    "source_boundary": { "const": "shadow_advisory_not_fact_source" },
+    "can_write_context_pack": { "type": "boolean" },
+    "can_write_canon": { "type": "boolean" },
+    "can_write_event_ledger": { "type": "boolean" },
+    "source_refs": { "type": "array", "items": { "type": "object" } },
+    "recent_event_refs": { "type": "array" },
+    "recent_events": { "type": "array" },
+    "active_aftermath_obligations": { "type": "array" },
+    "blockers": { "type": "array", "items": { "type": "string" } },
+    "warnings": { "type": "array", "items": { "type": "string" } },
+    "confidence": { "type": "number" },
+    "stale": { "type": "boolean" }
+  }
+}

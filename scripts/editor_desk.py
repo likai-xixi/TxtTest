@@ -191,6 +191,7 @@ def main() -> int:
     print(f"- 章节结构: {advisory.get('chapter_structure', 'unknown')}")
     print(f"- 章末状态变化: {advisory.get('end_state_change', 'unknown')}")
     print(f"- 润色状态: {advisory.get('polish', 'unknown')}")
+    print(f"- Shadow Memory: {advisory.get('shadow_memory', 'unknown')}")
     print()
     print("## Reader Risk / Prose Risk / Long Health")
     risk = state.get("reader_risk", {})

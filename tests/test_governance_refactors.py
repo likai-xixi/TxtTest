@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -12,6 +13,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "tests"))
 
 import deepseek_client  # noqa: E402
+import deepseek_preflight  # noqa: E402
 import gate_check  # noqa: E402
 import reader_feedback  # noqa: E402
 import audit  # noqa: E402
@@ -112,6 +114,30 @@ class GovernanceRefactorTests(unittest.TestCase):
         self.assertEqual(mocked.call_args.kwargs["timeout"], 7)
         self.assertEqual(request.get_header("Authorization"), "Bearer secret")
         self.assertEqual(json.loads(request.data.decode("utf-8")), {"model": "x"})
+
+    def test_deepseek_preflight_disables_thinking_for_connectivity_probe(self) -> None:
+        payloads = []
+
+        def fake_call(payload: dict, _api_key: str, *, timeout: int) -> dict:
+            payloads.append((payload, timeout))
+            return {
+                "choices": [
+                    {
+                        "finish_reason": "stop",
+                        "message": {"role": "assistant", "content": "OK"},
+                    }
+                ]
+            }
+
+        with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "secret"}), patch.object(sys, "argv", ["deepseek_preflight.py"]), patch(
+            "deepseek_preflight.call_deepseek",
+            side_effect=fake_call,
+        ):
+            result = deepseek_preflight.main()
+
+        self.assertEqual(result, 0)
+        self.assertEqual(payloads[0][0]["thinking"], {"type": "disabled"})
+        self.assertGreaterEqual(payloads[0][0]["max_tokens"], 32)
 
     def test_start_chapter_gate_thresholds_follow_gate_yaml(self) -> None:
         with copy_repo() as repo:
@@ -1340,7 +1366,7 @@ class GovernanceRefactorTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertEqual(len([line for line in result.stdout.splitlines() if line.strip()]), 5)
 
-    def test_status_is_one_line_and_personal_mode_hides_commercial_advisory(self) -> None:
+    def test_status_is_one_line_and_commercial_mode_surfaces_commercial_advisory(self) -> None:
         with copy_repo() as repo:
             status = run(repo, "scripts/novel.py", "status")
             desk = run(repo, "scripts/novel.py", "desk", "--verbose")
@@ -1348,7 +1374,63 @@ class GovernanceRefactorTests(unittest.TestCase):
 
             self.assertEqual(status.returncode, 0, status.stdout + status.stderr)
             self.assertEqual(len([line for line in status.stdout.splitlines() if line.strip()]), 1)
-            self.assertNotIn("commercial_positioning", desk.stdout)
+            self.assertIn("商业定位", desk.stdout)
+            self.assertIn("赛道扫描", desk.stdout)
+            self.assertIn("market-scan-check", audit_step_names)
+            self.assertIn("commercial-idea-check", audit_step_names)
+
+    def test_personal_noncommercial_mode_can_hide_commercial_advisory(self) -> None:
+        with copy_repo() as repo:
+            path = repo / "ops/personal_mode.yaml"
+            path.write_text(
+                "\n".join(
+                    [
+                        "mode: personal_noncommercial",
+                        "",
+                        "scope:",
+                        "  main_goal: personal_writing_pilot",
+                        "  commercial_advisory_enabled: false",
+                        "  platform_adaptation_enabled: false",
+                        "  monetization_optimization_enabled: false",
+                        "  ranking_optimization_enabled: false",
+                        "  paid_conversion_enabled: false",
+                        "  retention_optimization_enabled: false",
+                        "  treat_legacy_commercial_tools_as_main_flow: false",
+                        "",
+                        "ship_gates:",
+                        "  always_required: true",
+                        "  allow_route_to_skip_ship_gates: false",
+                        "",
+                        "literary_reviews:",
+                        "  default_blocking: false",
+                        "  human_flavor_default: warning",
+                        "  highlights_default: advisory",
+                        "  ai_taste_default: warning",
+                        "",
+                        "reader_feedback:",
+                        "  require_real_reader: false",
+                        "  allow_self_review: true",
+                        "  allow_simulated_reader: true",
+                        "  simulated_reader_must_be_labeled: true",
+                        "",
+                        "infrastructure:",
+                        "  sqlite_enabled: false",
+                        "  vector_memory_enabled: false",
+                        "  knowledge_graph_enabled: false",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            self.assertEqual(run(repo, "scripts/novel.py", "check").returncode, 0)
+            desk = run(repo, "scripts/novel.py", "desk", "--verbose")
+            audit_result = run(repo, "scripts/novel.py", "audit", "--mode", "project", "--json")
+            audit_data = json.loads(audit_result.stdout)
+            audit_step_names = {step["name"] for step in audit_data["steps"]}
+
+            self.assertNotIn("商业定位", desk.stdout)
             self.assertNotIn("market-scan-check", audit_step_names)
             self.assertNotIn("commercial-idea-check", audit_step_names)
 

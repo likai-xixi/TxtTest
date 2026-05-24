@@ -19,17 +19,21 @@
 
 正式流程以 `scripts/novel.py` 为准。底层脚本保留给统一入口、测试和排查调用；不得绕过 `novel.py` 直接落候选选择、裁决、Gate、事件或提交。
 
-## 个人版辅助 + 事实硬门禁
+## 商业连载模式 + 事实硬门禁
 
-本仓库按个人非商业写作使用。商业化、平台适配、付费转化、标题营销、简介营销、赛道扫描、榜单/算法优化、IP 衍生，均不进入主流程、不作为 P0/P1 优先级、不作为 Ship 或 Gate 门禁。若遗留脚本仍存在，只能作为手动参考，不得直接写入 `bible/canon.md`、`chapters/`、`state/event_ledger.jsonl`，不得进入 `state/context_pack/*.manifest.json` 的事实源输入链。
+本仓库已切换为商业连载赚钱模式。商业定位、目标平台、标题/简介、赛道扫描、追读钩子、付费卡点、三日留存、榜单/算法优化和更新节奏，进入主流程和 P0/P1 判断；开书、brief、Gate 和发布前检查都必须正视“上传平台挣钱”的目标。
 
-个人版保留的辅助层只包括：表格视图、章末继续阅读理由、润色、相似风险提示、fact card 草案与人味/节奏/读者体验观察。这些辅助层仍不得替代事实、设定、授权、因果、后果和落账门禁。
+商业增长层仍不得替代事实链。商业定位、赛道扫描、平台适配、付费转化和榜单策略可以作为写作/审稿/发布的决策输入，但不得直接写入 `bible/canon.md`、`chapters/`、`state/event_ledger.jsonl`，不得绕过正式 brief、context pack、candidate selection、landing provenance、chapter evidence 或 Gate 人类裁决。
 
 事实、设定、授权、因果、后果、相似风险、落账，继续作为 Ship 硬门禁。防 AI 味也是 Ship 硬门禁：`state/context_pack/{chapter}_review_context.md/json`、`reviews/{chapter}/ai_taste.md/json`、`reviews/{chapter}/dialogue_function.md/json`、Codex 子 agent 独立 `reviews/{chapter}/codex_anti_ai_review.md/json`、DeepSeek 独立 `reviews/{chapter}/deepseek_anti_ai_review.md/json`、`reviews/{chapter}/similarity_risk.md`、`reviews/{chapter}/fact_cards.json` 与至少一张已通过 `accept-fact-card` 写入 event ledger 的 fact card，是 `chapter-evidence` 的必查证据。fact card 只能写 `state/event_ledger.jsonl`，不能写 canon。
 
-个人版辅助入口：
+商业连载入口：
 
 ```bash
+python scripts/novel.py idea-form --commercial --id idea_xxx
+python scripts/novel.py commercial-idea-check --id idea_xxx
+python scripts/novel.py market-scan --id idea_xxx
+python scripts/novel.py market-scan-check --id idea_xxx
 python scripts/novel.py table-build
 python scripts/novel.py table-check
 python scripts/novel.py polish-start v01_c001
@@ -38,7 +42,7 @@ python scripts/novel.py similarity-risk-check v01_c001
 python scripts/novel.py fact-card-check v01_c001
 ```
 
-`audit --mode project/release` 在个人非商业模式下不要求商业定位或赛道扫描；硬裁决仍以 `core-freeze-check`、`brief-check`、`context-quality` 和 `chapter-evidence` 为准。
+`audit --mode project/release` 在商业连载模式下会纳入 `commercial-idea-check` 和 `market-scan-check`。硬裁决仍以 `core-freeze-check`、`brief-check`、`context-quality`、`chapter-evidence` 和 Gate 人类裁决为准；商业指标不能授权吃书、抄袭、未授权破局或人格漂移。
 
 ## 总编口令
 
@@ -60,6 +64,8 @@ python scripts/novel.py fact-card-check v01_c001
 - `总编台` / `下一步`：运行 `python scripts/novel.py desk`，只给用户一句当前卡点和可选口令。
 - `查状态`：运行 `python scripts/novel.py status`，用一句话告诉用户现在卡在哪里。
 - `锁读者承诺` / `读者承诺`：运行 `python scripts/novel.py reader-promise-start` 或 `reader-promise-check`，引导人类补全后用 `reader-promise-land --ready` 落为 READY。
+- `商业定位` / `平台定位`：运行 `python scripts/novel.py idea-form --commercial --id {idea_id}` 或检查最新 idea 的商业定位；商业定位必须服务目标平台、目标读者、核心爽点、前三章验证点、付费转化和相似风险边界。
+- `赛道扫描` / `市场扫描`：运行 `python scripts/novel.py market-scan --id {idea_id}`；扫描结果进入商业连载证据，但不得写 canon、正文、event ledger 或 context pack 事实源。
 
 回复用户时优先使用这些口令，不要把完整脚本链条甩给用户。
 
@@ -98,7 +104,7 @@ python scripts/novel.py self-test
 
 每章 brief 必须声明：`上章章末锚点`、`本章开场落点`、`场景承接说明`、`主线牵引档位`、`外部压力档位`、`本章继承变化`、`本章节奏用途`、`节奏说明`、`本章进展契约`、`本章代价与后果契约`、`本章解决边界`、`本章可用道具 IDs`、`本章可用技能 IDs`、`本章允许新增元素`、`本章禁止临场解决`、`本章留存合同`、`本章主角魅力合同`、`本章初始人格挑战合同`、`本章世界观展示合同`、`本章名词预算`、`本章悬念推进合同`、`本章语言记忆点`、`本章防 AI 味合同`、`本章情绪越界合同`、`本章角色私心与使坏合同`、`本章对白功能合同`、`本章句式破整合同`、`本章细节经济合同`。`brief_check` 硬查字段完整、场景承接、档位合法、进展契约、代价后果、解决边界、读者体验合同和人味合同；`pacing_check` 硬查跨章连续低推进、连续小事、高推进后无消化，并保留过热预警。`build_derived_state` 必须生成 `state/derived/pacing/progress_index.json`、`state/derived/pacing/aftermath_obligations.json`、`state/derived/personality/protagonist.json`、`state/derived/protagonist_progression.json`、`state/derived/world_reveal_ledger.json` 和 `state/derived/suspense_ledger.json`；`build_context_pack` 只能按这些 ID 拉取完整道具/技能条目，并带入上一章人类确认的章末锚点、当前后果承接债务、当前人格、读者承诺、悬念和世界观预算；未授权的新道具、新能力或新规则不得成为本章破局钥匙。Ship evidence 必须核验 brief 承诺的 `最低落账事件` 已进入 `state/event_ledger.jsonl`，且新增专项 review 不缺失、不 stale、不 BLOCKED。
 
-个人版 v2 的正式 brief 还必须包含 `本章人味焦点`、`本章生活毛边`、`本章禁止写平` 三段；缺段、空值、TODO 或占位都由 `brief-check` 硬拦截。落章后的 `human-flavor-check` 仍是 advisory/window signal，不因单章 WARNING 直接 Ship BLOCK。
+商业连载 v2 的正式 brief 还必须包含 `本章人味焦点`、`本章生活毛边`、`本章禁止写平` 三段；缺段、空值、TODO 或占位都由 `brief-check` 硬拦截。落章后的 `human-flavor-check` 仍是 advisory/window signal，不因单章 WARNING 直接 Ship BLOCK。
 
 ```text
 1. python scripts/novel.py brief-precheck {chapter}

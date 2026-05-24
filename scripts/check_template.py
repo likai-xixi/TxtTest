@@ -126,6 +126,11 @@ REQUIRED_PATHS = [
     "schemas/protagonist_progression.schema.json",
     "schemas/world_reveal_ledger.schema.json",
     "schemas/suspense_ledger.schema.json",
+    "schemas/shadow_local_window.schema.json",
+    "schemas/shadow_rag_index.schema.json",
+    "schemas/shadow_kg_edges.schema.json",
+    "schemas/shadow_route_signals.schema.json",
+    "schemas/shadow_manifest.schema.json",
     "templates/questionnaire_answers.md",
     "templates/idea_seed.md",
     "templates/commercial_idea.md",
@@ -278,6 +283,12 @@ REQUIRED_PATHS = [
     "scripts/candidate_compare.py",
     "scripts/gate_rehearsal.py",
     "scripts/stale_check.py",
+    "scripts/shadow_common.py",
+    "scripts/shadow_local_window.py",
+    "scripts/shadow_rag_index.py",
+    "scripts/shadow_kg_edges.py",
+    "scripts/shadow_route_signals.py",
+    "scripts/shadow_check.py",
     "scripts/workflow_smoke.py",
     "scripts/diff_scope_check.py",
     "scripts/continuity_check.py",
@@ -372,6 +383,11 @@ SCHEMA_PATHS = [
     "schemas/landing.schema.json",
     "schemas/market_scan.schema.json",
     "schemas/commercial_idea.schema.json",
+    "schemas/shadow_local_window.schema.json",
+    "schemas/shadow_rag_index.schema.json",
+    "schemas/shadow_kg_edges.schema.json",
+    "schemas/shadow_route_signals.schema.json",
+    "schemas/shadow_manifest.schema.json",
 ]
 
 RUNTIME_SCHEMA_GLOBS = [
@@ -387,6 +403,7 @@ RUNTIME_SCHEMA_GLOBS = [
     ("state/project_reader_promise.json", "schemas/reader_promise.schema.json"),
     ("ops/reader_reward_policy.json", "schemas/reader_reward_policy.schema.json"),
     ("state/derived/pacing/reader_reward_index.json", "schemas/reader_reward_index.schema.json"),
+    ("state/derived/reader_reward/*.json", "schemas/reader_reward_index.schema.json"),
     ("state/derived/reader_risk/*.json", "schemas/reader_risk_index.schema.json"),
     ("state/derived/long_health/*.json", "schemas/long_health.schema.json"),
     ("state/gates/gate_a_reader_experience.json", "schemas/gate_a_reader_experience.schema.json"),
@@ -436,6 +453,13 @@ RUNTIME_SCHEMA_GLOBS = [
     ("reviews/*/chapter_landing.json", "schemas/landing.schema.json"),
     ("state/idea_lab/*/market_scan.json", "schemas/market_scan.schema.json"),
     ("state/idea_lab/*/commercial_idea.json", "schemas/commercial_idea.schema.json"),
+    ("state/derived/platform_fit/*.json", "schemas/market_scan.schema.json"),
+    ("state/derived/commercial/*.json", "schemas/commercial_idea.schema.json"),
+    ("state/shadow/local_window/*.json", "schemas/shadow_local_window.schema.json"),
+    ("state/shadow/rag_index/*.json", "schemas/shadow_rag_index.schema.json"),
+    ("state/shadow/kg_edges/*.json", "schemas/shadow_kg_edges.schema.json"),
+    ("state/shadow/route_signals/*.json", "schemas/shadow_route_signals.schema.json"),
+    ("state/shadow/manifests/*.json", "schemas/shadow_manifest.schema.json"),
 ]
 
 
@@ -560,10 +584,40 @@ def check_yaml_against_schema(path_text: str, schema_text: str) -> list[str]:
         return [f"{schema_text}: invalid JSON schema: {exc}"]
     errors = [f"{path_text}: {item}" for item in validate_instance(data, schema)]
     if path_text == "ops/personal_mode.yaml" and isinstance(data, dict):
+        mode = str(data.get("mode", "")).strip()
+        scope = data.get("scope") if isinstance(data.get("scope"), dict) else {}
         ship_gates = data.get("ship_gates") if isinstance(data.get("ship_gates"), dict) else {}
         infrastructure = data.get("infrastructure") if isinstance(data.get("infrastructure"), dict) else {}
         literary = data.get("literary_reviews") if isinstance(data.get("literary_reviews"), dict) else {}
         reader = data.get("reader_feedback") if isinstance(data.get("reader_feedback"), dict) else {}
+        if mode == "personal_noncommercial":
+            if scope.get("main_goal") != "personal_writing_pilot":
+                errors.append("ops/personal_mode.yaml: personal mode main_goal must be personal_writing_pilot")
+            for key in (
+                "commercial_advisory_enabled",
+                "platform_adaptation_enabled",
+                "monetization_optimization_enabled",
+                "ranking_optimization_enabled",
+                "paid_conversion_enabled",
+                "retention_optimization_enabled",
+                "treat_legacy_commercial_tools_as_main_flow",
+            ):
+                if scope.get(key) is not False:
+                    errors.append(f"ops/personal_mode.yaml: personal mode scope.{key} must be false")
+        elif mode == "commercial_serial":
+            if scope.get("main_goal") != "commercial_serial_monetization":
+                errors.append("ops/personal_mode.yaml: commercial mode main_goal must be commercial_serial_monetization")
+            for key in (
+                "commercial_advisory_enabled",
+                "platform_adaptation_enabled",
+                "monetization_optimization_enabled",
+                "ranking_optimization_enabled",
+                "paid_conversion_enabled",
+                "retention_optimization_enabled",
+                "treat_legacy_commercial_tools_as_main_flow",
+            ):
+                if scope.get(key) is not True:
+                    errors.append(f"ops/personal_mode.yaml: commercial mode scope.{key} must be true")
         if ship_gates.get("always_required") is not True:
             errors.append("ops/personal_mode.yaml: ship_gates.always_required must be true")
         if ship_gates.get("allow_route_to_skip_ship_gates") is not False:

@@ -43,6 +43,7 @@ from review_binding import (
 )
 from revision_closure import evaluate as evaluate_revision_closure
 from product_kernel import always_required_ship_gates, personal_mode_runtime_failures, route_artifact_status, review_json_stale_failures
+from shadow_check import evaluate as evaluate_shadow
 
 
 PLACEHOLDERS = (
@@ -1994,6 +1995,7 @@ def always_required_ship_gate_failures(chapter: str) -> list[str]:
         "official_chapter_landing": lambda: validate_landing(chapter),
         "candidate_prompt_provenance": lambda: validate_candidate_prompt_evidence(chapter, selection, landing),
         "context_quality": lambda: validate_context_quality(chapter, landing),
+        "shadow_memory": lambda: [f"{chapter}: shadow memory {item}" for item in evaluate_shadow(chapter).get("blockers", [])],
         "review_context": lambda: validate_review_context(chapter),
         "authorized_breakers": lambda: validate_authorized_breakers(chapter),
         "element_usage": lambda: validate_element_usage(chapter),

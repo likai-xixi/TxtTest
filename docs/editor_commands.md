@@ -246,3 +246,21 @@ Series-style policy:
 
 `start` and `write` are blocked until `core_setting_freeze`, `outline/book_outline.json`, and `state/project_style_contract.json` are READY. `context_pack` may include the book outline only as `strategic_plan_not_fact_source`, and style assets only as `style_instruction_not_fact_source`.
 `start` and `write` are also blocked until `state/project_reader_promise.json` is `READY`. Reader Promise v2 must declare positive promises, negative failure modes, release-valve policy, protagonist agency, information clarity, language experience, structural efficiency, and R-level reward policy. Reader promise is an instruction source only; it is included in context pack as `reader_promise_instruction_not_fact_source`, while initial/current personality and reader experience ledgers are derived state.
+
+## Commercial Derived Signals
+
+Commercial serial helpers stay out of canon and the event ledger. `commercial-idea` evidence mirrors into `state/derived/commercial/`, `market-scan` mirrors into `state/derived/platform_fit/`, and `reader-reward-index --write` also mirrors into `state/derived/reader_reward/latest.json`. These files are rebuildable advisory state and may shape positioning, hooks, and risk review, but not facts.
+
+## Shadow Memory
+
+Shadow Memory is rebuildable advisory state. It never writes canon, never writes `state/event_ledger.jsonl`, and never authorizes a plot break. It can only raise review route strength.
+
+```bash
+python scripts/novel.py shadow-build v01_c001 --write
+python scripts/novel.py shadow-check v01_c001
+python scripts/novel.py shadow-diff v01_c001
+python scripts/novel.py shadow-route v01_c001 --write
+python scripts/novel.py shadow-audit
+```
+
+`start` now runs shadow build/check after derived state and before context pack. Ship evidence includes `shadow_memory` as an always-required gate; if the official chapter, brief, context, or ledger changes after shadow was built, rerun `shadow-build {chapter} --write`.
